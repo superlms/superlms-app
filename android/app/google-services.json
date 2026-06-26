@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "682389969874",
+    "project_id": "edyone-lms-57e8c",
+    "storage_bucket": "edyone-lms-57e8c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:682389969874:android:2a4a1a890058ed25c5c60b",
+        "android_client_info": {
+          "package_name": "com.edyoneapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6YvOJIKsI_m0p2FjhrO1rRptC_Kv6A1A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

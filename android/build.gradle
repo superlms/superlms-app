@@ -1,0 +1,39 @@
+buildscript {
+    ext {
+        buildToolsVersion = "36.0.0"
+        minSdkVersion = 24
+        compileSdkVersion = 36
+        targetSdkVersion = 36
+        ndkVersion = "27.1.12297006"
+        kotlinVersion = "2.1.20"
+    }
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath("com.android.tools.build:gradle")
+        classpath("com.facebook.react:react-native-gradle-plugin")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")
+        classpath("com.google.gms:google-services:4.4.2") // Firebase (push notifications)
+    }
+}
+
+apply plugin: "com.facebook.react.rootproject"
+
+allprojects {
+    repositories {
+        // Notifee ships its `app.notifee:core` AAR in a local Maven repo inside the
+        // npm package. Some libs (react-native-pdf, @react-native-community/blur) add
+        // jitpack.io via allprojects; because Notifee requests `app.notifee:core:+`
+        // (a dynamic version), Gradle would otherwise query jitpack's maven-metadata
+        // for it and the read-timeout fails the whole build. Pin the `app.notifee`
+        // group to the local repo so no other repository is ever queried for it.
+        exclusiveContent {
+            forRepository {
+                maven { url "$rootDir/../node_modules/@notifee/react-native/android/libs" }
+            }
+            filter { includeGroup "app.notifee" }
+        }
+    }
+}
