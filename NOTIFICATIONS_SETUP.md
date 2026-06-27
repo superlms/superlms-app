@@ -66,7 +66,7 @@ bundle. The references are `SOUND_ANDROID` / `SOUND_IOS` in
 
 ### App side — DONE ✅
 
-Firebase project `edyone-lms-57e8c`, Android app `com.edyoneapp`.
+Firebase project `superlms-lms-57e8c`, Android app `com.edyoneapp`.
 
 | Piece | File |
 | --- | --- |
@@ -87,7 +87,7 @@ where `type` matches a key in `catalog.ts` and `params` is JSON-encoded.
 
 ### Still TODO
 
-1. **Backend** (`edyonelms` API): a `device_tokens` table + `POST /device-token`
+1. **Backend** (`superlms` API): a `device_tokens` table + `POST /device-token`
    (& `/device-token/remove`) endpoints, and a sender that pushes data-only
    messages via **FCM HTTP v1** using the Firebase **service account key** (still
    to be provided; goes in `storage/`, never committed). Extend the existing

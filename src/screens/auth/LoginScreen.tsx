@@ -132,7 +132,7 @@ const LoginScreen = () => {
             <Image source={{ uri: 'logo' }} style={styles.logo} />
           </View>
 
-          <Text style={styles.title}>Welcome to Edyone LMS</Text>
+          <Text style={styles.title}>Welcome to SuperLMS</Text>
           <Text
             style={styles.subtitle}
             onLayout={e => {

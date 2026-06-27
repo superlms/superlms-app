@@ -1,7 +1,7 @@
 import { Dimensions, Platform } from 'react-native';
 
 const constant = {
-  API_BASE_URL: 'https://edyonelms.in/api/v1',
+  API_BASE_URL: 'https://superlms.in/api/v1',
   /** screen */
   screen: Dimensions.get('window'),
   screenHeight:

@@ -45,7 +45,7 @@ const AppLock = ({
         setLocked(false);
         return;
       }
-      const success = await Biometrics.authenticate('Unlock Edyone LMS');
+      const success = await Biometrics.authenticate('Unlock SuperLMS');
       if (success) setLocked(false);
     } finally {
       promptActive.current = false;

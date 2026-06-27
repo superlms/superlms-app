@@ -31,7 +31,7 @@ export function openNotificationTarget(id?: string): void {
   if (data?.screen) navigateToScreen(data.screen, data.params);
 }
 
-export const CHANNEL_ID = 'edyone-default';
+export const CHANNEL_ID = 'superlms-default';
 export const SOUND_ANDROID = 'notification_tone';       // res/raw/notification_tone.wav
 export const SOUND_IOS = 'notification_tone.wav';        // bundled file
 
