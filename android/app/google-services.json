@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "682389969874",
-    "project_id": "superlms-lms-57e8c",
-    "storage_bucket": "superlms-lms-57e8c.firebasestorage.app"
+    "project_number": "1003028261382",
+    "project_id": "super-lms-48c90",
+    "storage_bucket": "super-lms-48c90.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:682389969874:android:2a4a1a890058ed25c5c60b",
+        "mobilesdk_app_id": "1:1003028261382:android:03f34f803cac119d933187",
         "android_client_info": {
           "package_name": "com.edyoneapp"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyB6YvOJIKsI_m0p2FjhrO1rRptC_Kv6A1A"
+          "current_key": "AIzaSyDDseTjoMerHsCoJ7rKUEKv52wipAtl7iI"
         }
       ],
       "services": {
