@@ -2,6 +2,9 @@
  * @format
  */
 
+// Must be the very first import in the entry file (react-native-gesture-handler
+// requirement) so its native module is initialized before anything else loads.
+import 'react-native-gesture-handler';
 import { AppRegistry } from 'react-native';
 import notifee, { EventType } from '@notifee/react-native';
 import messaging from '@react-native-firebase/messaging';
