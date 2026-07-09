@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { DrawerActions } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
+import Header from '../../components/Header';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
@@ -138,13 +139,11 @@ const AdminAnnouncementScreen = ({ navigation }: any) => {
   return (
     <View style={s.root}>
       <StatusBar barStyle="dark-content" backgroundColor={theme.colors.card} />
-      <View style={s.topbar}>
-        <TouchableOpacity style={s.menuBtn} onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))} activeOpacity={0.8}>
-          <VectorIcon iconSet="Ionicons" iconName="arrow-back" size={22} color={theme.colors.primary} />
-        </TouchableOpacity>
-        <Text style={s.title}>Announcements</Text>
-        {!!stats && <Text style={s.headCount}>{stats.total}</Text>}
-      </View>
+      <Header
+        title="Announcements"
+        onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
+        rightText={stats ? String(stats.total) : undefined}
+      />
 
       {/* Filters */}
       <View style={s.filterRow}>

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { DrawerActions } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
+import Header from '../../components/Header';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
@@ -120,12 +121,10 @@ const AdminContentScreen = ({ navigation }: any) => {
   return (
     <View style={st.root}>
       <StatusBar barStyle="dark-content" backgroundColor={theme.colors.card} />
-      <View style={st.topbar}>
-        <TouchableOpacity style={st.menuBtn} onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))} activeOpacity={0.8}>
-          <VectorIcon iconSet="Ionicons" iconName="arrow-back" size={22} color={theme.colors.primary} />
-        </TouchableOpacity>
-        <Text style={st.title}>Content</Text>
-      </View>
+      <Header
+        title="Content"
+        onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
+      />
 
       <View style={st.statRow}>
         {[

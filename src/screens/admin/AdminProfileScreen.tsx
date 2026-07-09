@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import VectorIcon from '../../components/VectorIcon';
+import AppHeader from '../../components/Header';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
@@ -624,12 +625,7 @@ const AdminProfileScreen = ({ navigation }: any) => {
 };
 
 const Header = ({ navigation }: any) => (
-  <View style={s.topbar}>
-    <TouchableOpacity style={s.menuBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
-      <VectorIcon iconSet="Ionicons" iconName="arrow-back" size={20} color={theme.colors.primary} />
-    </TouchableOpacity>
-    <Text style={s.title}>Profile</Text>
-  </View>
+  <AppHeader title="Profile" onBackPress={() => navigation.goBack()} />
 );
 
 export default AdminProfileScreen;

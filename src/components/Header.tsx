@@ -18,6 +18,8 @@ interface HeaderProps {
   /** Optional right-side action (e.g. a "manage / edit" icon). */
   rightIcon?: string;
   onRightPress?: () => void;
+  /** Optional right-side info pill (e.g. a count or badge). */
+  rightText?: string;
 }
 
 const Header = ({
@@ -27,6 +29,7 @@ const Header = ({
   backgroundColor,
   rightIcon,
   onRightPress,
+  rightText,
 }: HeaderProps) => {
   const navigation = useNavigation<any>();
 
@@ -67,8 +70,12 @@ const Header = ({
           {title}
         </Text>
 
-        <View style={[styles.side, styles.sideRight]}>
-          {rightIcon && onRightPress ? (
+        <View style={[styles.side, styles.sideRight, rightText ? styles.sideAuto : null]}>
+          {rightText ? (
+            <View style={styles.rightPill}>
+              <Text style={styles.rightPillText}>{rightText}</Text>
+            </View>
+          ) : rightIcon && onRightPress ? (
             <TouchableOpacity
               onPress={onRightPress}
               activeOpacity={0.7}
@@ -108,6 +115,24 @@ const __mk_styles = () => StyleSheet.create({
   },
   sideRight: {
     alignItems: 'flex-end',
+  },
+  sideAuto: {
+    width: 'auto',
+    minWidth: 36,
+  },
+  rightPill: {
+    minWidth: 28,
+    height: 24,
+    paddingHorizontal: 8,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rightPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.colors.primary,
   },
   backButton: {
     width: 36,
