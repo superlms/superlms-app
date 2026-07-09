@@ -39,6 +39,7 @@ const AdminQuickLinksScreen = () => {
   const activeOrder = ORDER_OPTIONS.find(o => o.key === order)!;
 
   const moduleRoutes: Record<string, string> = {
+    analytics: 'AdminAnalytics',
     announcement: 'AdminAnnouncement',
     calender: 'AdminCalendar',
     enquiries: 'AdminEnquiries',

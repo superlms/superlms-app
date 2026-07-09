@@ -16,6 +16,7 @@ import { CommonActions } from '@react-navigation/native';
 import { theme, onThemeChange } from '../utils/theme';
 import VectorIcon from '../components/VectorIcon';
 import AdminTabNavigator from './AdminTabNavigator';
+import AdminAnalyticsScreen from '../screens/admin/AdminAnalyticsScreen';
 import AdminAnnouncementScreen from '../screens/admin/AdminAnnouncementScreen';
 import AdminAnnouncementDetailScreen from '../screens/admin/AdminAnnouncementDetailScreen';
 import AdminAnnouncementFormScreen from '../screens/admin/AdminAnnouncementFormScreen';
@@ -56,7 +57,7 @@ type MenuItem = { label: string; icon: string; route?: string };
 // Mirrors the web admin sidebar order (config/menu.php → 'admin').
 const ADMIN_MENU: MenuItem[] = [
   { label: 'Dashboard', icon: 'grid-outline', route: 'PanelHome' },
-  { label: 'Analytics', icon: 'analytics-outline' },
+  { label: 'Analytics', icon: 'analytics-outline', route: 'AdminAnalytics' },
   { label: 'Standard', icon: 'book-outline', route: 'AdminStandard' },
   { label: 'Students', icon: 'people-outline', route: 'AdminStudents' },
   { label: 'Teachers', icon: 'person-outline', route: 'AdminTeachers' },
@@ -315,6 +316,7 @@ const PanelDrawerNavigator = ({ route }: any) => {
         name="PanelHome"
         component={panel === 'accounts' ? AccountsDashboardScreen : AdminTabNavigator}
       />
+      {panel === 'admin' && <Drawer.Screen name="AdminAnalytics" component={AdminAnalyticsScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminAnnouncement" component={AdminAnnouncementScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminAnnouncementDetail" component={AdminAnnouncementDetailScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminAnnouncementForm" component={AdminAnnouncementFormScreen} />}

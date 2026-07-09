@@ -54,6 +54,7 @@ const AdminDashboardScreen = ({ navigation }: any) => {
 
   const moduleRoutes: Record<string, string> = {
     'quick-links': 'QuickLinks',
+    analytics: 'AdminAnalytics',
     announcement: 'AdminAnnouncement',
     calender: 'AdminCalendar',
     enquiries: 'AdminEnquiries',
