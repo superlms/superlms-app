@@ -20,6 +20,8 @@ import AdminAnnouncementScreen from '../screens/admin/AdminAnnouncementScreen';
 import AdminCalendarScreen from '../screens/admin/AdminCalendarScreen';
 import AdminEnquiriesScreen from '../screens/admin/AdminEnquiriesScreen';
 import AdminStandardScreen from '../screens/admin/AdminStandardScreen';
+import AdminStandardDetailScreen from '../screens/admin/AdminStandardDetailScreen';
+import AdminStandardFormScreen from '../screens/admin/AdminStandardFormScreen';
 import AdminStudentsScreen from '../screens/admin/AdminStudentsScreen';
 import AdminStudentDetailScreen from '../screens/admin/AdminStudentDetailScreen';
 import AdminStudentFormScreen from '../screens/admin/AdminStudentFormScreen';
@@ -74,6 +76,7 @@ const ADMIN_MENU: MenuItem[] = [
   { label: 'Exam Copy', icon: 'document-attach-outline' },
   { label: 'Report Card', icon: 'documents-outline' },
   { label: 'TC & Certificate', icon: 'ribbon-outline' },
+  { label: 'Profile', icon: 'person-circle-outline', route: 'AdminProfile' },
   { label: 'More', icon: 'ellipsis-horizontal-outline' },
 ];
 
@@ -308,6 +311,8 @@ const PanelDrawerNavigator = ({ route }: any) => {
       {panel === 'admin' && <Drawer.Screen name="AdminCalendar" component={AdminCalendarScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminEnquiries" component={AdminEnquiriesScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminStandard" component={AdminStandardScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminStandardDetail" component={AdminStandardDetailScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminStandardForm" component={AdminStandardFormScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminStudents" component={AdminStudentsScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminStudentDetail" component={AdminStudentDetailScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminStudentForm" component={AdminStudentFormScreen} />}

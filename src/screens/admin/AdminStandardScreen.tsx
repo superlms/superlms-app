@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,9 +14,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { DrawerActions } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import Header from '../../components/Header';
+import Select from '../../components/Select';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
@@ -26,18 +27,9 @@ import {
   AdminSection,
   AdminSubject,
   StandardStats,
-  createClass,
-  createSection,
-  createSubject,
-  deleteClass,
-  deleteSection,
-  deleteSubject,
   getClasses,
   getSections,
   getSubjects,
-  updateClass,
-  updateSection,
-  updateSubject,
 } from '../../api/adminStandardApi';
 
 type Tab = 'classes' | 'sections' | 'subjects';
@@ -60,37 +52,6 @@ const AdminStandardScreen = ({ navigation }: any) => {
   const [selClass, setSelClass] = useState<number | null>(null);
   const [selSection, setSelSection] = useState<number | null>(null);
 
-  // class modal
-  const [classModal, setClassModal] = useState(false);
-  const [editClass, setEditClass] = useState<AdminClass | null>(null);
-  const [cName, setCName] = useState('');
-  const [cCode, setCCode] = useState('');
-  const [cOrder, setCOrder] = useState('');
-  const [cActive, setCActive] = useState(true);
-
-  // section modal
-  const [secModal, setSecModal] = useState(false);
-  const [editSec, setEditSec] = useState<AdminSection | null>(null);
-  const [sName, setSName] = useState('');
-  const [sCode, setSCode] = useState('');
-  const [sDesc, setSDesc] = useState('');
-  const [sActive, setSActive] = useState(true);
-  const [sClassId, setSClassId] = useState<number | null>(null);
-
-  // subject modal
-  const [subModal, setSubModal] = useState(false);
-  const [editSub, setEditSub] = useState<AdminSubject | null>(null);
-  const [subName, setSubName] = useState('');
-  const [subCode, setSubCode] = useState('');
-  const [subDesc, setSubDesc] = useState('');
-  const [subActive, setSubActive] = useState(true);
-  const [subMandatory, setSubMandatory] = useState(true);
-  const [subClassId, setSubClassId] = useState<number | null>(null);
-  const [subSectionIds, setSubSectionIds] = useState<number[]>([]);
-  const [subModalSections, setSubModalSections] = useState<AdminSection[]>([]);
-
-  const [saving, setSaving] = useState(false);
-
   const loadClasses = useCallback(async () => {
     const res = await getClasses();
     setClasses(res.standards);
@@ -105,8 +66,7 @@ const AdminStandardScreen = ({ navigation }: any) => {
       if (tab === 'sections') {
         const cid = selClass ?? cls[0]?.id ?? null;
         setSelClass(cid);
-        if (cid) setSections((await getSections({ standard_id: cid })).sections);
-        else setSections([]);
+        setSections(cid ? (await getSections({ standard_id: cid })).sections : []);
       }
       if (tab === 'subjects') {
         const cid = selClass ?? cls[0]?.id ?? null;
@@ -134,6 +94,21 @@ const AdminStandardScreen = ({ navigation }: any) => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
+
+  // Reload when returning from the detail / form screens (the first focus is
+  // already covered by the tab effect above, so skip it).
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  const firstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false;
+        return;
+      }
+      loadRef.current();
+    }, []),
+  );
 
   const { refreshing, onRefresh } = useRefresh(load);
 
@@ -164,130 +139,22 @@ const AdminStandardScreen = ({ navigation }: any) => {
     }
   };
 
-  // ─── Class CRUD ─────────────────────────────────────────────────────────────
-  const openClass = (c?: AdminClass) => {
-    setEditClass(c ?? null);
-    setCName(c?.name ?? '');
-    setCCode(c?.code ?? '');
-    setCOrder(c?.order != null ? String(c.order) : '');
-    setCActive(c?.is_active ?? true);
-    setClassModal(true);
-  };
-  const saveClass = async () => {
-    if (!cName.trim() || !cCode.trim()) return Alert.alert('Required', 'Name and code are required.');
-    setSaving(true);
-    try {
-      const p = { name: cName.trim(), code: cCode.trim(), order: cOrder ? Number(cOrder) : undefined, is_active: cActive };
-      if (editClass) await updateClass(editClass.id, p);
-      else await createClass(p);
-      setClassModal(false);
-      await load();
-    } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save class.'));
-    } finally {
-      setSaving(false);
-    }
-  };
-  const removeClass = (c: AdminClass) =>
-    Alert.alert('Delete Class', `Delete "${c.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        try { await deleteClass(c.id); await load(); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
-      } },
-    ]);
-
-  // ─── Section CRUD ───────────────────────────────────────────────────────────
-  const openSection = (s?: AdminSection) => {
-    setEditSec(s ?? null);
-    setSName(s?.name ?? '');
-    setSCode(s?.code ?? '');
-    setSDesc(s?.description ?? '');
-    setSActive(s?.is_active ?? true);
-    setSClassId(s?.standard_id ?? selClass ?? classes[0]?.id ?? null);
-    setSecModal(true);
-  };
-  const saveSection = async () => {
-    if (!sName.trim() || !sCode.trim() || !sClassId) return Alert.alert('Required', 'Name, code and class are required.');
-    setSaving(true);
-    try {
-      const p = { name: sName.trim(), code: sCode.trim(), description: sDesc.trim(), standard_id: sClassId, is_active: sActive };
-      if (editSec) await updateSection(editSec.id, p);
-      else await createSection(p);
-      setSecModal(false);
-      await load();
-    } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save section.'));
-    } finally {
-      setSaving(false);
-    }
-  };
-  const removeSection = (s: AdminSection) =>
-    Alert.alert('Delete Section', `Delete "${s.name}"? Its subjects will be removed.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        try { await deleteSection(s.id); await load(); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
-      } },
-    ]);
-
-  // ─── Subject CRUD ───────────────────────────────────────────────────────────
-  const openSubject = async (s?: AdminSubject) => {
-    const cid = s?.standard_id ?? selClass ?? classes[0]?.id ?? null;
-    setEditSub(s ?? null);
-    setSubName(s?.name ?? '');
-    setSubCode(s?.code ?? '');
-    setSubDesc(s?.description ?? '');
-    setSubActive(s?.is_active ?? true);
-    setSubMandatory(s?.is_mandatory ?? true);
-    setSubClassId(cid);
-    setSubSectionIds(s?.section_ids ?? (selSection ? [selSection] : []));
-    if (cid) setSubModalSections((await getSections({ standard_id: cid })).sections);
-    setSubModal(true);
-  };
-  const onSubClassChange = async (cid: number) => {
-    setSubClassId(cid);
-    setSubSectionIds([]);
-    setSubModalSections((await getSections({ standard_id: cid })).sections);
-  };
-  const toggleSubSection = (id: number) =>
-    setSubSectionIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
-  const saveSubject = async () => {
-    if (!subName.trim() || !subCode.trim() || !subClassId || subSectionIds.length === 0)
-      return Alert.alert('Required', 'Name, code, class and at least one section are required.');
-    setSaving(true);
-    try {
-      const p = {
-        name: subName.trim(), code: subCode.trim(), description: subDesc.trim(),
-        standard_id: subClassId, section_ids: subSectionIds,
-        is_mandatory: subMandatory, is_active: subActive,
-      };
-      if (editSub) await updateSubject(editSub.id, p);
-      else await createSubject(p);
-      setSubModal(false);
-      await load();
-    } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save subject.'));
-    } finally {
-      setSaving(false);
-    }
-  };
-  const removeSubject = (s: AdminSubject) =>
-    Alert.alert('Delete Subject', `Delete "${s.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        try { await deleteSubject(s.id); await load(); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
-      } },
-    ]);
-
   const className = (id?: number | null) => classes.find(c => c.id === id)?.name ?? '';
 
   const onFab = () => {
-    if (tab === 'classes') openClass();
-    else if (tab === 'sections') openSection();
-    else openSubject();
+    if (tab === 'classes') navigation.navigate('AdminStandardForm', { type: 'class' });
+    else if (tab === 'sections') navigation.navigate('AdminStandardForm', { type: 'section', presetClassId: selClass });
+    else navigation.navigate('AdminStandardForm', { type: 'subject', presetClassId: selClass, presetSectionId: selSection });
   };
+
+  const openDetail = (type: 'class' | 'section' | 'subject', item: any) =>
+    navigation.navigate('AdminStandardDetail', { type, item });
+
+  const analytics = [
+    { label: 'Classes', value: stats?.classes, icon: 'book', color: '#F59E0B' },
+    { label: 'Sections', value: stats?.sections, icon: 'grid', color: '#0EA5E9' },
+    { label: 'Subjects', value: stats?.subjects, icon: 'library', color: '#22C55E' },
+  ];
 
   return (
     <View style={s.root}>
@@ -297,16 +164,15 @@ const AdminStandardScreen = ({ navigation }: any) => {
         onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
       />
 
-      {/* Stat row */}
-      <View style={s.statRow}>
-        {[
-          { label: 'Classes', value: stats?.classes, color: '#F59E0B' },
-          { label: 'Sections', value: stats?.sections, color: '#0EA5E9' },
-          { label: 'Subjects', value: stats?.subjects, color: '#22C55E' },
-        ].map(c => (
-          <View key={c.label} style={[s.statCard, { backgroundColor: c.color + '14' }]}>
-            <Text style={[s.statVal, { color: c.color }]}>{c.value ?? '—'}</Text>
-            <Text style={s.statLbl}>{c.label}</Text>
+      {/* Analytics */}
+      <View style={s.analytics}>
+        {analytics.map(a => (
+          <View key={a.label} style={s.aCard}>
+            <View style={[s.aIconWrap, { backgroundColor: a.color + '18' }]}>
+              <VectorIcon iconSet="Ionicons" iconName={a.icon} size={17} color={a.color} />
+            </View>
+            <Text style={[s.aVal, { color: a.color }]}>{a.value ?? '—'}</Text>
+            <Text style={s.aLbl}>{a.label}</Text>
           </View>
         ))}
       </View>
@@ -323,31 +189,29 @@ const AdminStandardScreen = ({ navigation }: any) => {
         })}
       </View>
 
-      {/* Class / Section pickers for drill-down */}
-      {(tab === 'sections' || tab === 'subjects') && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.pickerBar} contentContainerStyle={s.pickerContent}>
-          {classes.map(c => {
-            const active = selClass === c.id;
-            return (
-              <TouchableOpacity key={c.id} style={[s.pchip, active && s.pchipActive]} onPress={() => pickClass(c.id)} activeOpacity={0.8}>
-                <Text style={[s.pchipText, active && s.pchipTextActive]}>{c.name}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+      {/* Class / Section dropdown filters for drill-down */}
+      {tab === 'sections' && (
+        <View style={s.filterRow}>
+          <View style={{ flex: 1 }}>
+            <Select placeholder="Select class" value={selClass}
+              options={classes.map(c => ({ label: c.name, value: c.id }))}
+              onChange={(v) => pickClass(Number(v))} />
+          </View>
+        </View>
       )}
       {tab === 'subjects' && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.pickerBar2} contentContainerStyle={s.pickerContent}>
-          {sections.map(sec => {
-            const active = selSection === sec.id;
-            return (
-              <TouchableOpacity key={sec.id} style={[s.pchip, active && s.pchipActive]} onPress={() => pickSection(sec.id)} activeOpacity={0.8}>
-                <Text style={[s.pchipText, active && s.pchipTextActive]}>{sec.name}</Text>
-              </TouchableOpacity>
-            );
-          })}
-          {sections.length === 0 && <Text style={s.pickerEmpty}>No sections in this class</Text>}
-        </ScrollView>
+        <View style={s.filterRow}>
+          <View style={{ flex: 1 }}>
+            <Select placeholder="Class" value={selClass}
+              options={classes.map(c => ({ label: c.name, value: c.id }))}
+              onChange={(v) => pickClass(Number(v))} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Select placeholder="Section" value={selSection}
+              options={sections.map(sec => ({ label: sec.name, value: sec.id }))}
+              onChange={(v) => pickSection(Number(v))} disabled={!selClass || sections.length === 0} />
+          </View>
+        </View>
       )}
 
       {loading && !refreshing ? (
@@ -357,63 +221,45 @@ const AdminStandardScreen = ({ navigation }: any) => {
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
 
           {tab === 'classes' && classes.map(c => (
-            <View key={c.id} style={s.card}>
-              <View style={s.cardMain}>
-                <View style={[s.avatar, { backgroundColor: '#F59E0B18' }]}>
-                  <VectorIcon iconSet="Ionicons" iconName="book" size={20} color="#F59E0B" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.cardTitle}>{c.name}</Text>
-                  <Text style={s.cardSub}>Code {c.code}{c.board ? ` · ${c.board}` : ''}</Text>
-                  <Text style={s.cardMeta}>{c.sections_count ?? 0} sections · {c.subjects_count ?? 0} subjects</Text>
-                </View>
-                {!c.is_active && <View style={s.inactiveTag}><Text style={s.inactiveTagText}>Inactive</Text></View>}
+            <TouchableOpacity key={c.id} style={s.card} activeOpacity={0.7} onPress={() => openDetail('class', c)}>
+              <View style={[s.avatar, { backgroundColor: '#F59E0B18' }]}>
+                <VectorIcon iconSet="Ionicons" iconName="book" size={18} color="#F59E0B" />
               </View>
-              <View style={s.cardActions}>
-                <TouchableOpacity style={s.act} onPress={() => openClass(c)}><VectorIcon iconSet="Ionicons" iconName="create-outline" size={17} color={theme.colors.primary} /></TouchableOpacity>
-                <TouchableOpacity style={s.act} onPress={() => removeClass(c)}><VectorIcon iconSet="Ionicons" iconName="trash-outline" size={17} color={theme.colors.danger} /></TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Text style={s.cardTitle} numberOfLines={1}>{c.name}</Text>
+                <Text style={s.cardSub} numberOfLines={1}>Code {c.code}{c.board ? ` · ${c.board}` : ''} · {c.sections_count ?? 0} sec · {c.subjects_count ?? 0} sub</Text>
               </View>
-            </View>
+              {!c.is_active && <View style={s.inactiveTag}><Text style={s.inactiveTagText}>Inactive</Text></View>}
+              <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={18} color={theme.colors.textMuted} />
+            </TouchableOpacity>
           ))}
 
           {tab === 'sections' && sections.map(sec => (
-            <View key={sec.id} style={s.card}>
-              <View style={s.cardMain}>
-                <View style={[s.avatar, { backgroundColor: '#0EA5E918' }]}>
-                  <VectorIcon iconSet="Ionicons" iconName="grid" size={20} color="#0EA5E9" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.cardTitle}>{sec.name}</Text>
-                  <Text style={s.cardSub}>Code {sec.code} · {sec.standard_name ?? className(sec.standard_id)}</Text>
-                  {!!sec.description && <Text style={s.cardMeta}>{sec.description}</Text>}
-                </View>
-                {!sec.is_active && <View style={s.inactiveTag}><Text style={s.inactiveTagText}>Inactive</Text></View>}
+            <TouchableOpacity key={sec.id} style={s.card} activeOpacity={0.7} onPress={() => openDetail('section', sec)}>
+              <View style={[s.avatar, { backgroundColor: '#0EA5E918' }]}>
+                <VectorIcon iconSet="Ionicons" iconName="grid" size={18} color="#0EA5E9" />
               </View>
-              <View style={s.cardActions}>
-                <TouchableOpacity style={s.act} onPress={() => openSection(sec)}><VectorIcon iconSet="Ionicons" iconName="create-outline" size={17} color={theme.colors.primary} /></TouchableOpacity>
-                <TouchableOpacity style={s.act} onPress={() => removeSection(sec)}><VectorIcon iconSet="Ionicons" iconName="trash-outline" size={17} color={theme.colors.danger} /></TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Text style={s.cardTitle} numberOfLines={1}>{sec.name}</Text>
+                <Text style={s.cardSub} numberOfLines={1}>Code {sec.code} · {sec.standard_name ?? className(sec.standard_id)}</Text>
               </View>
-            </View>
+              {!sec.is_active && <View style={s.inactiveTag}><Text style={s.inactiveTagText}>Inactive</Text></View>}
+              <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={18} color={theme.colors.textMuted} />
+            </TouchableOpacity>
           ))}
 
           {tab === 'subjects' && subjects.map(sub => (
-            <View key={sub.id} style={s.card}>
-              <View style={s.cardMain}>
-                <View style={[s.avatar, { backgroundColor: '#22C55E18' }]}>
-                  <VectorIcon iconSet="Ionicons" iconName="library" size={20} color="#22C55E" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.cardTitle}>{sub.name}</Text>
-                  <Text style={s.cardSub}>Code {sub.code}{sub.is_mandatory != null ? ` · ${sub.is_mandatory ? 'Mandatory' : 'Optional'}` : ''}</Text>
-                  {!!sub.sections && <Text style={s.cardMeta}>Sections: {sub.sections}</Text>}
-                </View>
-                {!sub.is_active && <View style={s.inactiveTag}><Text style={s.inactiveTagText}>Inactive</Text></View>}
+            <TouchableOpacity key={sub.id} style={s.card} activeOpacity={0.7} onPress={() => openDetail('subject', sub)}>
+              <View style={[s.avatar, { backgroundColor: '#22C55E18' }]}>
+                <VectorIcon iconSet="Ionicons" iconName="library" size={18} color="#22C55E" />
               </View>
-              <View style={s.cardActions}>
-                <TouchableOpacity style={s.act} onPress={() => openSubject(sub)}><VectorIcon iconSet="Ionicons" iconName="create-outline" size={17} color={theme.colors.primary} /></TouchableOpacity>
-                <TouchableOpacity style={s.act} onPress={() => removeSubject(sub)}><VectorIcon iconSet="Ionicons" iconName="trash-outline" size={17} color={theme.colors.danger} /></TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Text style={s.cardTitle} numberOfLines={1}>{sub.name}</Text>
+                <Text style={s.cardSub} numberOfLines={1}>Code {sub.code}{sub.is_mandatory != null ? ` · ${sub.is_mandatory ? 'Mandatory' : 'Optional'}` : ''}</Text>
               </View>
-            </View>
+              {!sub.is_active && <View style={s.inactiveTag}><Text style={s.inactiveTagText}>Inactive</Text></View>}
+              <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={18} color={theme.colors.textMuted} />
+            </TouchableOpacity>
           ))}
 
           {((tab === 'classes' && classes.length === 0) ||
@@ -428,40 +274,6 @@ const AdminStandardScreen = ({ navigation }: any) => {
       <TouchableOpacity style={s.fab} onPress={onFab} activeOpacity={0.9}>
         <VectorIcon iconSet="Ionicons" iconName="add" size={28} color="#fff" />
       </TouchableOpacity>
-
-      {/* Class modal */}
-      <FormModal visible={classModal} title={editClass ? 'Edit Class' : 'New Class'}
-        onClose={() => setClassModal(false)} onSave={saveClass} saving={saving} saveLabel={editClass ? 'Update' : 'Create'}>
-        <Field label="Class Name" value={cName} onChangeText={setCName} placeholder="e.g. Class 10" />
-        <Field label="Class Code" value={cCode} onChangeText={setCCode} placeholder="e.g. 10" />
-        <Field label="Display Order" value={cOrder} onChangeText={setCOrder} placeholder="0" keyboardType="number-pad" />
-        <ToggleRow label="Active" value={cActive} onValueChange={setCActive} />
-      </FormModal>
-
-      {/* Section modal */}
-      <FormModal visible={secModal} title={editSec ? 'Edit Section' : 'New Section'}
-        onClose={() => setSecModal(false)} onSave={saveSection} saving={saving} saveLabel={editSec ? 'Update' : 'Create'}>
-        <Text style={s.fieldLabel}>Class</Text>
-        <ChipPicker items={classes.map(c => ({ id: c.id, label: c.name }))} selected={sClassId ? [sClassId] : []} onToggle={(id: number) => setSClassId(id)} />
-        <Field label="Section Name" value={sName} onChangeText={setSName} placeholder="e.g. A" />
-        <Field label="Section Code" value={sCode} onChangeText={setSCode} placeholder="e.g. A" />
-        <Field label="Description" value={sDesc} onChangeText={setSDesc} placeholder="Optional" multiline />
-        <ToggleRow label="Active" value={sActive} onValueChange={setSActive} />
-      </FormModal>
-
-      {/* Subject modal */}
-      <FormModal visible={subModal} title={editSub ? 'Edit Subject' : 'New Subject'}
-        onClose={() => setSubModal(false)} onSave={saveSubject} saving={saving} saveLabel={editSub ? 'Update' : 'Create'}>
-        <Field label="Subject Name" value={subName} onChangeText={setSubName} placeholder="e.g. Mathematics" />
-        <Field label="Subject Code" value={subCode} onChangeText={setSubCode} placeholder="e.g. MATH" />
-        <Field label="Description" value={subDesc} onChangeText={setSubDesc} placeholder="Optional" multiline />
-        <Text style={s.fieldLabel}>Class</Text>
-        <ChipPicker items={classes.map(c => ({ id: c.id, label: c.name }))} selected={subClassId ? [subClassId] : []} onToggle={onSubClassChange} />
-        <Text style={s.fieldLabel}>Sections (select one or more)</Text>
-        <ChipPicker multi items={subModalSections.map(x => ({ id: x.id, label: x.name }))} selected={subSectionIds} onToggle={toggleSubSection} />
-        <ToggleRow label="Mandatory" value={subMandatory} onValueChange={setSubMandatory} />
-        <ToggleRow label="Active" value={subActive} onValueChange={setSubActive} />
-      </FormModal>
     </View>
   );
 };
@@ -524,14 +336,13 @@ export default AdminStandardScreen;
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 40 },
-  topbar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 14, backgroundColor: theme.colors.card, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  menuBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 20, fontWeight: '900', color: theme.colors.textPrimary, flex: 1 },
 
-  statRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12 },
-  statCard: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
-  statVal: { fontSize: 20, fontWeight: '900' },
-  statLbl: { fontSize: 11, color: theme.colors.textSecondary, fontWeight: '600', marginTop: 2 },
+  // Analytics
+  analytics: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12 },
+  aCard: { flex: 1, alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, paddingVertical: 14 },
+  aIconWrap: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  aVal: { fontSize: 20, fontWeight: '900' },
+  aLbl: { fontSize: 11, color: theme.colors.textSecondary, fontWeight: '700', marginTop: 2 },
 
   tabRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 12 },
   tab: { flex: 1, paddingVertical: 9, borderRadius: theme.radius.full, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center' },
@@ -539,31 +350,23 @@ const s = StyleSheet.create({
   tabText: { fontSize: 13, fontWeight: '700', color: theme.colors.textSecondary },
   tabTextActive: { color: theme.colors.primary },
 
-  pickerBar: { maxHeight: 44, paddingLeft: 16 },
-  pickerBar2: { maxHeight: 44, paddingLeft: 16, marginTop: 4 },
-  pickerContent: { gap: 8, paddingRight: 16, alignItems: 'center' },
-  pchip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: theme.radius.full, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
-  pchipActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-  pchipText: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
-  pchipTextActive: { color: '#fff' },
+  filterRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: -4 },
   pickerEmpty: { fontSize: 12, color: theme.colors.textMuted, paddingVertical: 8 },
 
-  scroll: { paddingHorizontal: 16, paddingTop: 8 },
+  scroll: { paddingHorizontal: 16, paddingTop: 10 },
   empty: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', marginTop: 40 },
 
-  card: { backgroundColor: theme.colors.card, borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: theme.colors.border },
-  cardMain: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  cardTitle: { fontSize: 15, fontWeight: '800', color: theme.colors.textPrimary },
+  // Compact card — tap opens the detail screen.
+  card: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.card, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 8, borderWidth: 1, borderColor: theme.colors.border },
+  avatar: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  cardTitle: { fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary },
   cardSub: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
-  cardMeta: { fontSize: 11, color: theme.colors.textMuted, marginTop: 3 },
   inactiveTag: { backgroundColor: '#FEE2E2', borderRadius: theme.radius.full, paddingHorizontal: 8, paddingVertical: 3 },
   inactiveTagText: { fontSize: 10, fontWeight: '800', color: theme.colors.danger },
-  cardActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 10 },
-  act: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background },
 
   fab: { position: 'absolute', right: 18, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
 
+  // Shared modal/form styles (used by the exported FormModal / Field / ToggleRow / ChipPicker).
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 20 },
   modalCard: { width: '100%', maxWidth: 460, maxHeight: '88%', backgroundColor: theme.colors.card, borderRadius: 18, padding: 20 },
   modalTitle: { fontSize: 18, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 8, textAlign: 'center' },

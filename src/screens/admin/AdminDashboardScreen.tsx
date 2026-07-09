@@ -80,9 +80,6 @@ const AdminDashboardScreen = ({ navigation }: any) => {
     Alert.alert(m.label, 'This module is coming soon to the admin app.');
   };
 
-  const comingSoon = (label: string) =>
-    Alert.alert(label, 'This feature is coming soon to the admin app.');
-
   const statCards = [
     { label: 'Students', value: String(stats?.students ?? '—'), icon: 'people', color: '#6366F1' },
     { label: 'Teachers', value: String(stats?.teachers ?? '—'), icon: 'school', color: '#EC4899' },
@@ -102,7 +99,7 @@ const AdminDashboardScreen = ({ navigation }: any) => {
           <VectorIcon iconSet="Feather" iconName="menu" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={s.hello}>Welcome back</Text>
+          <Text style={s.hello}>Welcome back 👋</Text>
           <Text style={s.name} numberOfLines={1}>{user?.name ?? 'Admin'}</Text>
           <View style={s.metaRow}>
             {!!user?.organization?.name && <Text style={s.org} numberOfLines={1}>{user.organization.name}</Text>}
@@ -110,10 +107,7 @@ const AdminDashboardScreen = ({ navigation }: any) => {
           </View>
         </View>
 
-        {/* Right actions — announcement · notifications · profile */}
-        <TouchableOpacity style={s.iconBtn} onPress={() => comingSoon('Announcement')} activeOpacity={0.8}>
-          <VectorIcon iconSet="Ionicons" iconName="megaphone-outline" size={19} color={theme.colors.primary} />
-        </TouchableOpacity>
+        {/* Right actions — notifications only (profile & announcement moved to Quick Links / sidebar). */}
         <TouchableOpacity style={s.iconBtn} onPress={() => navigation.navigate('Notifications')} activeOpacity={0.8}>
           <VectorIcon iconSet="Ionicons" iconName="notifications-outline" size={19} color={theme.colors.primary} />
           {unreadCount > 0 && (
@@ -121,9 +115,6 @@ const AdminDashboardScreen = ({ navigation }: any) => {
               <Text style={s.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
             </View>
           )}
-        </TouchableOpacity>
-        <TouchableOpacity style={s.iconBtn} onPress={() => navigation.navigate('AdminProfile')} activeOpacity={0.8}>
-          <VectorIcon iconSet="Ionicons" iconName="person-circle-outline" size={22} color={theme.colors.primary} />
         </TouchableOpacity>
       </View>
 
@@ -195,7 +186,7 @@ const s = StyleSheet.create({
   hello: { fontSize: 12, color: theme.colors.textMuted, fontWeight: '600' },
   name: { fontSize: 20, fontWeight: '900', color: theme.colors.textPrimary, marginTop: 1 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  org: { fontSize: 12, color: theme.colors.textSecondary, flexShrink: 1 },
+  org: { fontSize: 11, color: theme.colors.textSecondary, flexShrink: 1 },
   yearBadge: {
     backgroundColor: theme.colors.primary + '14',
     borderRadius: theme.radius.full,

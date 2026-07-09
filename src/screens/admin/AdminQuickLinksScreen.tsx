@@ -82,6 +82,13 @@ const AdminQuickLinksScreen = () => {
           <VectorIcon iconSet="Feather" iconName="menu" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
         <Text style={s.title}>Quick Links</Text>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity style={s.iconBtn} onPress={() => navigation.navigate('AdminAnnouncement')} activeOpacity={0.8}>
+          <VectorIcon iconSet="Ionicons" iconName="megaphone-outline" size={19} color={theme.colors.primary} />
+        </TouchableOpacity>
+        <TouchableOpacity style={s.iconBtn} onPress={() => navigation.navigate('AdminProfile')} activeOpacity={0.8}>
+          <VectorIcon iconSet="Ionicons" iconName="person-circle-outline" size={22} color={theme.colors.primary} />
+        </TouchableOpacity>
       </View>
 
       {/* Filter bar */}
@@ -185,6 +192,14 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   title: { fontSize: 20, fontWeight: '900', color: theme.colors.textPrimary },
+  iconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   orderBar: {
     flexDirection: 'row',
