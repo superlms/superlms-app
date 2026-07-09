@@ -15,7 +15,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { theme, onThemeChange } from '../../utils/theme';
 import VectorIcon from '../../components/VectorIcon';
-import { login, type UserRole } from '../../api/authApi';
+import { login, forgotPassword, type UserRole } from '../../api/authApi';
 
 // Where each role lands after a successful login.
 const destinationFor = (role: UserRole) => {
@@ -93,6 +93,22 @@ const LoginScreen = () => {
       const res = await login(identifier.trim(), password);
       console.log('[Login] Success:', JSON.stringify({ role: res.role }, null, 2));
 
+      // School admins get an extra OTP step (mirrors the web admin login). The
+      // session isn't stored yet — send the code and hand off to the OTP screen,
+      // which finishes the login on success.
+      if (res.requiresOtp) {
+        const email = (res.user as any)?.email ?? identifier.trim();
+        const otpRes = await forgotPassword(email);
+        navigation.navigate('LoginOtp', {
+          email,
+          userId: otpRes.user_id,
+          pendingToken: res.token,
+          pendingUser: res.user,
+          pendingRole: res.role,
+        });
+        return;
+      }
+
       const dest = destinationFor(res.role);
       navigation.dispatch(
         CommonActions.reset({
@@ -139,8 +155,7 @@ const LoginScreen = () => {
               subtitleYRef.current = e.nativeEvent.layout.y;
             }}
           >
-            Students sign in with their admission number, staff with their email —
-            we'll take you to the right dashboard.
+            Students use their admission number, staff use email.
           </Text>
 
           <View style={styles.formCard}>
@@ -279,7 +294,7 @@ const __mk_styles = () => StyleSheet.create({
     marginTop: theme.spacing.xl,
     marginBottom: theme.spacing.md,
   },
-  logo: { width: 150, height: 150, resizeMode: 'contain' },
+  logo: { width: 110, height: 110, resizeMode: 'contain' },
   title: {
     fontSize: 26,
     fontWeight: '700',

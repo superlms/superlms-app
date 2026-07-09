@@ -4,6 +4,7 @@ import DrawerNavigator from './DrawerNavigator';
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
+import LoginOtpScreen from '../screens/auth/LoginOtpScreen';
 import SplashScreen from '../screens/splash/SplashScreen';
 import AboutAppScreen from '../screens/more/AboutAppScreen';
 import SchoolInfoScreen from '../screens/more/SchoolInfoScreen';
@@ -59,6 +60,7 @@ const AppNavigator = () => {
 
       {/* Auth Flow — single global login (role auto-detected from credentials) */}
       <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="LoginOtp" component={LoginOtpScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
 
       {/* Profile */}

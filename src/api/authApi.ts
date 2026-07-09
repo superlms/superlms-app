@@ -66,6 +66,10 @@ export interface UnifiedAuthResponse {
   token: string;
   user: AuthUser;
   role: UserRole; // 'student' | 'teacher' | 'admin' | 'accounts'
+  // School-admin sign-ins gate on an email OTP before the session is stored
+  // (mirrors the web admin login). When true, the auth is NOT yet persisted —
+  // finish it with completeLogin() after the OTP is verified.
+  requiresOtp: boolean;
 }
 
 export const login = async (
@@ -92,8 +96,22 @@ export const login = async (
     throw new Error('No token in response: ' + JSON.stringify(data));
   }
 
+  // Credentials are valid at this point. School admins must still clear an
+  // email OTP, so hold the session in memory and let the OTP screen persist it.
+  const requiresOtp = role === 'admin';
+  if (!requiresOtp) {
+    await _persistAuth({ token, user }, role);
+  }
+  return { token, user, role, requiresOtp };
+};
+
+// Finalise a deferred (OTP-gated) login once the OTP has been verified.
+export const completeLogin = async (
+  token: string,
+  user: AuthUser,
+  role: UserRole,
+): Promise<void> => {
   await _persistAuth({ token, user }, role);
-  return { token, user, role };
 };
 
 // Map any backend role/user_type to the app's stored role values.

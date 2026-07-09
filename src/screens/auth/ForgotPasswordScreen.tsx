@@ -715,8 +715,8 @@ const __mk_styles = () => StyleSheet.create({
     marginBottom: 42,
   },
   logo: {
-    width: 140,
-    height: 140,
+    width: 100,
+    height: 100,
     resizeMode: 'contain',
   },
   desc: {
