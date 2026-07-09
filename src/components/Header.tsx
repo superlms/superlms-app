@@ -20,6 +20,8 @@ interface HeaderProps {
   onRightPress?: () => void;
   /** Optional right-side info pill (e.g. a count or badge). */
   rightText?: string;
+  /** Optional custom right-side content (e.g. multiple action buttons). */
+  rightSlot?: React.ReactNode;
 }
 
 const Header = ({
@@ -30,6 +32,7 @@ const Header = ({
   rightIcon,
   onRightPress,
   rightText,
+  rightSlot,
 }: HeaderProps) => {
   const navigation = useNavigation<any>();
 
@@ -70,8 +73,10 @@ const Header = ({
           {title}
         </Text>
 
-        <View style={[styles.side, styles.sideRight, rightText ? styles.sideAuto : null]}>
-          {rightText ? (
+        <View style={[styles.side, styles.sideRight, (rightText || rightSlot) ? styles.sideAuto : null]}>
+          {rightSlot ? (
+            rightSlot
+          ) : rightText ? (
             <View style={styles.rightPill}>
               <Text style={styles.rightPillText}>{rightText}</Text>
             </View>

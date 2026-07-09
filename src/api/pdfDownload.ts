@@ -73,3 +73,47 @@ export const downloadPdf = async (url: string, fileName: string): Promise<string
   await ios.openDocument(path);
   return path;
 };
+
+/**
+ * Write a CSV string to a file and surface it the same way as a downloaded PDF
+ * (Android → public Downloads via MediaStore; iOS → share/preview sheet). A BOM
+ * is prepended so Excel reads UTF-8 correctly. Returns the local file path.
+ */
+export const saveCsvFile = async (fileName: string, csv: string): Promise<string> => {
+  const { fs, android, ios, MediaCollection } = ReactNativeBlobUtil;
+  const safeName = fileName.endsWith('.csv') ? fileName : `${fileName}.csv`;
+  const localPath = `${fs.dirs.DocumentDir}/${safeName}`;
+
+  await fs.writeFile(localPath, '﻿' + csv, 'utf8');
+
+  if (Platform.OS === 'android') {
+    try {
+      await MediaCollection.copyToMediaStore(
+        { name: safeName, parentFolder: '', mimeType: 'text/csv' },
+        'Download',
+        localPath,
+      );
+      return localPath;
+    } catch {
+      try {
+        await android.addCompleteDownload({
+          title: safeName,
+          description: 'Downloaded',
+          mime: 'text/csv',
+          path: localPath,
+          showNotification: true,
+        });
+      } catch {
+        try {
+          await android.actionViewIntent(localPath, 'text/csv');
+        } catch {
+          // give up silently — the file is still saved at `localPath`
+        }
+      }
+      return localPath;
+    }
+  }
+
+  await ios.openDocument(localPath);
+  return localPath;
+};
