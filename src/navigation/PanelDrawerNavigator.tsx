@@ -17,7 +17,13 @@ import { theme, onThemeChange } from '../utils/theme';
 import VectorIcon from '../components/VectorIcon';
 import AdminTabNavigator from './AdminTabNavigator';
 import AdminAnnouncementScreen from '../screens/admin/AdminAnnouncementScreen';
+import AdminAnnouncementDetailScreen from '../screens/admin/AdminAnnouncementDetailScreen';
+import AdminAnnouncementFormScreen from '../screens/admin/AdminAnnouncementFormScreen';
 import AdminCalendarScreen from '../screens/admin/AdminCalendarScreen';
+import AdminCalendarDetailScreen from '../screens/admin/AdminCalendarDetailScreen';
+import AdminCalendarFormScreen from '../screens/admin/AdminCalendarFormScreen';
+import AdminCalendarMonthScreen from '../screens/admin/AdminCalendarMonthScreen';
+import AdminCalendarDayScreen from '../screens/admin/AdminCalendarDayScreen';
 import AdminEnquiriesScreen from '../screens/admin/AdminEnquiriesScreen';
 import AdminStandardScreen from '../screens/admin/AdminStandardScreen';
 import AdminStandardDetailScreen from '../screens/admin/AdminStandardDetailScreen';
@@ -308,7 +314,13 @@ const PanelDrawerNavigator = ({ route }: any) => {
         component={panel === 'accounts' ? AccountsDashboardScreen : AdminTabNavigator}
       />
       {panel === 'admin' && <Drawer.Screen name="AdminAnnouncement" component={AdminAnnouncementScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminAnnouncementDetail" component={AdminAnnouncementDetailScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminAnnouncementForm" component={AdminAnnouncementFormScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminCalendar" component={AdminCalendarScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminCalendarDetail" component={AdminCalendarDetailScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminCalendarForm" component={AdminCalendarFormScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminCalendarMonth" component={AdminCalendarMonthScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminCalendarDay" component={AdminCalendarDayScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminEnquiries" component={AdminEnquiriesScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminStandard" component={AdminStandardScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminStandardDetail" component={AdminStandardDetailScreen} />}
