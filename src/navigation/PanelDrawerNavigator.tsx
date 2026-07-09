@@ -32,6 +32,8 @@ import AdminStudentsScreen from '../screens/admin/AdminStudentsScreen';
 import AdminStudentDetailScreen from '../screens/admin/AdminStudentDetailScreen';
 import AdminStudentFormScreen from '../screens/admin/AdminStudentFormScreen';
 import AdminTeachersScreen from '../screens/admin/AdminTeachersScreen';
+import AdminTeacherDetailScreen from '../screens/admin/AdminTeacherDetailScreen';
+import AdminTeacherFormScreen from '../screens/admin/AdminTeacherFormScreen';
 import AdminIdCardScreen from '../screens/admin/AdminIdCardScreen';
 import AdminExamScreen from '../screens/admin/AdminExamScreen';
 import AdminSyllabusScreen from '../screens/admin/AdminSyllabusScreen';
@@ -329,6 +331,8 @@ const PanelDrawerNavigator = ({ route }: any) => {
       {panel === 'admin' && <Drawer.Screen name="AdminStudentDetail" component={AdminStudentDetailScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminStudentForm" component={AdminStudentFormScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminTeachers" component={AdminTeachersScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminTeacherDetail" component={AdminTeacherDetailScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminTeacherForm" component={AdminTeacherFormScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminIdCard" component={AdminIdCardScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminExam" component={AdminExamScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminSyllabus" component={AdminSyllabusScreen} />}

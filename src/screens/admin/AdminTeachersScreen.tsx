@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,57 +11,65 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { DrawerActions } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import Header from '../../components/Header';
+import Select from '../../components/Select';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
-import { apiErr, pickImage } from '../../utils/filePickers';
-import { PickedFile } from '../../api/adminProfileApi';
-import { FormModal, Field, ToggleRow, ChipPicker } from './AdminStandardScreen';
+import { apiErr } from '../../utils/filePickers';
+import { saveCsvFile } from '../../api/pdfDownload';
 import {
   TeacherRow,
   TeacherStats,
-  TeacherPayload,
-  createTeacher,
-  deleteTeacher,
-  getTeacher,
+  TeacherFilters,
   getTeachers,
-  updateTeacher,
 } from '../../api/adminTeacherApi';
 
-const GENDERS = [
-  { id: 'male', label: 'Male' },
-  { id: 'female', label: 'Female' },
-  { id: 'other', label: 'Other' },
+const GENDER_OPTS = [
+  { label: 'All Genders', value: '' },
+  { label: 'Male', value: 'male' },
+  { label: 'Female', value: 'female' },
+  { label: 'Other', value: 'other' },
+];
+const STATUS_OPTS = [
+  { label: 'All Status', value: '' },
+  { label: 'Active', value: '1' },
+  { label: 'Inactive', value: '0' },
 ];
 
-const emptyForm: TeacherPayload = {
-  name: '', email: '', mobile: '', dob: '', gender: '',
-  employee_id: '', date_of_joining: '', qualification: '',
-  address: '', pincode: '', emergency_contact: '', state: '', city: '',
-  is_active: true, image: null,
+const csvCell = (v: any) => {
+  const str = v === null || v === undefined ? '' : String(v);
+  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 };
 
 const AdminTeachersScreen = ({ navigation }: any) => {
   const [rows, setRows] = useState<TeacherRow[]>([]);
   const [stats, setStats] = useState<TeacherStats | null>(null);
   const [loading, setLoading] = useState(true);
+
   const [search, setSearch] = useState('');
+  const [fGender, setFGender] = useState('');
+  const [fStatus, setFStatus] = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
-  const [modal, setModal] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState<TeacherPayload>(emptyForm);
-  const [photo, setPhoto] = useState<PickedFile | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const set = (k: keyof TeacherPayload, v: any) => setForm(prev => ({ ...prev, [k]: v }));
+  const buildFilters = useCallback(
+    (extra: Partial<TeacherFilters> = {}): TeacherFilters => {
+      const f: TeacherFilters = { ...extra };
+      if (search.trim()) f.search = search.trim();
+      if (fGender) f.gender = fGender;
+      if (fStatus) f.status = fStatus as '0' | '1';
+      return f;
+    },
+    [search, fGender, fStatus],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getTeachers({ search });
+      const res = await getTeachers(buildFilters({ per_page: 200 }));
       setRows(res.teachers);
       setStats(res.stats);
     } catch (e) {
@@ -69,68 +77,38 @@ const AdminTeachersScreen = ({ navigation }: any) => {
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [buildFilters]);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
+
   const { refreshing, onRefresh } = useRefresh(load);
 
-  const openCreate = () => {
-    setEditId(null);
-    setForm({ ...emptyForm });
-    setPhoto(null);
-    setModal(true);
-  };
+  const activeFilterCount = (fGender ? 1 : 0) + (fStatus ? 1 : 0);
+  const clearFilters = () => { setFGender(''); setFStatus(''); };
 
-  const openEdit = async (id: number) => {
+  const doExport = async () => {
+    setExporting(true);
     try {
-      const d = await getTeacher(id);
-      setEditId(id);
-      setForm({
-        name: d.name ?? '', email: d.email ?? '', mobile: d.phone ?? '',
-        dob: d.dob ?? '', gender: d.gender ?? '',
-        employee_id: d.employee_id ?? '', date_of_joining: d.date_of_joining ?? '',
-        qualification: d.qualification ?? '', address: d.address ?? '',
-        pincode: d.pincode ?? '', emergency_contact: d.emergency_contact ?? '',
-        state: d.state ?? '', city: d.city ?? '', is_active: d.is_active, image: null,
+      const res = await getTeachers(buildFilters({ per_page: 10000 }));
+      const list = res.teachers;
+      if (list.length === 0) { Alert.alert('Export', 'No teachers to export.'); return; }
+      const headers = ['Name', 'Employee ID', 'Email', 'Phone', 'Gender', 'Qualification', 'Status'];
+      const lines = [headers.join(',')];
+      list.forEach(r => {
+        lines.push([
+          r.name, r.employee_id, r.email, r.phone, r.gender, r.qualification,
+          r.is_active ? 'Active' : 'Inactive',
+        ].map(csvCell).join(','));
       });
-      setPhoto(null);
-      setModal(true);
+      const stamp = new Date().toISOString().slice(0, 10);
+      await saveCsvFile(`teachers_${stamp}`, lines.join('\n'));
+      Alert.alert('Export complete', `${list.length} teachers exported to your Downloads.`);
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load teacher.'));
-    }
-  };
-
-  const choosePhoto = async () => {
-    const f = await pickImage();
-    if (f) { setPhoto(f); set('image', f); }
-  };
-
-  const save = async () => {
-    const required = ['name', 'email', 'mobile', 'dob', 'gender', 'employee_id', 'date_of_joining', 'qualification', 'address', 'pincode', 'emergency_contact'] as (keyof TeacherPayload)[];
-    if (required.some(k => !String(form[k] ?? '').trim())) {
-      return Alert.alert('Required', 'Please fill all required fields.');
-    }
-    setSaving(true);
-    try {
-      if (editId) await updateTeacher(editId, form);
-      else await createTeacher(form);
-      setModal(false);
-      await load();
-    } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save teacher.'));
+      Alert.alert('Export failed', apiErr(e, 'Could not export teachers.'));
     } finally {
-      setSaving(false);
+      setExporting(false);
     }
   };
-
-  const remove = (r: TeacherRow) =>
-    Alert.alert('Delete Teacher', `Delete "${r.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        try { await deleteTeacher(r.id); await load(); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
-      } },
-    ]);
 
   return (
     <View style={s.root}>
@@ -138,6 +116,19 @@ const AdminTeachersScreen = ({ navigation }: any) => {
       <Header
         title="Teachers"
         onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
+        rightSlot={
+          <View style={s.headActions}>
+            <TouchableOpacity style={s.headBtn} onPress={() => setFilterOpen(true)} activeOpacity={0.8}>
+              <VectorIcon iconSet="Ionicons" iconName="filter" size={18} color={theme.colors.primary} />
+              {activeFilterCount > 0 && <View style={s.headDot}><Text style={s.headDotText}>{activeFilterCount}</Text></View>}
+            </TouchableOpacity>
+            <TouchableOpacity style={s.headBtn} onPress={doExport} activeOpacity={0.8} disabled={exporting}>
+              {exporting
+                ? <ActivityIndicator size="small" color={theme.colors.primary} />
+                : <VectorIcon iconSet="Ionicons" iconName="download-outline" size={18} color={theme.colors.primary} />}
+            </TouchableOpacity>
+          </View>
+        }
       />
 
       <View style={s.statRow}>
@@ -167,57 +158,53 @@ const AdminTeachersScreen = ({ navigation }: any) => {
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           {rows.length === 0 && <Text style={s.empty}>No teachers found.</Text>}
           {rows.map(r => (
-            <View key={r.id} style={s.card}>
-              <View style={s.cardMain}>
-                {r.image ? <Image source={{ uri: r.image }} style={s.avatarImg} /> : (
-                  <View style={[s.avatar, { backgroundColor: '#8B5CF618' }]}>
-                    <Text style={s.avatarInit}>{(r.name || '?').charAt(0).toUpperCase()}</Text>
-                  </View>
-                )}
-                <View style={{ flex: 1 }}>
-                  <Text style={s.cardTitle}>{r.name}</Text>
-                  <Text style={s.cardSub}>{r.employee_id ?? '—'}{r.qualification ? ` · ${r.qualification}` : ''}</Text>
-                  <Text style={s.cardMeta}>{r.email}{r.phone ? ` · ${r.phone}` : ''}</Text>
+            <TouchableOpacity key={r.id} style={s.card} activeOpacity={0.7}
+              onPress={() => navigation.navigate('AdminTeacherDetail', { id: r.id })}>
+              {r.image ? <Image source={{ uri: r.image }} style={s.avatarImg} /> : (
+                <View style={[s.avatar, { backgroundColor: '#8B5CF618' }]}>
+                  <Text style={s.avatarInit}>{(r.name || '?').charAt(0).toUpperCase()}</Text>
                 </View>
-                {!r.is_active && <View style={s.inactiveTag}><Text style={s.inactiveTagText}>Inactive</Text></View>}
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={s.cardTitle} numberOfLines={1}>{r.name}</Text>
+                <Text style={s.cardSub} numberOfLines={1}>
+                  {r.employee_id ?? '—'}{r.qualification ? ` · ${r.qualification}` : ''}
+                </Text>
               </View>
-              <View style={s.cardActions}>
-                <TouchableOpacity style={s.act} onPress={() => openEdit(r.id)}><VectorIcon iconSet="Ionicons" iconName="create-outline" size={17} color={theme.colors.primary} /></TouchableOpacity>
-                <TouchableOpacity style={s.act} onPress={() => remove(r)}><VectorIcon iconSet="Ionicons" iconName="trash-outline" size={17} color={theme.colors.danger} /></TouchableOpacity>
-              </View>
-            </View>
+              {!r.is_active && <View style={s.inactiveTag}><Text style={s.inactiveTagText}>Inactive</Text></View>}
+              <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={18} color={theme.colors.textMuted} />
+            </TouchableOpacity>
           ))}
           <View style={{ height: 90 }} />
         </ScrollView>
       )}
 
-      <TouchableOpacity style={s.fab} onPress={openCreate} activeOpacity={0.9}>
+      <TouchableOpacity style={s.fab} onPress={() => navigation.navigate('AdminTeacherForm')} activeOpacity={0.9}>
         <VectorIcon iconSet="Ionicons" iconName="add" size={28} color="#fff" />
       </TouchableOpacity>
 
-      <FormModal visible={modal} title={editId ? 'Edit Teacher' : 'New Teacher'}
-        onClose={() => setModal(false)} onSave={save} saving={saving} saveLabel={editId ? 'Update' : 'Create'}>
-        <TouchableOpacity style={s.photoBtn} onPress={choosePhoto} activeOpacity={0.85}>
-          <VectorIcon iconSet="Ionicons" iconName="camera-outline" size={16} color={theme.colors.primary} />
-          <Text style={s.photoBtnText} numberOfLines={1}>{photo ? photo.name : 'Add photo (optional)'}</Text>
-        </TouchableOpacity>
-
-        <Field label="Full Name" value={form.name} onChangeText={(v: string) => set('name', v)} placeholder="Teacher name" />
-        <Field label="Email" value={form.email} onChangeText={(v: string) => set('email', v)} placeholder="email@example.com" keyboardType="email-address" autoCapitalize="none" />
-        <Field label="Mobile" value={form.mobile} onChangeText={(v: string) => set('mobile', v)} placeholder="10-digit" keyboardType="number-pad" />
-        <Field label="Date of Birth" value={form.dob} onChangeText={(v: string) => set('dob', v)} placeholder="YYYY-MM-DD" />
-        <Text style={s.fieldLabel}>Gender</Text>
-        <ChipPicker items={GENDERS} selected={form.gender ? [form.gender] : []} onToggle={(id: string) => set('gender', id)} />
-        <Field label="Employee ID" value={form.employee_id} onChangeText={(v: string) => set('employee_id', v)} placeholder="e.g. EMP001" />
-        <Field label="Date of Joining" value={form.date_of_joining} onChangeText={(v: string) => set('date_of_joining', v)} placeholder="YYYY-MM-DD" />
-        <Field label="Qualification" value={form.qualification} onChangeText={(v: string) => set('qualification', v)} placeholder="e.g. B.Ed, M.Sc" />
-        <Field label="Emergency Contact" value={form.emergency_contact} onChangeText={(v: string) => set('emergency_contact', v)} placeholder="10-digit" keyboardType="number-pad" />
-        <Field label="Address" value={form.address} onChangeText={(v: string) => set('address', v)} placeholder="Full address" multiline />
-        <Field label="State" value={form.state} onChangeText={(v: string) => set('state', v)} placeholder="Optional" />
-        <Field label="City" value={form.city} onChangeText={(v: string) => set('city', v)} placeholder="Optional" />
-        <Field label="Pincode" value={form.pincode} onChangeText={(v: string) => set('pincode', v)} placeholder="6 digits" keyboardType="number-pad" />
-        <ToggleRow label="Active" value={form.is_active} onValueChange={(v: boolean) => set('is_active', v)} />
-      </FormModal>
+      {/* Filter popup (top-right) */}
+      {filterOpen && (
+        <View style={s.filterOverlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setFilterOpen(false)} />
+          <View style={s.filterCard}>
+            <View style={s.filterHead}>
+              <Text style={s.filterTitle}>Filter Teachers</Text>
+              <TouchableOpacity onPress={() => setFilterOpen(false)}><VectorIcon iconSet="Ionicons" iconName="close" size={20} color={theme.colors.textMuted} /></TouchableOpacity>
+            </View>
+            <Select label="Gender" value={fGender} options={GENDER_OPTS} onChange={(v) => setFGender(String(v))} />
+            <Select label="Status" value={fStatus} options={STATUS_OPTS} onChange={(v) => setFStatus(String(v))} />
+            <View style={s.filterActions}>
+              <TouchableOpacity style={[s.fbtn, s.fbtnGhost]} onPress={clearFilters} activeOpacity={0.85}>
+                <Text style={s.fbtnGhostText}>Clear</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.fbtn, s.fbtnPrimary]} onPress={() => setFilterOpen(false)} activeOpacity={0.9}>
+                <Text style={s.fbtnPrimaryText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -227,9 +214,11 @@ export default AdminTeachersScreen;
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 40 },
-  topbar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 14, backgroundColor: theme.colors.card, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  menuBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 20, fontWeight: '900', color: theme.colors.textPrimary, flex: 1 },
+
+  headActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
+  headDot: { position: 'absolute', top: -2, right: -2, minWidth: 15, height: 15, paddingHorizontal: 3, borderRadius: 8, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
+  headDotText: { fontSize: 9, fontWeight: '800', color: '#fff' },
 
   statRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12 },
   statCard: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
@@ -242,22 +231,25 @@ const s = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingTop: 10 },
   empty: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', marginTop: 40 },
 
-  card: { backgroundColor: theme.colors.card, borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: theme.colors.border },
-  cardMain: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  avatarImg: { width: 44, height: 44, borderRadius: 14 },
-  avatarInit: { fontSize: 18, fontWeight: '900', color: '#8B5CF6' },
-  cardTitle: { fontSize: 15, fontWeight: '800', color: theme.colors.textPrimary },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.card, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 8, borderWidth: 1, borderColor: theme.colors.border },
+  avatar: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  avatarImg: { width: 38, height: 38, borderRadius: 12 },
+  avatarInit: { fontSize: 16, fontWeight: '900', color: '#8B5CF6' },
+  cardTitle: { fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary },
   cardSub: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
-  cardMeta: { fontSize: 11, color: theme.colors.textMuted, marginTop: 3 },
   inactiveTag: { backgroundColor: '#FEE2E2', borderRadius: theme.radius.full, paddingHorizontal: 8, paddingVertical: 3 },
   inactiveTagText: { fontSize: 10, fontWeight: '800', color: theme.colors.danger },
-  cardActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 10 },
-  act: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background },
 
   fab: { position: 'absolute', right: 18, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
 
-  photoBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, paddingVertical: 11, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight },
-  photoBtnText: { fontSize: 13, fontWeight: '700', color: theme.colors.primary, maxWidth: '80%' },
-  fieldLabel: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary, marginTop: 12, marginBottom: 6 },
+  filterOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'flex-end', justifyContent: 'flex-start', paddingTop: 66, paddingRight: 12 },
+  filterCard: { width: '86%', maxWidth: 360, backgroundColor: theme.colors.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: theme.colors.border, elevation: 8, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  filterHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  filterTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.textPrimary },
+  filterActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  fbtn: { flex: 1, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  fbtnGhost: { backgroundColor: theme.colors.border },
+  fbtnGhostText: { fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary },
+  fbtnPrimary: { backgroundColor: theme.colors.primary },
+  fbtnPrimaryText: { fontSize: 14, fontWeight: '700', color: '#fff' },
 });
