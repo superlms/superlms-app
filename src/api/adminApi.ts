@@ -37,6 +37,11 @@ export interface AdminAnalytics {
   top_students: { rank: number; name: string; class: string; section: string; score: number }[];
   class_distribution: { labels: string[]; present: number[]; absent: number[] };
   fee: { total: number; collected: number; remaining: number };
+  structure: { classes: number; sections: number; subjects: number };
+  homework: { total: number; submitted: number; pending: number };
+  ledger: { credit: number; expense: number; balance: number };
+  enquiries: { total: number; pending: number; admitted: number; other: number };
+  performance: { avg: number; graded: number; buckets: { labels: string[]; values: number[] } };
   recent_activities: { title: string; description: string; time: string | null; color: string }[];
 }
 
