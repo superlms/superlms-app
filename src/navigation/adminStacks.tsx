@@ -27,6 +27,19 @@ import AdminCalendarDayScreen from '../screens/admin/AdminCalendarDayScreen';
 import AdminEnquiriesScreen from '../screens/admin/AdminEnquiriesScreen';
 import AdminEnquiryDetailScreen from '../screens/admin/AdminEnquiryDetailScreen';
 import AdminEnquiryReplyScreen from '../screens/admin/AdminEnquiryReplyScreen';
+// Syllabus
+import AdminSyllabusScreen from '../screens/admin/AdminSyllabusScreen';
+import AdminSyllabusChapterFormScreen from '../screens/admin/AdminSyllabusChapterFormScreen';
+import AdminSyllabusTopicFormScreen from '../screens/admin/AdminSyllabusTopicFormScreen';
+// Content
+import AdminContentScreen from '../screens/admin/AdminContentScreen';
+import AdminContentFormScreen from '../screens/admin/AdminContentFormScreen';
+// Quiz
+import AdminQuizScreen from '../screens/admin/AdminQuizScreen';
+import AdminQuizFormScreen from '../screens/admin/AdminQuizFormScreen';
+// Book
+import AdminBookScreen from '../screens/admin/AdminBookScreen';
+import AdminBookFormScreen from '../screens/admin/AdminBookFormScreen';
 
 // Each admin section that has list → detail → form/reply screens gets its own
 // native stack. This gives correct, isolated back navigation (a "Back" inside a
@@ -82,5 +95,34 @@ export const AdminEnquiriesStack = () => (
     <Stack.Screen name="AdminEnquiriesHome" component={AdminEnquiriesScreen} />
     <Stack.Screen name="AdminEnquiryDetail" component={AdminEnquiryDetailScreen} />
     <Stack.Screen name="AdminEnquiryReply" component={AdminEnquiryReplyScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminSyllabusStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminSyllabusHome" component={AdminSyllabusScreen} />
+    <Stack.Screen name="AdminSyllabusChapterForm" component={AdminSyllabusChapterFormScreen} />
+    <Stack.Screen name="AdminSyllabusTopicForm" component={AdminSyllabusTopicFormScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminContentStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminContentHome" component={AdminContentScreen} />
+    <Stack.Screen name="AdminContentForm" component={AdminContentFormScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminQuizStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminQuizHome" component={AdminQuizScreen} />
+    <Stack.Screen name="AdminQuizForm" component={AdminQuizFormScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminBookStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminBookHome" component={AdminBookScreen} />
+    <Stack.Screen name="AdminBookForm" component={AdminBookFormScreen} />
   </Stack.Navigator>
 );

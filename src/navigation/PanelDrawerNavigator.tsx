@@ -19,10 +19,6 @@ import AdminTabNavigator from './AdminTabNavigator';
 import AdminAnalyticsScreen from '../screens/admin/AdminAnalyticsScreen';
 import AdminIdCardScreen from '../screens/admin/AdminIdCardScreen';
 import AdminExamScreen from '../screens/admin/AdminExamScreen';
-import AdminSyllabusScreen from '../screens/admin/AdminSyllabusScreen';
-import AdminContentScreen from '../screens/admin/AdminContentScreen';
-import AdminQuizScreen from '../screens/admin/AdminQuizScreen';
-import AdminBookScreen from '../screens/admin/AdminBookScreen';
 import AdminTimetableScreen from '../screens/admin/AdminTimetableScreen';
 import AdminArrangementScreen from '../screens/admin/AdminArrangementScreen';
 import {
@@ -32,6 +28,10 @@ import {
   AdminAnnouncementStack,
   AdminCalendarStack,
   AdminEnquiriesStack,
+  AdminSyllabusStack,
+  AdminContentStack,
+  AdminQuizStack,
+  AdminBookStack,
 } from './adminStacks';
 import AccountsDashboardScreen from '../screens/accounts/AccountsDashboardScreen';
 import { AdminUser, AccountsUser, getStoredUser, logout } from '../api/authApi';
@@ -315,10 +315,10 @@ const PanelDrawerNavigator = ({ route }: any) => {
       {panel === 'admin' && <Drawer.Screen name="AdminTeachers" component={AdminTeachersStack} />}
       {panel === 'admin' && <Drawer.Screen name="AdminIdCard" component={AdminIdCardScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminExam" component={AdminExamScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminSyllabus" component={AdminSyllabusScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminContent" component={AdminContentScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminQuiz" component={AdminQuizScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminBook" component={AdminBookScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminSyllabus" component={AdminSyllabusStack} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminContent" component={AdminContentStack} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminQuiz" component={AdminQuizStack} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminBook" component={AdminBookStack} />}
       {panel === 'admin' && <Drawer.Screen name="AdminTimetable" component={AdminTimetableScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminArrangement" component={AdminArrangementScreen} />}
     </Drawer.Navigator>

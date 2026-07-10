@@ -13,7 +13,7 @@ export interface ListRowProps {
   title: string;
   subtitle?: string;
   metaIcon?: string;
-  meta?: string;
+  meta?: string | null;
   tag?: string;
   tagColor?: string;
   right?: React.ReactNode;

@@ -161,7 +161,7 @@ const AdminTeachersScreen = ({ navigation }: any) => {
             <ListRow
               key={r.id}
               color={r.is_active ? '#8B5CF6' : '#EF4444'}
-              title={r.name}
+              title={r.name ?? '—'}
               subtitle={`${r.employee_id ?? '—'}${r.qualification ? ` · ${r.qualification}` : ''}`}
               metaIcon="mail-outline"
               meta={r.email || r.phone || undefined}

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -7,36 +7,24 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { DrawerActions } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import Header from '../../components/Header';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
-import { apiErr, pickImage, pickPdf } from '../../utils/filePickers';
-import { PickedFile } from '../../api/adminProfileApi';
-import { FormModal, ChipPicker } from './AdminStandardScreen';
+import { apiErr } from '../../utils/filePickers';
 import AdminCurriculumFilter, { CurriculumSelection } from './AdminCurriculumFilter';
 import {
   ContentChapter,
   ContentStats,
-  ContentType,
   clearContent,
   getContent,
   getContentStats,
-  saveContent,
 } from '../../api/adminContentLibApi';
-
-const TYPES = [
-  { id: 'text', label: 'Text' },
-  { id: 'url', label: 'Link' },
-  { id: 'image', label: 'Image' },
-  { id: 'pdf', label: 'PDF' },
-];
 
 const AdminContentScreen = ({ navigation }: any) => {
   const [stats, setStats] = useState<ContentStats | null>(null);
@@ -44,16 +32,6 @@ const AdminContentScreen = ({ navigation }: any) => {
   const [chapters, setChapters] = useState<ContentChapter[]>([]);
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState<number[]>([]);
-
-  // content modal
-  const [modal, setModal] = useState(false);
-  const [target, setTarget] = useState<{ type: 'chapter' | 'topic'; id: number; name: string } | null>(null);
-  const [cType, setCType] = useState<ContentType>('text');
-  const [text, setText] = useState('');
-  const [url, setUrl] = useState('');
-  const [image, setImage] = useState<PickedFile | null>(null);
-  const [pdf, setPdf] = useState<PickedFile | null>(null);
-  const [saving, setSaving] = useState(false);
 
   const loadStats = useCallback(async () => { try { setStats(await getContentStats()); } catch {} }, []);
   const loadList = useCallback(async () => {
@@ -65,40 +43,13 @@ const AdminContentScreen = ({ navigation }: any) => {
     finally { setLoading(false); }
   }, [sel]);
 
-  useEffect(() => { loadStats(); }, [loadStats]);
-  useEffect(() => { loadList(); }, [loadList]);
+  useFocusEffect(useCallback(() => { loadStats(); loadList(); }, [loadStats, loadList]));
   const { refreshing, onRefresh } = useRefresh(async () => { await Promise.all([loadStats(), loadList()]); });
 
   const toggle = (id: number) => setExpanded(p => (p.includes(id) ? p.filter(x => x !== id) : [...p, id]));
 
-  const openContent = (type: 'chapter' | 'topic', id: number, name: string, existing?: any) => {
-    setTarget({ type, id, name });
-    setText(existing?.text ?? '');
-    setUrl(existing?.url ?? '');
-    setImage(null);
-    setPdf(null);
-    setCType(existing?.image ? 'image' : existing?.pdf ? 'pdf' : existing?.url ? 'url' : 'text');
-    setModal(true);
-  };
-
-  const choose = async (kind: 'image' | 'pdf') => {
-    const f = kind === 'image' ? await pickImage() : await pickPdf();
-    if (f) { if (kind === 'image') setImage(f); else setPdf(f); }
-  };
-
-  const save = async () => {
-    if (cType === 'text' && !text.trim()) return Alert.alert('Required', 'Enter some text.');
-    if (cType === 'url' && !url.trim()) return Alert.alert('Required', 'Enter a link.');
-    if (cType === 'image' && !image) return Alert.alert('Required', 'Pick an image.');
-    if (cType === 'pdf' && !pdf) return Alert.alert('Required', 'Pick a PDF.');
-    setSaving(true);
-    try {
-      await saveContent({ target_type: target!.type, target_id: target!.id, content_type: cType, text, url, image, pdf });
-      setModal(false);
-      await Promise.all([loadStats(), loadList()]);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not save content.')); }
-    finally { setSaving(false); }
-  };
+  const editContent = (type: 'chapter' | 'topic', id: number, name: string, existing?: any) =>
+    navigation.navigate('AdminContentForm', { targetType: type, targetId: id, name, existing });
 
   const clear = (type: 'chapter' | 'topic', id: number, name: string) =>
     Alert.alert('Remove Content', `Remove all content from "${name}"?`, [
@@ -159,7 +110,7 @@ const AdminContentScreen = ({ navigation }: any) => {
                     <Text style={st.chMeta}>{c.has_content ? 'Has content' : 'No content'} · {c.topics.length} topic(s)</Text>
                   </View>
                   {c.has_content && <View style={st.dotGreen} />}
-                  <TouchableOpacity style={st.act} onPress={() => openContent('chapter', c.id, c.name, c.content)}><VectorIcon iconSet="Ionicons" iconName="create-outline" size={16} color={theme.colors.primary} /></TouchableOpacity>
+                  <TouchableOpacity style={st.act} onPress={() => editContent('chapter', c.id, c.name, c.content)}><VectorIcon iconSet="Ionicons" iconName="create-outline" size={16} color={theme.colors.primary} /></TouchableOpacity>
                   {c.has_content && <TouchableOpacity style={st.act} onPress={() => clear('chapter', c.id, c.name)}><VectorIcon iconSet="Ionicons" iconName="trash-outline" size={16} color={theme.colors.danger} /></TouchableOpacity>}
                 </TouchableOpacity>
                 {open && (
@@ -171,7 +122,7 @@ const AdminContentScreen = ({ navigation }: any) => {
                           <Text style={st.topicName}>{t.name}</Text>
                           {t.has_content && <ContentPreview c={t.content} />}
                         </View>
-                        <TouchableOpacity style={st.actSm} onPress={() => openContent('topic', t.id, t.name, t.content)}><VectorIcon iconSet="Ionicons" iconName="create-outline" size={14} color={theme.colors.primary} /></TouchableOpacity>
+                        <TouchableOpacity style={st.actSm} onPress={() => editContent('topic', t.id, t.name, t.content)}><VectorIcon iconSet="Ionicons" iconName="create-outline" size={14} color={theme.colors.primary} /></TouchableOpacity>
                         {t.has_content && <TouchableOpacity style={st.actSm} onPress={() => clear('topic', t.id, t.name)}><VectorIcon iconSet="Ionicons" iconName="trash-outline" size={14} color={theme.colors.danger} /></TouchableOpacity>}
                       </View>
                     ))}
@@ -183,30 +134,6 @@ const AdminContentScreen = ({ navigation }: any) => {
           <View style={{ height: 40 }} />
         </ScrollView>
       )}
-
-      <FormModal visible={modal} title={`Content · ${target?.name ?? ''}`} onClose={() => setModal(false)} onSave={save} saving={saving} saveLabel="Save">
-        <Text style={st.fieldLabel}>Type</Text>
-        <ChipPicker items={TYPES} selected={[cType]} onToggle={(id: any) => setCType(id)} />
-        {cType === 'text' && (
-          <TextInput style={[st.input, st.inputMulti, { marginTop: 12 }]} placeholder="Enter content text" placeholderTextColor={theme.colors.textMuted} multiline value={text} onChangeText={setText} />
-        )}
-        {cType === 'url' && (
-          <TextInput style={[st.input, { marginTop: 12 }]} placeholder="https://..." placeholderTextColor={theme.colors.textMuted} autoCapitalize="none" value={url} onChangeText={setUrl} />
-        )}
-        {cType === 'image' && (
-          <TouchableOpacity style={st.pickBtn} onPress={() => choose('image')} activeOpacity={0.85}>
-            <VectorIcon iconSet="Ionicons" iconName="image-outline" size={16} color={theme.colors.primary} />
-            <Text style={st.pickText} numberOfLines={1}>{image ? image.name : 'Pick image'}</Text>
-          </TouchableOpacity>
-        )}
-        {cType === 'pdf' && (
-          <TouchableOpacity style={st.pickBtn} onPress={() => choose('pdf')} activeOpacity={0.85}>
-            <VectorIcon iconSet="Ionicons" iconName="document-outline" size={16} color={theme.colors.primary} />
-            <Text style={st.pickText} numberOfLines={1}>{pdf ? pdf.name : 'Pick PDF'}</Text>
-          </TouchableOpacity>
-        )}
-        <Text style={st.note}>Saving replaces the existing content of this {target?.type}.</Text>
-      </FormModal>
     </View>
   );
 };
@@ -216,9 +143,6 @@ export default AdminContentScreen;
 const st = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 40 },
-  topbar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 14, backgroundColor: theme.colors.card, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  menuBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 20, fontWeight: '900', color: theme.colors.textPrimary, flex: 1 },
 
   statRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12 },
   statCard: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
@@ -241,11 +165,4 @@ const st = StyleSheet.create({
   topicRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   topicName: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary },
   actSm: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background },
-
-  fieldLabel: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary, marginTop: 12, marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: theme.colors.textPrimary, backgroundColor: theme.colors.background },
-  inputMulti: { minHeight: 90, textAlignVertical: 'top' },
-  pickBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight },
-  pickText: { fontSize: 13, fontWeight: '700', color: theme.colors.primary, maxWidth: '80%' },
-  note: { fontSize: 11, color: theme.colors.textMuted, marginTop: 12 },
 });

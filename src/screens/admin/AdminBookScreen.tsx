@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,29 +12,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { DrawerActions } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import Header from '../../components/Header';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
-import { apiErr, pickImage, pickPdf } from '../../utils/filePickers';
-import { PickedFile } from '../../api/adminProfileApi';
-import { FormModal, Field, ToggleRow, ChipPicker } from './AdminStandardScreen';
-import {
-  BookRow,
-  BookStats,
-  BookPayload,
-  createBook,
-  deleteBook,
-  getBookOptions,
-  getBooks,
-  updateBook,
-} from '../../api/adminBookApi';
-
-const emptyForm: BookPayload = {
-  title: '', standard_id: 0, section_id: null, subject_id: 0, is_active: true, book_logo: null, pdf_file: null,
-};
+import { apiErr } from '../../utils/filePickers';
+import { BookRow, BookStats, deleteBook, getBooks } from '../../api/adminBookApi';
 
 const AdminBookScreen = ({ navigation }: any) => {
   const [books, setBooks] = useState<BookRow[]>([]);
@@ -43,16 +28,6 @@ const AdminBookScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [fClass, setFClass] = useState<number | null>(null);
-
-  const [modal, setModal] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState<BookPayload>(emptyForm);
-  const [formSections, setFormSections] = useState<{ id: number; name: string }[]>([]);
-  const [formSubjects, setFormSubjects] = useState<{ id: number; name: string }[]>([]);
-  const [logo, setLogo] = useState<PickedFile | null>(null);
-  const [pdf, setPdf] = useState<PickedFile | null>(null);
-  const [saving, setSaving] = useState(false);
-  const set = (k: keyof BookPayload, v: any) => setForm(prev => ({ ...prev, [k]: v }));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -69,71 +44,11 @@ const AdminBookScreen = ({ navigation }: any) => {
     }
   }, [fClass, search]);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
   const { refreshing, onRefresh } = useRefresh(load);
 
-  const loadFormOptions = async (standardId: number, sectionId?: number | null) => {
-    try {
-      const o = await getBookOptions(standardId, sectionId);
-      setFormSections(o.sections);
-      setFormSubjects(o.subjects);
-    } catch { setFormSections([]); setFormSubjects([]); }
-  };
-
-  const openCreate = async () => {
-    setEditId(null);
-    const cid = fClass ?? classes[0]?.id ?? 0;
-    setForm({ ...emptyForm, standard_id: cid });
-    setLogo(null); setPdf(null);
-    if (cid) await loadFormOptions(cid, null);
-    setModal(true);
-  };
-
-  const openEdit = async (b: BookRow) => {
-    setEditId(b.id);
-    setForm({
-      title: b.title, standard_id: b.standard_id, section_id: b.section_id ?? null,
-      subject_id: b.subject_id, is_active: b.is_active, book_logo: null, pdf_file: null,
-    });
-    setLogo(null); setPdf(null);
-    await loadFormOptions(b.standard_id, b.section_id);
-    setModal(true);
-  };
-
-  const onClassChange = async (id: number) => {
-    set('standard_id', id);
-    set('section_id', null);
-    set('subject_id', 0);
-    await loadFormOptions(id, null);
-  };
-  const onSectionChange = async (id: number | null) => {
-    set('section_id', id);
-    set('subject_id', 0);
-    await loadFormOptions(form.standard_id, id);
-  };
-
-  const choose = async (kind: 'logo' | 'pdf') => {
-    const f = kind === 'logo' ? await pickImage() : await pickPdf();
-    if (!f) return;
-    if (kind === 'logo') { setLogo(f); set('book_logo', f); } else { setPdf(f); set('pdf_file', f); }
-  };
-
-  const save = async () => {
-    if (!form.title.trim() || !form.standard_id || !form.subject_id) {
-      return Alert.alert('Required', 'Title, class and subject are required.');
-    }
-    setSaving(true);
-    try {
-      if (editId) await updateBook(editId, form);
-      else await createBook(form);
-      setModal(false);
-      await load();
-    } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save book.'));
-    } finally {
-      setSaving(false);
-    }
-  };
+  const openCreate = () => navigation.navigate('AdminBookForm', { classes, presetClassId: fClass });
+  const openEdit = (b: BookRow) => navigation.navigate('AdminBookForm', { book: b, classes });
 
   const remove = (b: BookRow) =>
     Alert.alert('Delete Book', `Delete "${b.title}"?`, [
@@ -165,7 +80,7 @@ const AdminBookScreen = ({ navigation }: any) => {
         ))}
       </View>
 
-      {/* Class filter (required) */}
+      {/* Class filter */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterBar} contentContainerStyle={s.filterContent}>
         {classes.map(c => {
           const active = fClass === c.id;
@@ -222,26 +137,6 @@ const AdminBookScreen = ({ navigation }: any) => {
       <TouchableOpacity style={s.fab} onPress={openCreate} activeOpacity={0.9}>
         <VectorIcon iconSet="Ionicons" iconName="add" size={28} color="#fff" />
       </TouchableOpacity>
-
-      <FormModal visible={modal} title={editId ? 'Edit Book' : 'New Book'} onClose={() => setModal(false)} onSave={save} saving={saving} saveLabel={editId ? 'Update' : 'Create'}>
-        <Field label="Title" value={form.title} onChangeText={(v: string) => set('title', v)} placeholder="Book title" />
-        <Text style={s.fieldLabel}>Class</Text>
-        <ChipPicker items={classes.map(c => ({ id: c.id, label: c.name }))} selected={form.standard_id ? [form.standard_id] : []} onToggle={onClassChange} />
-        <Text style={s.fieldLabel}>Section (optional)</Text>
-        <ChipPicker items={[{ id: 0, label: 'All' }, ...formSections.map(x => ({ id: x.id, label: x.name }))]} selected={[form.section_id ?? 0]} onToggle={(id: number) => onSectionChange(id === 0 ? null : id)} />
-        <Text style={s.fieldLabel}>Subject</Text>
-        <ChipPicker items={formSubjects.map(x => ({ id: x.id, label: x.name }))} selected={form.subject_id ? [form.subject_id] : []} onToggle={(id: number) => set('subject_id', id)} />
-
-        <TouchableOpacity style={s.pickBtn} onPress={() => choose('logo')} activeOpacity={0.85}>
-          <VectorIcon iconSet="Ionicons" iconName="image-outline" size={16} color={theme.colors.primary} />
-          <Text style={s.pickText} numberOfLines={1}>{logo ? logo.name : 'Cover image (optional)'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={s.pickBtn} onPress={() => choose('pdf')} activeOpacity={0.85}>
-          <VectorIcon iconSet="Ionicons" iconName="document-outline" size={16} color={theme.colors.primary} />
-          <Text style={s.pickText} numberOfLines={1}>{pdf ? pdf.name : 'Book PDF (optional)'}</Text>
-        </TouchableOpacity>
-        <ToggleRow label="Active" value={form.is_active} onValueChange={(v: boolean) => set('is_active', v)} />
-      </FormModal>
     </View>
   );
 };
@@ -251,9 +146,6 @@ export default AdminBookScreen;
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 40 },
-  topbar: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 14, backgroundColor: theme.colors.card, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  menuBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 20, fontWeight: '900', color: theme.colors.textPrimary, flex: 1 },
 
   statRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12 },
   statCard: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
@@ -288,8 +180,4 @@ const s = StyleSheet.create({
   act: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background },
 
   fab: { position: 'absolute', right: 18, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
-
-  fieldLabel: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary, marginTop: 12, marginBottom: 6 },
-  pickBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight },
-  pickText: { fontSize: 13, fontWeight: '700', color: theme.colors.primary, maxWidth: '80%' },
 });
