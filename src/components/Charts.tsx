@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from './VectorIcon';
 import { theme, onThemeChange } from '../utils/theme';
 
@@ -241,32 +241,60 @@ export const WeekDots = ({
 );
 
 // ─── Card wrapper with titled header ─────────────────────────────────────────
+// Pass `onPress` to make the whole card tappable — it renders a chevron and a
+// small "open" hint after the title so users know it drills into a screen.
 export const ChartCard = ({
   icon,
   iconBg,
   iconColor,
   title,
+  subtitle,
   right,
+  onPress,
   children,
 }: {
   icon: string;
   iconBg: string;
   iconColor: string;
   title: string;
+  subtitle?: string;
   right?: React.ReactNode;
+  onPress?: () => void;
   children: React.ReactNode;
-}) => (
-  <View style={cc.card}>
+}) => {
+  const head = (
     <View style={cc.head}>
       <View style={[cc.icon, { backgroundColor: iconBg }]}>
         <VectorIcon iconSet="Ionicons" iconName={icon} size={15} color={iconColor} />
       </View>
-      <Text style={cc.title}>{title}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={cc.title} numberOfLines={1}>{title}</Text>
+        {subtitle != null && <Text style={cc.subtitle} numberOfLines={1}>{subtitle}</Text>}
+      </View>
       {right}
+      {onPress != null && (
+        <View style={[cc.chevron, { backgroundColor: iconBg }]}>
+          <VectorIcon iconSet="Feather" iconName="chevron-right" size={16} color={iconColor} />
+        </View>
+      )}
     </View>
-    {children}
-  </View>
-);
+  );
+
+  if (onPress != null) {
+    return (
+      <TouchableOpacity style={cc.card} activeOpacity={0.85} onPress={onPress}>
+        {head}
+        {children}
+      </TouchableOpacity>
+    );
+  }
+  return (
+    <View style={cc.card}>
+      {head}
+      {children}
+    </View>
+  );
+};
 
 const __mk_c = () => StyleSheet.create({
   chip: {
@@ -371,7 +399,15 @@ const __mk_cc = () => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { flex: 1, fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary },
+  title: { fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary },
+  subtitle: { fontSize: 10.5, fontWeight: '600', color: theme.colors.textMuted, marginTop: 1 },
+  chevron: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
 
 

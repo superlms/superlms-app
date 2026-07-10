@@ -12,7 +12,7 @@ import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
-import { ChartCard, Donut, MiniBars, StackedBar } from '../../components/Charts';
+import { ChartCard, Donut, MiniBars, StackedBar, HBar } from '../../components/Charts';
 import { AdminAnalytics, getAdminAnalytics } from '../../api/adminApi';
 import { AdminUser, getStoredUser } from '../../api/authApi';
 import { useUnreadCount } from '../../notifications';
@@ -23,37 +23,57 @@ const ABSENT = '#EF4444';
 const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 const pct = (a: number, b: number) => (a + b > 0 ? Math.round((a / (a + b)) * 100) : 0);
 
-// ── Attendance card: present donut + present/absent split + monthly bars ──
+// ── right-aligned metric pill for a card header ──
+const Badge = ({ text, color }: { text: string; color: string }) => (
+  <View style={[s.badge, { backgroundColor: color + '1A' }]}>
+    <Text style={[s.badgeText, { color }]}>{text}</Text>
+  </View>
+);
+
+// ── Attendance card: rate + today + present & absent monthly bars ──
 const AttendanceCard = ({
-  title, icon, color, pie, monthly,
+  title, icon, color, todayPresent, todayAbsent, pie, monthly, onPress,
 }: {
   title: string; icon: string; color: string;
+  todayPresent?: number; todayAbsent?: number;
   pie: { present: number; absent: number };
   monthly: { months: string[]; present: number[]; absent: number[] };
+  onPress: () => void;
 }) => {
-  const present = pct(pie.present, pie.absent);
+  const rate = pct(pie.present, pie.absent);
   const maxVal = Math.max(1, ...monthly.present, ...monthly.absent);
   return (
-    <ChartCard icon={icon} iconBg={color + '18'} iconColor={color} title={title}>
+    <ChartCard icon={icon} iconBg={color + '18'} iconColor={color} title={title}
+      subtitle="Last 30 days" right={<Badge text={`${rate}%`} color={PRESENT} />} onPress={onPress}>
       <View style={s.pieRow}>
-        <Donut size={104} stroke={12} pct={present} color={PRESENT} label={`${present}%`} sub="present" />
-        <View style={{ flex: 1 }}>
+        <Donut size={104} stroke={12} pct={rate} color={PRESENT} label={`${rate}%`} sub="present" />
+        <View style={{ flex: 1, gap: 10 }}>
           <StackedBar
             segments={[
               { label: 'Present', value: pie.present, color: PRESENT },
               { label: 'Absent', value: pie.absent, color: ABSENT },
             ]}
           />
+          {(todayPresent != null || todayAbsent != null) && (
+            <View style={s.todayRow}>
+              <View style={[s.todayPill, { backgroundColor: PRESENT + '14' }]}>
+                <Text style={[s.todayVal, { color: PRESENT }]}>{todayPresent ?? 0}</Text>
+                <Text style={s.todayLbl}>present today</Text>
+              </View>
+              <View style={[s.todayPill, { backgroundColor: ABSENT + '14' }]}>
+                <Text style={[s.todayVal, { color: ABSENT }]}>{todayAbsent ?? 0}</Text>
+                <Text style={s.todayLbl}>absent today</Text>
+              </View>
+            </View>
+          )}
         </View>
       </View>
       <Text style={s.subLabel}>Monthly present (Apr–Mar)</Text>
-      <MiniBars
-        data={monthly.months.map((m, i) => ({ label: m, value: monthly.present[i] ?? 0 }))}
-        maxVal={maxVal}
-        color={PRESENT}
-        height={110}
-        showValue={false}
-      />
+      <MiniBars data={monthly.months.map((m, i) => ({ label: m, value: monthly.present[i] ?? 0 }))}
+        maxVal={maxVal} color={PRESENT} height={96} showValue={false} />
+      <Text style={s.subLabel}>Monthly absent (Apr–Mar)</Text>
+      <MiniBars data={monthly.months.map((m, i) => ({ label: m, value: monthly.absent[i] ?? 0 }))}
+        maxVal={maxVal} color={ABSENT} height={96} showValue={false} />
     </ChartCard>
   );
 };
@@ -81,37 +101,45 @@ const AdminDashboardScreen = ({ navigation }: any) => {
 
   const { refreshing, onRefresh } = useRefresh(load);
   const unreadCount = useUnreadCount();
+  const go = (route: string) => navigation.navigate(route);
 
   const statCards = data ? [
-    { label: 'Students', value: String(data.stats.totalStudents), icon: 'people', color: '#6366F1' },
-    { label: 'Present Today', value: String(data.stats.presentToday), icon: 'checkmark-circle', color: PRESENT },
-    { label: 'Absent Today', value: String(data.stats.absentToday), icon: 'close-circle', color: ABSENT },
-    { label: 'Teachers', value: String(data.stats.teachers), icon: 'school', color: '#8B5CF6' },
-    { label: 'New (30d)', value: String(data.stats.newAdmissions), icon: 'person-add', color: '#F59E0B' },
+    { label: 'Students', value: String(data.stats.totalStudents), icon: 'people', color: '#6366F1', route: 'AdminStudents' },
+    { label: 'Present Today', value: String(data.stats.presentToday), icon: 'checkmark-circle', color: PRESENT, route: 'AdminAnalytics' },
+    { label: 'Absent Today', value: String(data.stats.absentToday), icon: 'close-circle', color: ABSENT, route: 'AdminAnalytics' },
+    { label: 'Teachers', value: String(data.stats.teachers), icon: 'school', color: '#8B5CF6', route: 'AdminTeachers' },
+    { label: 'New (30d)', value: String(data.stats.newAdmissions), icon: 'person-add', color: '#F59E0B', route: 'AdminStudents' },
   ] : [];
+
+  // ── derived metrics ──
+  const ratio = data && data.stats.teachers > 0
+    ? `1:${Math.round(data.stats.totalStudents / data.stats.teachers)}` : '—';
+  const avgPerClass = data && data.structure.classes > 0
+    ? Math.round(data.stats.totalStudents / data.structure.classes) : 0;
+  const passRate = (() => {
+    if (!data || data.performance.graded === 0) return 0;
+    const v = data.performance.buckets.values;
+    const pass = (v[0] ?? 0) + (v[1] ?? 0) + (v[2] ?? 0) + (v[3] ?? 0);
+    return Math.round((pass / data.performance.graded) * 100);
+  })();
+  const enqConversion = data && data.enquiries.total > 0
+    ? Math.round((data.enquiries.admitted / data.enquiries.total) * 100) : 0;
 
   return (
     <View style={s.root}>
       {/* Top bar */}
       <View style={s.topbar}>
-        <TouchableOpacity
-          style={s.menuBtn}
-          onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-          activeOpacity={0.8}
-        >
+        <TouchableOpacity style={s.menuBtn} onPress={() => navigation.dispatch(DrawerActions.openDrawer())} activeOpacity={0.8}>
           <VectorIcon iconSet="Feather" iconName="menu" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={s.hello}>Welcome back 👋</Text>
           <Text style={s.name} numberOfLines={2}>{user?.name ?? 'Admin'}</Text>
         </View>
-
         <TouchableOpacity style={s.iconBtn} onPress={() => navigation.navigate('Notifications')} activeOpacity={0.8}>
           <VectorIcon iconSet="Ionicons" iconName="notifications-outline" size={19} color={theme.colors.primary} />
           {unreadCount > 0 && (
-            <View style={s.bellBadge}>
-              <Text style={s.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-            </View>
+            <View style={s.bellBadge}><Text style={s.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text></View>
           )}
         </TouchableOpacity>
       </View>
@@ -119,21 +147,23 @@ const AdminDashboardScreen = ({ navigation }: any) => {
       {loading && !refreshing ? (
         <View style={s.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>
       ) : (
-        <ScrollView
-          contentContainerStyle={s.scroll}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        >
-          {/* Headline stats */}
+        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+
+          {/* Headline stats — each opens its screen */}
           <View style={s.statGrid}>
             {statCards.map(c => (
-              <View key={c.label} style={[s.statCard, { backgroundColor: c.color + '12' }]}>
-                <View style={[s.statIcon, { backgroundColor: c.color + '22' }]}>
-                  <VectorIcon iconSet="Ionicons" iconName={c.icon} size={18} color={c.color} />
+              <TouchableOpacity key={c.label} style={[s.statCard, { backgroundColor: c.color + '12' }]}
+                activeOpacity={0.85} onPress={() => go(c.route)}>
+                <View style={s.statTop}>
+                  <View style={[s.statIcon, { backgroundColor: c.color + '22' }]}>
+                    <VectorIcon iconSet="Ionicons" iconName={c.icon} size={18} color={c.color} />
+                  </View>
+                  <VectorIcon iconSet="Feather" iconName="chevron-right" size={16} color={c.color} />
                 </View>
                 <Text style={[s.statVal, { color: c.color }]} numberOfLines={1}>{c.value}</Text>
                 <Text style={s.statLbl}>{c.label}</Text>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
 
@@ -145,22 +175,32 @@ const AdminDashboardScreen = ({ navigation }: any) => {
           ) : (
             <>
               {/* School structure */}
-              <ChartCard icon="business" iconBg="#0EA5E918" iconColor="#0EA5E9" title="School Structure">
+              <ChartCard icon="business" iconBg="#0EA5E918" iconColor="#0EA5E9" title="School Structure"
+                subtitle="Classes, sections & subjects" onPress={() => go('AdminStandard')}>
                 <View style={s.miniStatRow}>
                   <MiniStat label="Classes" value={data.structure.classes} color="#0EA5E9" icon="grid" />
                   <MiniStat label="Sections" value={data.structure.sections} color="#6366F1" icon="layers" />
                   <MiniStat label="Subjects" value={data.structure.subjects} color="#EC4899" icon="book" />
                 </View>
+                <View style={s.divider} />
+                <View style={s.kvRow}>
+                  <KV label="Student–Teacher ratio" value={ratio} />
+                  <KV label="Avg / class" value={String(avgPerClass)} />
+                </View>
               </ChartCard>
 
               {/* Attendance */}
               <AttendanceCard title="Student Attendance" icon="people" color="#6366F1"
-                pie={data.student_pie} monthly={data.student_monthly} />
+                todayPresent={data.stats.presentToday} todayAbsent={data.stats.absentToday}
+                pie={data.student_pie} monthly={data.student_monthly} onPress={() => go('AdminAnalytics')} />
               <AttendanceCard title="Teacher Attendance" icon="school" color="#8B5CF6"
-                pie={data.teacher_pie} monthly={data.teacher_monthly} />
+                pie={data.teacher_pie} monthly={data.teacher_monthly} onPress={() => go('AdminAnalytics')} />
 
               {/* Fee collection */}
-              <ChartCard icon="cash" iconBg="#14B8A618" iconColor="#14B8A6" title="Fee Collection">
+              <ChartCard icon="cash" iconBg="#14B8A618" iconColor="#14B8A6" title="Fee Collection"
+                subtitle="Collected vs remaining"
+                right={<Badge text={`${pct(data.fee.collected, data.fee.remaining)}%`} color="#14B8A6" />}
+                onPress={() => go('AdminAnalytics')}>
                 <View style={s.pieRow}>
                   <Donut size={104} stroke={12} pct={pct(data.fee.collected, data.fee.remaining)} color="#14B8A6"
                     label={`${pct(data.fee.collected, data.fee.remaining)}%`} sub="collected" />
@@ -170,10 +210,16 @@ const AdminDashboardScreen = ({ navigation }: any) => {
                     <FeeRow label="Remaining" value={inr(data.fee.remaining)} color={ABSENT} />
                   </View>
                 </View>
+                <View style={s.divider} />
+                <HBar label="Collection rate" value={pct(data.fee.collected, data.fee.remaining)} max={100} color="#14B8A6" />
               </ChartCard>
 
               {/* Ledger */}
-              <ChartCard icon="wallet" iconBg="#F59E0B18" iconColor="#F59E0B" title="Ledger">
+              <ChartCard icon="wallet" iconBg="#F59E0B18" iconColor="#F59E0B" title="Ledger"
+                subtitle="Credit, expense & balance"
+                right={<Badge text={data.ledger.balance >= 0 ? 'Surplus' : 'Deficit'}
+                  color={data.ledger.balance >= 0 ? PRESENT : ABSENT} />}
+                onPress={() => go('AdminAnalytics')}>
                 <StackedBar
                   segments={[
                     { label: 'Credit', value: data.ledger.credit, color: PRESENT },
@@ -183,16 +229,19 @@ const AdminDashboardScreen = ({ navigation }: any) => {
                 <View style={s.ledgerRow}>
                   <FeeRow label="Credit" value={inr(data.ledger.credit)} color={PRESENT} />
                   <FeeRow label="Expense" value={inr(data.ledger.expense)} color={ABSENT} />
-                  <FeeRow label="Balance" value={inr(data.ledger.balance)}
+                  <View style={s.divider} />
+                  <FeeRow label="Net balance" value={inr(data.ledger.balance)}
                     color={data.ledger.balance >= 0 ? PRESENT : ABSENT} />
                 </View>
               </ChartCard>
 
               {/* Homework */}
-              <ChartCard icon="document-text" iconBg="#22C55E18" iconColor="#22C55E" title="Homework (30d)">
+              <ChartCard icon="document-text" iconBg="#22C55E18" iconColor="#22C55E" title="Homework"
+                subtitle="Submissions · last 30 days"
+                right={<Badge text={`${pct(data.homework.submitted, data.homework.pending)}%`} color="#22C55E" />}
+                onPress={() => go('AdminAnalytics')}>
                 <View style={s.pieRow}>
-                  <Donut size={104} stroke={12}
-                    pct={pct(data.homework.submitted, data.homework.pending)} color="#22C55E"
+                  <Donut size={104} stroke={12} pct={pct(data.homework.submitted, data.homework.pending)} color="#22C55E"
                     label={`${pct(data.homework.submitted, data.homework.pending)}%`} sub="done" />
                   <View style={{ flex: 1, gap: 8 }}>
                     <FeeRow label="Assigned" value={String(data.homework.total)} />
@@ -203,7 +252,10 @@ const AdminDashboardScreen = ({ navigation }: any) => {
               </ChartCard>
 
               {/* Enquiries */}
-              <ChartCard icon="clipboard" iconBg="#EC489918" iconColor="#EC4899" title="Admission Enquiries">
+              <ChartCard icon="clipboard" iconBg="#EC489918" iconColor="#EC4899" title="Admission Enquiries"
+                subtitle="Admission pipeline"
+                right={<Badge text={`${enqConversion}% won`} color={PRESENT} />}
+                onPress={() => go('AdminEnquiries')}>
                 <StackedBar
                   segments={[
                     { label: 'Admitted', value: data.enquiries.admitted, color: PRESENT },
@@ -211,25 +263,28 @@ const AdminDashboardScreen = ({ navigation }: any) => {
                     { label: 'Other', value: data.enquiries.other, color: '#9CA3AF' },
                   ]}
                 />
-                <FeeRow label="Total enquiries" value={String(data.enquiries.total)} />
+                <View style={s.divider} />
+                <View style={s.kvRow}>
+                  <KV label="Total" value={String(data.enquiries.total)} />
+                  <KV label="Admitted" value={String(data.enquiries.admitted)} color={PRESENT} />
+                  <KV label="Pending" value={String(data.enquiries.pending)} color="#F59E0B" />
+                </View>
               </ChartCard>
 
               {/* Exam performance */}
               {data.performance.graded > 0 && (
-                <ChartCard icon="ribbon" iconBg="#6366F118" iconColor="#6366F1" title="Exam Performance">
+                <ChartCard icon="ribbon" iconBg="#6366F118" iconColor="#6366F1" title="Exam Performance"
+                  subtitle={`${data.performance.graded} results graded`}
+                  right={<Badge text={`${passRate}% pass`} color={PRESENT} />}
+                  onPress={() => go('AdminExam')}>
                   <View style={s.pieRow}>
                     <Donut size={104} stroke={12} pct={data.performance.avg} color="#6366F1"
                       label={`${data.performance.avg}%`} sub="avg score" />
                     <View style={{ flex: 1 }}>
                       <Text style={s.subLabel}>Score distribution</Text>
-                      <MiniBars
-                        data={data.performance.buckets.labels.map((l, i) => ({
-                          label: l, value: data.performance.buckets.values[i] ?? 0,
-                        }))}
-                        maxVal={Math.max(1, ...data.performance.buckets.values)}
-                        color="#6366F1"
-                        height={100}
-                      />
+                      <MiniBars data={data.performance.buckets.labels.map((l, i) => ({
+                        label: l, value: data.performance.buckets.values[i] ?? 0 }))}
+                        maxVal={Math.max(1, ...data.performance.buckets.values)} color="#6366F1" height={100} />
                     </View>
                   </View>
                 </ChartCard>
@@ -237,26 +292,33 @@ const AdminDashboardScreen = ({ navigation }: any) => {
 
               {/* Class distribution */}
               {data.class_distribution.labels.length > 0 && (
-                <ChartCard icon="grid" iconBg="#0EA5E918" iconColor="#0EA5E9" title="Class Distribution (Today)">
-                  {data.class_distribution.labels.map((label, i) => (
-                    <View key={label} style={s.cdRow}>
-                      <Text style={s.cdLabel} numberOfLines={1}>{label}</Text>
-                      <View style={{ flex: 1 }}>
-                        <StackedBar height={12}
-                          segments={[
-                            { label: 'P', value: data.class_distribution.present[i] ?? 0, color: PRESENT },
-                            { label: 'A', value: data.class_distribution.absent[i] ?? 0, color: ABSENT },
-                          ]}
-                        />
+                <ChartCard icon="grid" iconBg="#0EA5E918" iconColor="#0EA5E9" title="Class Distribution"
+                  subtitle="Present vs absent today" onPress={() => go('AdminStandard')}>
+                  {data.class_distribution.labels.map((label, i) => {
+                    const p = data.class_distribution.present[i] ?? 0;
+                    const a = data.class_distribution.absent[i] ?? 0;
+                    return (
+                      <View key={label} style={s.cdRow}>
+                        <Text style={s.cdLabel} numberOfLines={1}>{label}</Text>
+                        <View style={{ flex: 1 }}>
+                          <StackedBar height={12}
+                            segments={[
+                              { label: 'P', value: p, color: PRESENT },
+                              { label: 'A', value: a, color: ABSENT },
+                            ]}
+                          />
+                        </View>
+                        <Text style={s.cdRate}>{pct(p, a)}%</Text>
                       </View>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </ChartCard>
               )}
 
               {/* Top students */}
               {data.top_students.length > 0 && (
-                <ChartCard icon="trophy" iconBg="#F59E0B18" iconColor="#F59E0B" title="Top Students">
+                <ChartCard icon="trophy" iconBg="#F59E0B18" iconColor="#F59E0B" title="Top Students"
+                  subtitle="By attendance" onPress={() => go('AdminStudents')}>
                   {data.top_students.map(t => (
                     <View key={t.rank} style={s.topRow}>
                       <View style={[s.rankBadge,
@@ -277,7 +339,8 @@ const AdminDashboardScreen = ({ navigation }: any) => {
 
               {/* Recent activity */}
               {data.recent_activities.length > 0 && (
-                <ChartCard icon="time" iconBg="#8B5CF618" iconColor="#8B5CF6" title="Recent Activity">
+                <ChartCard icon="time" iconBg="#8B5CF618" iconColor="#8B5CF6" title="Recent Activity"
+                  subtitle="Latest across the school">
                   {data.recent_activities.map((a, i) => (
                     <View key={i} style={s.actRow}>
                       <View style={[s.actDot, { backgroundColor: a.color }]} />
@@ -318,6 +381,13 @@ const FeeRow = ({ label, value, color }: { label: string; value: string; color?:
   </View>
 );
 
+const KV = ({ label, value, color }: { label: string; value: string; color?: string }) => (
+  <View style={s.kv}>
+    <Text style={[s.kvVal, color ? { color } : null]}>{value}</Text>
+    <Text style={s.kvLbl} numberOfLines={1}>{label}</Text>
+  </View>
+);
+
 export default AdminDashboardScreen;
 
 const s = StyleSheet.create({
@@ -334,44 +404,18 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
-  menuBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  menuBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   hello: { fontSize: 12, color: theme.colors.textMuted, fontWeight: '600' },
   name: { fontSize: 15, fontWeight: '900', color: theme.colors.textPrimary, marginTop: 1, lineHeight: 19 },
-  iconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bellBadge: {
-    position: 'absolute',
-    top: 3,
-    right: 3,
-    minWidth: 16,
-    height: 16,
-    paddingHorizontal: 3,
-    borderRadius: 8,
-    backgroundColor: '#EF4444',
-    borderWidth: 1.5,
-    borderColor: theme.colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  iconBtn: { width: 38, height: 38, borderRadius: theme.radius.full, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  bellBadge: { position: 'absolute', top: 3, right: 3, minWidth: 16, height: 16, paddingHorizontal: 3, borderRadius: 8, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: theme.colors.card, alignItems: 'center', justifyContent: 'center' },
   bellBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800', lineHeight: 11 },
 
   scroll: { padding: 16, gap: 14, paddingBottom: 40 },
 
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   statCard: { width: '31%', flexGrow: 1, borderRadius: 16, padding: 12, gap: 6 },
+  statTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   statIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   statVal: { fontSize: 19, fontWeight: '900' },
   statLbl: { fontSize: 11, color: theme.colors.textSecondary, fontWeight: '600' },
@@ -379,8 +423,17 @@ const s = StyleSheet.create({
   emptyBox: { alignItems: 'center', gap: 10, paddingVertical: 40 },
   emptyText: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', paddingHorizontal: 32 },
 
+  badge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: theme.radius.full },
+  badgeText: { fontSize: 11, fontWeight: '800' },
+
   pieRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   subLabel: { fontSize: 11, fontWeight: '700', color: theme.colors.textMuted, marginTop: 4 },
+  divider: { height: 1, backgroundColor: theme.colors.border, marginVertical: 4 },
+
+  todayRow: { flexDirection: 'row', gap: 8 },
+  todayPill: { flex: 1, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 8 },
+  todayVal: { fontSize: 16, fontWeight: '900' },
+  todayLbl: { fontSize: 9, fontWeight: '600', color: theme.colors.textSecondary },
 
   miniStatRow: { flexDirection: 'row', gap: 10 },
   miniStat: { flex: 1, borderRadius: 14, padding: 12, gap: 6, alignItems: 'flex-start' },
@@ -388,13 +441,19 @@ const s = StyleSheet.create({
   miniVal: { fontSize: 20, fontWeight: '900' },
   miniLbl: { fontSize: 11, color: theme.colors.textSecondary, fontWeight: '600' },
 
+  kvRow: { flexDirection: 'row', gap: 10 },
+  kv: { flex: 1 },
+  kvVal: { fontSize: 15, fontWeight: '900', color: theme.colors.textPrimary },
+  kvLbl: { fontSize: 10.5, color: theme.colors.textSecondary, fontWeight: '600', marginTop: 1 },
+
   feeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   feeLbl: { fontSize: 12, color: theme.colors.textSecondary, fontWeight: '600' },
   feeVal: { fontSize: 13, fontWeight: '800', color: theme.colors.textPrimary },
   ledgerRow: { gap: 6, marginTop: 4 },
 
   cdRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  cdLabel: { width: 64, fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
+  cdLabel: { width: 58, fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
+  cdRate: { width: 38, textAlign: 'right', fontSize: 11, fontWeight: '800', color: PRESENT },
 
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
   rankBadge: { width: 26, height: 26, borderRadius: 13, backgroundColor: theme.colors.textMuted, alignItems: 'center', justifyContent: 'center' },
