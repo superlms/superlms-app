@@ -17,8 +17,6 @@ import { theme, onThemeChange } from '../utils/theme';
 import VectorIcon from '../components/VectorIcon';
 import AdminTabNavigator from './AdminTabNavigator';
 import AdminAnalyticsScreen from '../screens/admin/AdminAnalyticsScreen';
-import AdminIdCardScreen from '../screens/admin/AdminIdCardScreen';
-import AdminExamScreen from '../screens/admin/AdminExamScreen';
 import AdminTimetableScreen from '../screens/admin/AdminTimetableScreen';
 import AdminArrangementScreen from '../screens/admin/AdminArrangementScreen';
 import {
@@ -33,6 +31,10 @@ import {
   AdminQuizStack,
   AdminBookStack,
   AdminMoreStack,
+  AdminExamStack,
+  AdminIdCardStack,
+  AdminPerformanceStack,
+  AdminExamCopyStack,
 } from './adminStacks';
 import AccountsDashboardScreen from '../screens/accounts/AccountsDashboardScreen';
 import { AdminUser, AccountsUser, getStoredUser, logout } from '../api/authApi';
@@ -72,8 +74,8 @@ const ADMIN_MENU: MenuItem[] = [
   { label: 'Exam', icon: 'school-outline', route: 'AdminExam' },
   { label: 'Admit Card', icon: 'ticket-outline' },
   { label: 'Seating Plan', icon: 'apps-outline' },
-  { label: 'Performance', icon: 'speedometer-outline' },
-  { label: 'Exam Copy', icon: 'document-attach-outline' },
+  { label: 'Performance', icon: 'speedometer-outline', route: 'AdminPerformance' },
+  { label: 'Exam Copy', icon: 'document-attach-outline', route: 'AdminExamCopy' },
   { label: 'Report Card', icon: 'documents-outline' },
   { label: 'TC & Certificate', icon: 'ribbon-outline' },
   { label: 'Profile', icon: 'person-circle-outline', route: 'AdminProfile' },
@@ -314,8 +316,10 @@ const PanelDrawerNavigator = ({ route }: any) => {
       {panel === 'admin' && <Drawer.Screen name="AdminStandard" component={AdminStandardStack} />}
       {panel === 'admin' && <Drawer.Screen name="AdminStudents" component={AdminStudentsStack} />}
       {panel === 'admin' && <Drawer.Screen name="AdminTeachers" component={AdminTeachersStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminIdCard" component={AdminIdCardScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminExam" component={AdminExamScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminIdCard" component={AdminIdCardStack} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminExam" component={AdminExamStack} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminPerformance" component={AdminPerformanceStack} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminExamCopy" component={AdminExamCopyStack} />}
       {panel === 'admin' && <Drawer.Screen name="AdminSyllabus" component={AdminSyllabusStack} />}
       {panel === 'admin' && <Drawer.Screen name="AdminContent" component={AdminContentStack} />}
       {panel === 'admin' && <Drawer.Screen name="AdminQuiz" component={AdminQuizStack} />}

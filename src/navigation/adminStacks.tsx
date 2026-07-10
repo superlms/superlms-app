@@ -48,6 +48,19 @@ import AdminAdmissionsScreen from '../screens/admin/AdminAdmissionsScreen';
 import AdminAdmissionDetailScreen from '../screens/admin/AdminAdmissionDetailScreen';
 import AdminListsScreen from '../screens/admin/AdminListsScreen';
 import AdminRateLmsScreen from '../screens/admin/AdminRateLmsScreen';
+// Exam
+import AdminExamScreen from '../screens/admin/AdminExamScreen';
+import AdminExamFormScreen from '../screens/admin/AdminExamFormScreen';
+import AdminExamSyllabusFormScreen from '../screens/admin/AdminExamSyllabusFormScreen';
+// ID Card
+import AdminIdCardScreen from '../screens/admin/AdminIdCardScreen';
+import AdminIdCardGenerateScreen from '../screens/admin/AdminIdCardGenerateScreen';
+import AdminIdCardEditScreen from '../screens/admin/AdminIdCardEditScreen';
+import AdminIdCardViewScreen from '../screens/admin/AdminIdCardViewScreen';
+// Performance & Exam Copy
+import AdminPerformanceScreen from '../screens/admin/AdminPerformanceScreen';
+import AdminExamCopyScreen from '../screens/admin/AdminExamCopyScreen';
+import AdminExamCopyDetailScreen from '../screens/admin/AdminExamCopyDetailScreen';
 
 // Each admin section that has list → detail → form/reply screens gets its own
 // native stack. This gives correct, isolated back navigation (a "Back" inside a
@@ -144,5 +157,35 @@ export const AdminMoreStack = () => (
     <Stack.Screen name="AdminAdmissionDetail" component={AdminAdmissionDetailScreen} />
     <Stack.Screen name="AdminLists" component={AdminListsScreen} />
     <Stack.Screen name="AdminRateLms" component={AdminRateLmsScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminExamStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminExamHome" component={AdminExamScreen} />
+    <Stack.Screen name="AdminExamForm" component={AdminExamFormScreen} />
+    <Stack.Screen name="AdminExamSyllabusForm" component={AdminExamSyllabusFormScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminIdCardStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminIdCardHome" component={AdminIdCardScreen} />
+    <Stack.Screen name="AdminIdCardGenerate" component={AdminIdCardGenerateScreen} />
+    <Stack.Screen name="AdminIdCardEdit" component={AdminIdCardEditScreen} />
+    <Stack.Screen name="AdminIdCardView" component={AdminIdCardViewScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminPerformanceStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminPerformanceHome" component={AdminPerformanceScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminExamCopyStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminExamCopyHome" component={AdminExamCopyScreen} />
+    <Stack.Screen name="AdminExamCopyDetail" component={AdminExamCopyDetailScreen} />
   </Stack.Navigator>
 );
