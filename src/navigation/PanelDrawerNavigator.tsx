@@ -19,6 +19,9 @@ import AdminTabNavigator from './AdminTabNavigator';
 import AdminAnalyticsScreen from '../screens/admin/AdminAnalyticsScreen';
 import AdminTimetableScreen from '../screens/admin/AdminTimetableScreen';
 import AdminArrangementScreen from '../screens/admin/AdminArrangementScreen';
+import AdminHomeworkScreen from '../screens/admin/AdminHomeworkScreen';
+import AdminAttendanceScreen from '../screens/admin/AdminAttendanceScreen';
+import AdminTransportScreen from '../screens/admin/AdminTransportScreen';
 import {
   AdminStudentsStack,
   AdminTeachersStack,
@@ -58,9 +61,9 @@ const ADMIN_MENU: MenuItem[] = [
   { label: 'Ledger', icon: 'calculator-outline' },
   { label: 'Payroll', icon: 'wallet-outline' },
   { label: 'Credit', icon: 'card-outline' },
-  { label: 'Attendance', icon: 'clipboard-outline' },
-  { label: 'Transportation', icon: 'bus-outline' },
-  { label: 'Homework', icon: 'create-outline' },
+  { label: 'Attendance', icon: 'clipboard-outline', route: 'AdminAttendance' },
+  { label: 'Transportation', icon: 'bus-outline', route: 'AdminTransport' },
+  { label: 'Homework', icon: 'create-outline', route: 'AdminHomework' },
   { label: 'Time Table', icon: 'time-outline', route: 'AdminTimetable' },
   { label: 'Arrangement', icon: 'grid-outline', route: 'AdminArrangement' },
   { label: 'Announcement', icon: 'megaphone-outline', route: 'AdminAnnouncement' },
@@ -326,6 +329,9 @@ const PanelDrawerNavigator = ({ route }: any) => {
       {panel === 'admin' && <Drawer.Screen name="AdminBook" component={AdminBookStack} />}
       {panel === 'admin' && <Drawer.Screen name="AdminTimetable" component={AdminTimetableScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminArrangement" component={AdminArrangementScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminHomework" component={AdminHomeworkScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminAttendance" component={AdminAttendanceScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminTransport" component={AdminTransportScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminMore" component={AdminMoreStack} />}
     </Drawer.Navigator>
   );

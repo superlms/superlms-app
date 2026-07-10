@@ -54,6 +54,9 @@ const AdminQuickLinksScreen = () => {
     book: 'AdminBook',
     timetable: 'AdminTimetable',
     arrangement: 'AdminArrangement',
+    homework: 'AdminHomework',
+    attendance: 'AdminAttendance',
+    transport: 'AdminTransport',
   };
 
   const openModule = (m: { key: string; label: string }) => {
