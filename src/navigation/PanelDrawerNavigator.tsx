@@ -32,6 +32,7 @@ import {
   AdminContentStack,
   AdminQuizStack,
   AdminBookStack,
+  AdminMoreStack,
 } from './adminStacks';
 import AccountsDashboardScreen from '../screens/accounts/AccountsDashboardScreen';
 import { AdminUser, AccountsUser, getStoredUser, logout } from '../api/authApi';
@@ -76,7 +77,7 @@ const ADMIN_MENU: MenuItem[] = [
   { label: 'Report Card', icon: 'documents-outline' },
   { label: 'TC & Certificate', icon: 'ribbon-outline' },
   { label: 'Profile', icon: 'person-circle-outline', route: 'AdminProfile' },
-  { label: 'More', icon: 'ellipsis-horizontal-outline' },
+  { label: 'More', icon: 'ellipsis-horizontal-outline', route: 'AdminMore' },
 ];
 
 // Mirrors the web accounts sidebar order (config/menu.php → 'accounts').
@@ -321,6 +322,7 @@ const PanelDrawerNavigator = ({ route }: any) => {
       {panel === 'admin' && <Drawer.Screen name="AdminBook" component={AdminBookStack} />}
       {panel === 'admin' && <Drawer.Screen name="AdminTimetable" component={AdminTimetableScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminArrangement" component={AdminArrangementScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminMore" component={AdminMoreStack} />}
     </Drawer.Navigator>
   );
 };

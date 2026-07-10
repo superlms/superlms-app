@@ -40,6 +40,14 @@ import AdminQuizFormScreen from '../screens/admin/AdminQuizFormScreen';
 // Book
 import AdminBookScreen from '../screens/admin/AdminBookScreen';
 import AdminBookFormScreen from '../screens/admin/AdminBookFormScreen';
+// More
+import AdminMoreScreen from '../screens/admin/AdminMoreScreen';
+import AdminUsersScreen from '../screens/admin/AdminUsersScreen';
+import AdminUserDetailScreen from '../screens/admin/AdminUserDetailScreen';
+import AdminAdmissionsScreen from '../screens/admin/AdminAdmissionsScreen';
+import AdminAdmissionDetailScreen from '../screens/admin/AdminAdmissionDetailScreen';
+import AdminListsScreen from '../screens/admin/AdminListsScreen';
+import AdminRateLmsScreen from '../screens/admin/AdminRateLmsScreen';
 
 // Each admin section that has list → detail → form/reply screens gets its own
 // native stack. This gives correct, isolated back navigation (a "Back" inside a
@@ -124,5 +132,17 @@ export const AdminBookStack = () => (
   <Stack.Navigator screenOptions={opts}>
     <Stack.Screen name="AdminBookHome" component={AdminBookScreen} />
     <Stack.Screen name="AdminBookForm" component={AdminBookFormScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminMoreStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminMoreHome" component={AdminMoreScreen} />
+    <Stack.Screen name="AdminUsers" component={AdminUsersScreen} />
+    <Stack.Screen name="AdminUserDetail" component={AdminUserDetailScreen} />
+    <Stack.Screen name="AdminAdmissions" component={AdminAdmissionsScreen} />
+    <Stack.Screen name="AdminAdmissionDetail" component={AdminAdmissionDetailScreen} />
+    <Stack.Screen name="AdminLists" component={AdminListsScreen} />
+    <Stack.Screen name="AdminRateLms" component={AdminRateLmsScreen} />
   </Stack.Navigator>
 );
