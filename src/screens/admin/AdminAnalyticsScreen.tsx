@@ -16,6 +16,7 @@ import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { ChartCard, Donut, MiniBars, StackedBar } from '../../components/Charts';
+import ListRow from '../../components/ListRow';
 import { AdminAnalytics, getAdminAnalytics } from '../../api/adminApi';
 
 const PRESENT = '#22C55E';
@@ -23,6 +24,7 @@ const ABSENT = '#EF4444';
 const DAY_OPTIONS = [7, 15, 30, 45, 60];
 const pct = (a: number, b: number) => (a + b > 0 ? Math.round((a / (a + b)) * 100) : 0);
 const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+const rankColor = (rank: number) => (rank === 1 ? '#F59E0B' : rank === 2 ? '#9CA3AF' : rank === 3 ? '#B45309' : '#6366F1');
 
 const AttendanceCard = ({
   title, icon, color, pie, monthly,
@@ -173,16 +175,14 @@ const AdminAnalyticsScreen = ({ navigation }: any) => {
           {data.top_students.length > 0 && (
             <ChartCard icon="trophy" iconBg="#F59E0B18" iconColor="#F59E0B" title="Top Students">
               {data.top_students.map(t => (
-                <View key={t.rank} style={s.topRow}>
-                  <View style={[s.rankBadge, t.rank === 1 && { backgroundColor: '#F59E0B' }, t.rank === 2 && { backgroundColor: '#9CA3AF' }, t.rank === 3 && { backgroundColor: '#B45309' }]}>
-                    <Text style={s.rankText}>{t.rank}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.topName} numberOfLines={1}>{t.name}</Text>
-                    <Text style={s.topMeta}>{t.class}{t.section !== '—' ? ` · ${t.section}` : ''}</Text>
-                  </View>
-                  <Text style={s.topScore}>{t.score}%</Text>
-                </View>
+                <ListRow
+                  key={t.rank}
+                  variant="plain"
+                  color={rankColor(t.rank)}
+                  title={`${t.rank}. ${t.name}`}
+                  subtitle={`${t.class}${t.section !== '—' ? ` · ${t.section}` : ''}`}
+                  right={<Text style={[s.topScore, { color: rankColor(t.rank) }]}>{t.score}%</Text>}
+                />
               ))}
             </ChartCard>
           )}
@@ -191,14 +191,14 @@ const AdminAnalyticsScreen = ({ navigation }: any) => {
           {data.recent_activities.length > 0 && (
             <ChartCard icon="time" iconBg="#6366F118" iconColor="#6366F1" title="Recent Activity">
               {data.recent_activities.map((a, i) => (
-                <View key={i} style={s.actRow}>
-                  <View style={[s.actDot, { backgroundColor: a.color }]} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.actTitle}>{a.title}</Text>
-                    <Text style={s.actDesc} numberOfLines={1}>{a.description}</Text>
-                  </View>
-                  {!!a.time && <Text style={s.actTime}>{a.time}</Text>}
-                </View>
+                <ListRow
+                  key={i}
+                  variant="plain"
+                  color={a.color}
+                  title={a.title}
+                  subtitle={a.description}
+                  right={a.time ? <Text style={s.actTime}>{a.time}</Text> : null}
+                />
               ))}
             </ChartCard>
           )}
@@ -243,16 +243,6 @@ const s = StyleSheet.create({
   cdRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   cdLabel: { width: 64, fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
 
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
-  rankBadge: { width: 26, height: 26, borderRadius: 13, backgroundColor: theme.colors.textMuted, alignItems: 'center', justifyContent: 'center' },
-  rankText: { fontSize: 12, fontWeight: '900', color: '#fff' },
-  topName: { fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary },
-  topMeta: { fontSize: 11, color: theme.colors.textMuted, marginTop: 1 },
   topScore: { fontSize: 14, fontWeight: '900', color: PRESENT },
-
-  actRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
-  actDot: { width: 9, height: 9, borderRadius: 5 },
-  actTitle: { fontSize: 13, fontWeight: '700', color: theme.colors.textPrimary },
-  actDesc: { fontSize: 11, color: theme.colors.textSecondary, marginTop: 1 },
   actTime: { fontSize: 10, color: theme.colors.textMuted },
 });

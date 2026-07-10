@@ -12,6 +12,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import Header from '../../components/Header';
+import ListRow from '../../components/ListRow';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
@@ -112,21 +113,17 @@ const AdminAnnouncementScreen = ({ navigation }: any) => {
         >
           {items.length === 0 && <Text style={s.empty}>No announcements found.</Text>}
           {items.map(a => (
-            <TouchableOpacity key={a.id} style={s.card} activeOpacity={0.7}
-              onPress={() => navigation.navigate('AdminAnnouncementDetail', { item: a })}>
-              <View style={[s.typeBadge, { backgroundColor: TYPE_COLOR[a.type] + '18' }]}>
-                <Text style={[s.typeBadgeText, { color: TYPE_COLOR[a.type] }]}>{TYPE_LABEL[a.type]}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.cardTitle} numberOfLines={1}>{a.announcement_name}</Text>
-                <Text style={s.cardBody} numberOfLines={1}>{a.announcement_content}</Text>
-                <Text style={s.cardMeta} numberOfLines={1}>
-                  {a.creator_name ?? 'Admin'}{a.created_at ? ` · ${new Date(a.created_at).toLocaleDateString()}` : ''}
-                  {a.image_url ? ' · 📷' : ''}{a.pdf_url ? ' · 📄' : ''}
-                </Text>
-              </View>
-              <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={18} color={theme.colors.textMuted} />
-            </TouchableOpacity>
+            <ListRow
+              key={a.id}
+              color={TYPE_COLOR[a.type]}
+              title={a.announcement_name}
+              subtitle={a.announcement_content}
+              metaIcon="person-outline"
+              meta={`${a.creator_name ?? 'Admin'}${a.created_at ? ` · ${new Date(a.created_at).toLocaleDateString()}` : ''}${a.image_url ? ' · 📷' : ''}${a.pdf_url ? ' · 📄' : ''}`}
+              tag={TYPE_LABEL[a.type]}
+              tagColor={TYPE_COLOR[a.type]}
+              onPress={() => navigation.navigate('AdminAnnouncementDetail', { item: a })}
+            />
           ))}
           <View style={{ height: 90 }} />
         </ScrollView>

@@ -17,6 +17,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import Header from '../../components/Header';
+import ListRow from '../../components/ListRow';
 import Select from '../../components/Select';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
@@ -221,45 +222,45 @@ const AdminStandardScreen = ({ navigation }: any) => {
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
 
           {tab === 'classes' && classes.map(c => (
-            <TouchableOpacity key={c.id} style={s.card} activeOpacity={0.7} onPress={() => openDetail('class', c)}>
-              <View style={[s.avatar, { backgroundColor: '#F59E0B18' }]}>
-                <VectorIcon iconSet="Ionicons" iconName="book" size={18} color="#F59E0B" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.cardTitle} numberOfLines={1}>{c.name}</Text>
-                <Text style={s.cardSub} numberOfLines={1}>Code {c.code}{c.board ? ` · ${c.board}` : ''} · {c.sections_count ?? 0} sec · {c.subjects_count ?? 0} sub</Text>
-              </View>
-              {!c.is_active && <View style={s.inactiveTag}><Text style={s.inactiveTagText}>Inactive</Text></View>}
-              <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={18} color={theme.colors.textMuted} />
-            </TouchableOpacity>
+            <ListRow
+              key={c.id}
+              color="#F59E0B"
+              title={c.name}
+              subtitle={`Code ${c.code}${c.board ? ` · ${c.board}` : ''}`}
+              metaIcon="grid-outline"
+              meta={`${c.sections_count ?? 0} sec · ${c.subjects_count ?? 0} sub`}
+              tag={c.is_active ? 'Active' : 'Inactive'}
+              tagColor={c.is_active ? '#22C55E' : '#EF4444'}
+              onPress={() => openDetail('class', c)}
+            />
           ))}
 
           {tab === 'sections' && sections.map(sec => (
-            <TouchableOpacity key={sec.id} style={s.card} activeOpacity={0.7} onPress={() => openDetail('section', sec)}>
-              <View style={[s.avatar, { backgroundColor: '#0EA5E918' }]}>
-                <VectorIcon iconSet="Ionicons" iconName="grid" size={18} color="#0EA5E9" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.cardTitle} numberOfLines={1}>{sec.name}</Text>
-                <Text style={s.cardSub} numberOfLines={1}>Code {sec.code} · {sec.standard_name ?? className(sec.standard_id)}</Text>
-              </View>
-              {!sec.is_active && <View style={s.inactiveTag}><Text style={s.inactiveTagText}>Inactive</Text></View>}
-              <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={18} color={theme.colors.textMuted} />
-            </TouchableOpacity>
+            <ListRow
+              key={sec.id}
+              color="#0EA5E9"
+              title={sec.name}
+              subtitle={`Code ${sec.code}`}
+              metaIcon="book-outline"
+              meta={sec.standard_name ?? className(sec.standard_id)}
+              tag={sec.is_active ? 'Active' : 'Inactive'}
+              tagColor={sec.is_active ? '#22C55E' : '#EF4444'}
+              onPress={() => openDetail('section', sec)}
+            />
           ))}
 
           {tab === 'subjects' && subjects.map(sub => (
-            <TouchableOpacity key={sub.id} style={s.card} activeOpacity={0.7} onPress={() => openDetail('subject', sub)}>
-              <View style={[s.avatar, { backgroundColor: '#22C55E18' }]}>
-                <VectorIcon iconSet="Ionicons" iconName="library" size={18} color="#22C55E" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.cardTitle} numberOfLines={1}>{sub.name}</Text>
-                <Text style={s.cardSub} numberOfLines={1}>Code {sub.code}{sub.is_mandatory != null ? ` · ${sub.is_mandatory ? 'Mandatory' : 'Optional'}` : ''}</Text>
-              </View>
-              {!sub.is_active && <View style={s.inactiveTag}><Text style={s.inactiveTagText}>Inactive</Text></View>}
-              <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={18} color={theme.colors.textMuted} />
-            </TouchableOpacity>
+            <ListRow
+              key={sub.id}
+              color="#22C55E"
+              title={sub.name}
+              subtitle={`Code ${sub.code}`}
+              metaIcon="pricetag-outline"
+              meta={sub.is_mandatory != null ? (sub.is_mandatory ? 'Mandatory' : 'Optional') : undefined}
+              tag={sub.is_active ? 'Active' : 'Inactive'}
+              tagColor={sub.is_active ? '#22C55E' : '#EF4444'}
+              onPress={() => openDetail('subject', sub)}
+            />
           ))}
 
           {((tab === 'classes' && classes.length === 0) ||

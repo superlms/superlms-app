@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -14,6 +13,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import Header from '../../components/Header';
+import ListRow from '../../components/ListRow';
 import Select from '../../components/Select';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
@@ -158,22 +158,17 @@ const AdminTeachersScreen = ({ navigation }: any) => {
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           {rows.length === 0 && <Text style={s.empty}>No teachers found.</Text>}
           {rows.map(r => (
-            <TouchableOpacity key={r.id} style={s.card} activeOpacity={0.7}
-              onPress={() => navigation.navigate('AdminTeacherDetail', { id: r.id })}>
-              {r.image ? <Image source={{ uri: r.image }} style={s.avatarImg} /> : (
-                <View style={[s.avatar, { backgroundColor: '#8B5CF618' }]}>
-                  <Text style={s.avatarInit}>{(r.name || '?').charAt(0).toUpperCase()}</Text>
-                </View>
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={s.cardTitle} numberOfLines={1}>{r.name}</Text>
-                <Text style={s.cardSub} numberOfLines={1}>
-                  {r.employee_id ?? '—'}{r.qualification ? ` · ${r.qualification}` : ''}
-                </Text>
-              </View>
-              {!r.is_active && <View style={s.inactiveTag}><Text style={s.inactiveTagText}>Inactive</Text></View>}
-              <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={18} color={theme.colors.textMuted} />
-            </TouchableOpacity>
+            <ListRow
+              key={r.id}
+              color={r.is_active ? '#8B5CF6' : '#EF4444'}
+              title={r.name}
+              subtitle={`${r.employee_id ?? '—'}${r.qualification ? ` · ${r.qualification}` : ''}`}
+              metaIcon="mail-outline"
+              meta={r.email || r.phone || undefined}
+              tag={r.is_active ? 'Active' : 'Inactive'}
+              tagColor={r.is_active ? '#22C55E' : '#EF4444'}
+              onPress={() => navigation.navigate('AdminTeacherDetail', { id: r.id })}
+            />
           ))}
           <View style={{ height: 90 }} />
         </ScrollView>

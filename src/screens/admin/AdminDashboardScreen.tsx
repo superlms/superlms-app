@@ -13,6 +13,7 @@ import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
 import { ChartCard, Donut, MiniBars, StackedBar, HBar } from '../../components/Charts';
+import ListRow from '../../components/ListRow';
 import { AdminAnalytics, getAdminAnalytics } from '../../api/adminApi';
 import { AdminUser, getStoredUser } from '../../api/authApi';
 import { useUnreadCount } from '../../notifications';
@@ -22,6 +23,7 @@ const ABSENT = '#EF4444';
 
 const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 const pct = (a: number, b: number) => (a + b > 0 ? Math.round((a / (a + b)) * 100) : 0);
+const rankColor = (rank: number) => (rank === 1 ? '#F59E0B' : rank === 2 ? '#9CA3AF' : rank === 3 ? '#B45309' : '#6366F1');
 
 // ── right-aligned metric pill for a card header ──
 const Badge = ({ text, color }: { text: string; color: string }) => (
@@ -320,19 +322,14 @@ const AdminDashboardScreen = ({ navigation }: any) => {
                 <ChartCard icon="trophy" iconBg="#F59E0B18" iconColor="#F59E0B" title="Top Students"
                   subtitle="By attendance" onPress={() => go('AdminStudents')}>
                   {data.top_students.map(t => (
-                    <View key={t.rank} style={s.topRow}>
-                      <View style={[s.rankBadge,
-                        t.rank === 1 && { backgroundColor: '#F59E0B' },
-                        t.rank === 2 && { backgroundColor: '#9CA3AF' },
-                        t.rank === 3 && { backgroundColor: '#B45309' }]}>
-                        <Text style={s.rankText}>{t.rank}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.topName} numberOfLines={1}>{t.name}</Text>
-                        <Text style={s.topMeta}>{t.class}{t.section !== '—' ? ` · ${t.section}` : ''}</Text>
-                      </View>
-                      <Text style={s.topScore}>{t.score}%</Text>
-                    </View>
+                    <ListRow
+                      key={t.rank}
+                      variant="plain"
+                      color={rankColor(t.rank)}
+                      title={`${t.rank}. ${t.name}`}
+                      subtitle={`${t.class}${t.section !== '—' ? ` · ${t.section}` : ''}`}
+                      right={<Text style={[s.topScore, { color: rankColor(t.rank) }]}>{t.score}%</Text>}
+                    />
                   ))}
                 </ChartCard>
               )}
@@ -342,14 +339,14 @@ const AdminDashboardScreen = ({ navigation }: any) => {
                 <ChartCard icon="time" iconBg="#8B5CF618" iconColor="#8B5CF6" title="Recent Activity"
                   subtitle="Latest across the school">
                   {data.recent_activities.map((a, i) => (
-                    <View key={i} style={s.actRow}>
-                      <View style={[s.actDot, { backgroundColor: a.color }]} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.actTitle}>{a.title}</Text>
-                        <Text style={s.actDesc} numberOfLines={1}>{a.description}</Text>
-                      </View>
-                      {!!a.time && <Text style={s.actTime}>{a.time}</Text>}
-                    </View>
+                    <ListRow
+                      key={i}
+                      variant="plain"
+                      color={a.color}
+                      title={a.title}
+                      subtitle={a.description}
+                      right={a.time ? <Text style={s.actTime}>{a.time}</Text> : null}
+                    />
                   ))}
                 </ChartCard>
               )}
@@ -455,16 +452,6 @@ const s = StyleSheet.create({
   cdLabel: { width: 58, fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
   cdRate: { width: 38, textAlign: 'right', fontSize: 11, fontWeight: '800', color: PRESENT },
 
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 6 },
-  rankBadge: { width: 26, height: 26, borderRadius: 13, backgroundColor: theme.colors.textMuted, alignItems: 'center', justifyContent: 'center' },
-  rankText: { fontSize: 12, fontWeight: '900', color: '#fff' },
-  topName: { fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary },
-  topMeta: { fontSize: 11, color: theme.colors.textMuted, marginTop: 1 },
   topScore: { fontSize: 14, fontWeight: '900', color: PRESENT },
-
-  actRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
-  actDot: { width: 9, height: 9, borderRadius: 5 },
-  actTitle: { fontSize: 13, fontWeight: '700', color: theme.colors.textPrimary },
-  actDesc: { fontSize: 11, color: theme.colors.textSecondary, marginTop: 1 },
   actTime: { fontSize: 10, color: theme.colors.textMuted },
 });
