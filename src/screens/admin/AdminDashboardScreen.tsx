@@ -20,12 +20,6 @@ import { ADMIN_MODULES as MODULES } from './adminModules';
 
 const inr = (n: number) => `₹ ${Number(n || 0).toLocaleString('en-IN')}`;
 
-// Academic year badge, e.g. "2026–27" — mirrors the web top bar.
-const academicYear = () => {
-  const y = new Date().getFullYear();
-  return `${y}–${String((y + 1) % 100).padStart(2, '0')}`;
-};
-
 const AdminDashboardScreen = ({ navigation }: any) => {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [stats, setStats] = useState<AdminDashboard | null>(null);
@@ -101,11 +95,7 @@ const AdminDashboardScreen = ({ navigation }: any) => {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={s.hello}>Welcome back 👋</Text>
-          <Text style={s.name} numberOfLines={1}>{user?.name ?? 'Admin'}</Text>
-          <View style={s.metaRow}>
-            {!!user?.organization?.name && <Text style={s.org} numberOfLines={1}>{user.organization.name}</Text>}
-            <View style={s.yearBadge}><Text style={s.yearTxt}>{academicYear()}</Text></View>
-          </View>
+          <Text style={s.name} numberOfLines={2}>{user?.name ?? 'Admin'}</Text>
         </View>
 
         {/* Right actions — notifications only (profile & announcement moved to Quick Links / sidebar). */}
@@ -185,18 +175,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   hello: { fontSize: 12, color: theme.colors.textMuted, fontWeight: '600' },
-  name: { fontSize: 20, fontWeight: '900', color: theme.colors.textPrimary, marginTop: 1 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  org: { fontSize: 11, color: theme.colors.textSecondary, flexShrink: 1 },
-  yearBadge: {
-    backgroundColor: theme.colors.primary + '14',
-    borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.primary + '22',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  yearTxt: { fontSize: 10, fontWeight: '700', color: theme.colors.primary },
+  name: { fontSize: 15, fontWeight: '900', color: theme.colors.textPrimary, marginTop: 1, lineHeight: 19 },
   iconBtn: {
     width: 38,
     height: 38,

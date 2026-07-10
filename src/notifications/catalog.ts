@@ -67,6 +67,7 @@ export type NotificationType =
   | 'leave_request'
   | 'leave_approved'
   | 'general'
+  | 'promo'
   | (string & {});
 
 export const CATALOG: Record<string, CatalogEntry> = {
@@ -137,6 +138,9 @@ export const CATALOG: Record<string, CatalogEntry> = {
   },
   general: {
     category: 'General',
+  },
+  promo: {
+    category: 'Announcement',
   },
 };
 
