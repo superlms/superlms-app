@@ -22,6 +22,10 @@ import AdminArrangementScreen from '../screens/admin/AdminArrangementScreen';
 import AdminHomeworkScreen from '../screens/admin/AdminHomeworkScreen';
 import AdminAttendanceScreen from '../screens/admin/AdminAttendanceScreen';
 import AdminTransportScreen from '../screens/admin/AdminTransportScreen';
+import AdminCreditScreen from '../screens/admin/AdminCreditScreen';
+import AdminAdmitCardScreen from '../screens/admin/AdminAdmitCardScreen';
+import AdminReportCardScreen from '../screens/admin/AdminReportCardScreen';
+import AdminTcCertificateScreen from '../screens/admin/AdminTcCertificateScreen';
 import {
   AdminStudentsStack,
   AdminTeachersStack,
@@ -60,7 +64,7 @@ const ADMIN_MENU: MenuItem[] = [
   { label: 'Fees', icon: 'cash-outline' },
   { label: 'Ledger', icon: 'calculator-outline' },
   { label: 'Payroll', icon: 'wallet-outline' },
-  { label: 'Credit', icon: 'card-outline' },
+  { label: 'Credit', icon: 'card-outline', route: 'AdminCredit' },
   { label: 'Attendance', icon: 'clipboard-outline', route: 'AdminAttendance' },
   { label: 'Transportation', icon: 'bus-outline', route: 'AdminTransport' },
   { label: 'Homework', icon: 'create-outline', route: 'AdminHomework' },
@@ -75,12 +79,12 @@ const ADMIN_MENU: MenuItem[] = [
   { label: 'Enquiries', icon: 'chatbubbles-outline', route: 'AdminEnquiries' },
   { label: 'ID Card', icon: 'id-card-outline', route: 'AdminIdCard' },
   { label: 'Exam', icon: 'school-outline', route: 'AdminExam' },
-  { label: 'Admit Card', icon: 'ticket-outline' },
+  { label: 'Admit Card', icon: 'ticket-outline', route: 'AdminAdmitCard' },
   { label: 'Seating Plan', icon: 'apps-outline' },
   { label: 'Performance', icon: 'speedometer-outline', route: 'AdminPerformance' },
   { label: 'Exam Copy', icon: 'document-attach-outline', route: 'AdminExamCopy' },
-  { label: 'Report Card', icon: 'documents-outline' },
-  { label: 'TC & Certificate', icon: 'ribbon-outline' },
+  { label: 'Report Card', icon: 'documents-outline', route: 'AdminReportCard' },
+  { label: 'TC & Certificate', icon: 'ribbon-outline', route: 'AdminTcCertificate' },
   { label: 'Profile', icon: 'person-circle-outline', route: 'AdminProfile' },
   { label: 'More', icon: 'ellipsis-horizontal-outline', route: 'AdminMore' },
 ];
@@ -332,6 +336,10 @@ const PanelDrawerNavigator = ({ route }: any) => {
       {panel === 'admin' && <Drawer.Screen name="AdminHomework" component={AdminHomeworkScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminAttendance" component={AdminAttendanceScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminTransport" component={AdminTransportScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminCredit" component={AdminCreditScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminAdmitCard" component={AdminAdmitCardScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminReportCard" component={AdminReportCardScreen} />}
+      {panel === 'admin' && <Drawer.Screen name="AdminTcCertificate" component={AdminTcCertificateScreen} />}
       {panel === 'admin' && <Drawer.Screen name="AdminMore" component={AdminMoreStack} />}
     </Drawer.Navigator>
   );

@@ -57,6 +57,10 @@ const AdminQuickLinksScreen = () => {
     homework: 'AdminHomework',
     attendance: 'AdminAttendance',
     transport: 'AdminTransport',
+    credit: 'AdminCredit',
+    'admit-card': 'AdminAdmitCard',
+    'report-card': 'AdminReportCard',
+    'tc-certificate': 'AdminTcCertificate',
   };
 
   const openModule = (m: { key: string; label: string }) => {
