@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -11,11 +11,8 @@ import {
 import { DrawerActions, useNavigation } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import { theme } from '../../utils/theme';
-import { ADMIN_MODULES } from './adminModules';
-
-// Quick Links shows every admin sidebar module except the Quick Links tile
-// itself — mirrors the web Quick Links page.
-const LINKS = ADMIN_MODULES.filter(m => m.key !== 'quick-links');
+import { visibleAdminModules } from './adminModules';
+import { AdminUser, getStoredUser } from '../../api/authApi';
 
 type OrderKey = 'sidebar' | 'ascending';
 
@@ -28,13 +25,30 @@ const AdminQuickLinksScreen = () => {
   const navigation = useNavigation<any>();
   const [order, setOrder] = useState<OrderKey>('sidebar');
   const [orderOpen, setOrderOpen] = useState(false);
+  const [permissions, setPermissions] = useState<string[] | undefined>(undefined);
+
+  // Load the signed-in admin's granted functionalities. A full admin gets the
+  // ['*'] wildcard; a sub-admin gets only the screens the school granted them
+  // on the web — so both see exactly the same set of tiles they can access.
+  useEffect(() => {
+    getStoredUser()
+      .then(u => setPermissions((u as AdminUser | null)?.permissions))
+      .catch(() => setPermissions(undefined));
+  }, []);
+
+  // Every accessible admin module except the Quick Links tile itself
+  // (mirrors the web Quick Links page).
+  const links = useMemo(
+    () => visibleAdminModules(permissions).filter(m => m.key !== 'quick-links'),
+    [permissions],
+  );
 
   const orderedLinks = useMemo(() => {
     if (order === 'ascending') {
-      return [...LINKS].sort((a, b) => a.label.localeCompare(b.label));
+      return [...links].sort((a, b) => a.label.localeCompare(b.label));
     }
-    return LINKS; // already in sidebar order
-  }, [order]);
+    return links; // already in sidebar order
+  }, [order, links]);
 
   const activeOrder = ORDER_OPTIONS.find(o => o.key === order)!;
 

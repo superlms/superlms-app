@@ -45,6 +45,7 @@ import {
 } from './adminStacks';
 import AccountsDashboardScreen from '../screens/accounts/AccountsDashboardScreen';
 import { AdminUser, AccountsUser, getStoredUser, logout } from '../api/authApi';
+import { hasAllAccess } from '../screens/admin/adminModules';
 
 const Drawer = createDrawerNavigator();
 
@@ -52,41 +53,43 @@ type Panel = 'admin' | 'accounts';
 
 // `route` set → the menu item opens a real screen. Otherwise it's a shell entry
 // that shows a "coming soon" notice (those modules arrive in later phases).
-type MenuItem = { label: string; icon: string; route?: string };
+// `perm` is the web admin route name that grants the module (config/menu.php);
+// items without one (Dashboard, Profile) are structural and always shown.
+type MenuItem = { label: string; icon: string; route?: string; perm?: string };
 
 // Mirrors the web admin sidebar order (config/menu.php → 'admin').
 const ADMIN_MENU: MenuItem[] = [
   { label: 'Dashboard', icon: 'grid-outline', route: 'PanelHome' },
-  { label: 'Analytics', icon: 'analytics-outline', route: 'AdminAnalytics' },
-  { label: 'Standard', icon: 'book-outline', route: 'AdminStandard' },
-  { label: 'Students', icon: 'people-outline', route: 'AdminStudents' },
-  { label: 'Teachers', icon: 'person-outline', route: 'AdminTeachers' },
-  { label: 'Fees', icon: 'cash-outline' },
-  { label: 'Ledger', icon: 'calculator-outline' },
-  { label: 'Payroll', icon: 'wallet-outline' },
-  { label: 'Credit', icon: 'card-outline', route: 'AdminCredit' },
-  { label: 'Attendance', icon: 'clipboard-outline', route: 'AdminAttendance' },
-  { label: 'Transportation', icon: 'bus-outline', route: 'AdminTransport' },
-  { label: 'Homework', icon: 'create-outline', route: 'AdminHomework' },
-  { label: 'Time Table', icon: 'time-outline', route: 'AdminTimetable' },
-  { label: 'Arrangement', icon: 'grid-outline', route: 'AdminArrangement' },
-  { label: 'Announcement', icon: 'megaphone-outline', route: 'AdminAnnouncement' },
-  { label: 'Calender', icon: 'calendar-outline', route: 'AdminCalendar' },
-  { label: 'Syllabus', icon: 'document-text-outline', route: 'AdminSyllabus' },
-  { label: 'Content', icon: 'folder-outline', route: 'AdminContent' },
-  { label: 'Quiz', icon: 'help-circle-outline', route: 'AdminQuiz' },
-  { label: 'Book', icon: 'book-outline', route: 'AdminBook' },
-  { label: 'Enquiries', icon: 'chatbubbles-outline', route: 'AdminEnquiries' },
-  { label: 'ID Card', icon: 'id-card-outline', route: 'AdminIdCard' },
-  { label: 'Exam', icon: 'school-outline', route: 'AdminExam' },
-  { label: 'Admit Card', icon: 'ticket-outline', route: 'AdminAdmitCard' },
-  { label: 'Seating Plan', icon: 'apps-outline' },
-  { label: 'Performance', icon: 'speedometer-outline', route: 'AdminPerformance' },
-  { label: 'Exam Copy', icon: 'document-attach-outline', route: 'AdminExamCopy' },
-  { label: 'Report Card', icon: 'documents-outline', route: 'AdminReportCard' },
-  { label: 'TC & Certificate', icon: 'ribbon-outline', route: 'AdminTcCertificate' },
+  { label: 'Analytics', icon: 'analytics-outline', route: 'AdminAnalytics', perm: 'admin.analytics' },
+  { label: 'Standard', icon: 'book-outline', route: 'AdminStandard', perm: 'admin.standard' },
+  { label: 'Students', icon: 'people-outline', route: 'AdminStudents', perm: 'admin.student' },
+  { label: 'Teachers', icon: 'person-outline', route: 'AdminTeachers', perm: 'admin.teacher' },
+  { label: 'Fees', icon: 'cash-outline', perm: 'admin.fee' },
+  { label: 'Ledger', icon: 'calculator-outline', perm: 'admin.ledger' },
+  { label: 'Payroll', icon: 'wallet-outline', perm: 'admin.payroll' },
+  { label: 'Credit', icon: 'card-outline', route: 'AdminCredit', perm: 'admin.credit' },
+  { label: 'Attendance', icon: 'clipboard-outline', route: 'AdminAttendance', perm: 'admin.attendance' },
+  { label: 'Transportation', icon: 'bus-outline', route: 'AdminTransport', perm: 'admin.transport' },
+  { label: 'Homework', icon: 'create-outline', route: 'AdminHomework', perm: 'admin.homework' },
+  { label: 'Time Table', icon: 'time-outline', route: 'AdminTimetable', perm: 'admin.timetable' },
+  { label: 'Arrangement', icon: 'grid-outline', route: 'AdminArrangement', perm: 'admin.arrangement' },
+  { label: 'Announcement', icon: 'megaphone-outline', route: 'AdminAnnouncement', perm: 'admin.announcement' },
+  { label: 'Calender', icon: 'calendar-outline', route: 'AdminCalendar', perm: 'admin.calender' },
+  { label: 'Syllabus', icon: 'document-text-outline', route: 'AdminSyllabus', perm: 'admin.syllabus' },
+  { label: 'Content', icon: 'folder-outline', route: 'AdminContent', perm: 'admin.content' },
+  { label: 'Quiz', icon: 'help-circle-outline', route: 'AdminQuiz', perm: 'admin.quiz' },
+  { label: 'Book', icon: 'book-outline', route: 'AdminBook', perm: 'admin.book' },
+  { label: 'Enquiries', icon: 'chatbubbles-outline', route: 'AdminEnquiries', perm: 'admin.enqueries' },
+  { label: 'ID Card', icon: 'id-card-outline', route: 'AdminIdCard', perm: 'admin.id-card' },
+  { label: 'Exam', icon: 'school-outline', route: 'AdminExam', perm: 'admin.add-exam' },
+  { label: 'Admit Card', icon: 'ticket-outline', route: 'AdminAdmitCard', perm: 'admin.admit-card' },
+  { label: 'Seating Plan', icon: 'apps-outline', perm: 'admin.seating-plan' },
+  { label: 'Performance', icon: 'speedometer-outline', route: 'AdminPerformance', perm: 'admin.performance' },
+  { label: 'Exam Copy', icon: 'document-attach-outline', route: 'AdminExamCopy', perm: 'admin.exam-copy' },
+  { label: 'Report Card', icon: 'documents-outline', route: 'AdminReportCard', perm: 'admin.report-card' },
+  { label: 'TC & Certificate', icon: 'ribbon-outline', route: 'AdminTcCertificate', perm: 'admin.tc-certificate' },
   { label: 'Profile', icon: 'person-circle-outline', route: 'AdminProfile' },
-  { label: 'More', icon: 'ellipsis-horizontal-outline', route: 'AdminMore' },
+  { label: 'More', icon: 'ellipsis-horizontal-outline', route: 'AdminMore', perm: 'admin.more' },
 ];
 
 // Mirrors the web accounts sidebar order (config/menu.php → 'accounts').
@@ -123,12 +126,32 @@ const PanelDrawerNavigator = ({ route }: any) => {
     const [org, setOrg] = useState<{ name?: string; logo?: string | null } | null>(
       null,
     );
+    const [permissions, setPermissions] = useState<string[] | undefined>(undefined);
 
     useEffect(() => {
       getStoredUser()
-        .then(u => setOrg((u as AdminUser | AccountsUser | null)?.organization ?? null))
-        .catch(() => setOrg(null));
+        .then(u => {
+          const admin = u as AdminUser | AccountsUser | null;
+          setOrg(admin?.organization ?? null);
+          setPermissions((admin as AdminUser | null)?.permissions);
+        })
+        .catch(() => {
+          setOrg(null);
+          setPermissions(undefined);
+        });
     }, []);
+
+    // On the admin panel a sub-admin sees only the functionalities the school
+    // granted them on the web (structural items without a `perm` always show);
+    // a full admin (['*']) and the accounts panel keep the full menu.
+    const visibleItems = useMemo(() => {
+      if (panel !== 'admin' || hasAllAccess(permissions)) {
+        return menuItems;
+      }
+      return menuItems.filter(
+        item => !item.perm || permissions!.includes(item.perm),
+      );
+    }, [permissions]);
 
     const onItemPress = (item: MenuItem) => {
       if (item.route) {
@@ -184,7 +207,7 @@ const PanelDrawerNavigator = ({ route }: any) => {
           <View style={styles.headerDivider} />
 
           <View style={styles.menu}>
-            {menuItems.map((item, index) => {
+            {visibleItems.map((item, index) => {
               const isActive =
                 !!item.route && state.routeNames[state.index] === item.route;
 
@@ -224,7 +247,7 @@ const PanelDrawerNavigator = ({ route }: any) => {
                       {item.label}
                     </Text>
                   </TouchableOpacity>
-                  {index !== menuItems.length - 1 && (
+                  {index !== visibleItems.length - 1 && (
                     <View style={styles.divider} />
                   )}
                 </View>

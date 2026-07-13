@@ -29,6 +29,11 @@ export interface AdminUser {
   email: string;
   role: 'admin' | 'sub-admin';
   image?: string | null;
+  // Functionalities this admin may access, as web admin route names
+  // (e.g. 'admin.attendance'). Full admins get the ['*'] wildcard; sub-admins
+  // get only the screens granted from the web Users panel. Absent on legacy
+  // sessions — treated as full access for backward compatibility.
+  permissions?: string[];
   organization?: {
     id: number;
     name: string;
