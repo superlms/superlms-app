@@ -77,3 +77,6 @@ replay_pid*.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# OTA release build artifacts
+dist-ota/

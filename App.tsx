@@ -12,6 +12,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import AppLock from './src/components/AppLock';
 import { ThemeProvider, theme } from './src/utils/theme';
 import { initNotifications } from './src/notifications';
+import { checkForOTAUpdate } from './src/utils/otaUpdate';
 
 // Routes where the biometric prompt must NOT fire — splash, onboarding and
 // every auth screen. Anything else is considered "inside the app" (dashboard
@@ -71,6 +72,9 @@ const App = () => {
   // Set up the notification channel, permission and tap handling once.
   useEffect(() => {
     initNotifications();
+    // Check for an over-the-air JS update in the background (release builds
+    // only). New bundles are applied on the next cold start — no Play Store.
+    checkForOTAUpdate();
   }, []);
 
   return (

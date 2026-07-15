@@ -5,6 +5,7 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import com.otahotupdate.OtaHotUpdate
 
 class MainApplication : Application(), ReactApplication {
 
@@ -16,6 +17,9 @@ class MainApplication : Application(), ReactApplication {
           // Packages that cannot be autolinked yet can be added manually here, for example:
           // add(MyReactNativePackage())
         },
+      // OTA: load the downloaded JS bundle if one is installed & compatible;
+      // otherwise falls back to the bundle shipped inside the APK/AAB.
+      jsBundleFilePath = OtaHotUpdate.bundleJS(applicationContext),
     )
   }
 
