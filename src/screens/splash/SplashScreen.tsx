@@ -71,7 +71,7 @@ const SplashScreen = ({ navigation }: any) => {
             },
           ]}
         >
-          <Image source={{ uri: 'logo' }} style={styles.logo} />
+          <Image source={require('../../assets/logo.png')} style={styles.logo} />
 
           <Animated.View
             style={[

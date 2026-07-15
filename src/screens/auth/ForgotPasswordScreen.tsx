@@ -234,7 +234,7 @@ const ForgotPasswordScreen = () => {
         return (
           <>
             <View style={styles.iconBadge}>
-              <Image source={{ uri: 'logo' }} style={styles.logo} />
+              <Image source={require('../../assets/logo.png')} style={styles.logo} />
             </View>
             <Text style={styles.heading}>Reset Password</Text>
             <Text
@@ -315,7 +315,7 @@ const ForgotPasswordScreen = () => {
         return (
           <>
             <View style={styles.iconBadge}>
-              <Image source={{ uri: 'logo' }} style={styles.logo} />
+              <Image source={require('../../assets/logo.png')} style={styles.logo} />
             </View>
             <Text style={styles.heading}>Enter OTP</Text>
             <Text
@@ -422,7 +422,7 @@ const ForgotPasswordScreen = () => {
         return (
           <>
             <View style={styles.iconBadge}>
-              <Image source={{ uri: 'logo' }} style={styles.logo} />
+              <Image source={require('../../assets/logo.png')} style={styles.logo} />
             </View>
             <Text style={styles.heading}>Set New Password</Text>
             <Text

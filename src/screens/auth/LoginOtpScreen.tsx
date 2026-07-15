@@ -259,7 +259,7 @@ const LoginOtpScreen = () => {
         >
           <View style={styles.card}>
             <View style={styles.iconBadge}>
-              <Image source={{ uri: 'logo' }} style={styles.logo} />
+              <Image source={require('../../assets/logo.png')} style={styles.logo} />
             </View>
             <Text style={styles.heading}>Enter OTP</Text>
             <Text
