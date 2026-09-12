@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
@@ -112,7 +113,7 @@ const ProgressBar = ({ pct }: { pct: number }) => (
   </View>
 );
 
-// Exam filter: a card-style field that opens a list of exams to pick from.
+// Exam selector: a soft, label-less field that opens a bottom sheet of exams.
 const ExamPicker = ({
   options,
   value,
@@ -122,24 +123,25 @@ const ExamPicker = ({
   value: string;
   onChange: (id: string) => void;
 }) => {
+  const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const selected = options.find(o => o.id === value) ?? options[0];
 
   return (
     <>
-      <TouchableOpacity style={styles.picker} activeOpacity={0.7} onPress={() => setOpen(true)}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.pickerLabel}>Exam</Text>
-          <Text style={styles.pickerValue} numberOfLines={1}>
-            {selected?.label}
-          </Text>
-        </View>
+      <TouchableOpacity style={styles.select} activeOpacity={0.7} onPress={() => setOpen(true)}>
+        <VectorIcon iconSet="Ionicons" iconName="document-text-outline" size={18} color={theme.colors.primary} />
+        <Text style={styles.selectText} numberOfLines={1}>
+          {selected?.label}
+        </Text>
         <VectorIcon iconSet="Ionicons" iconName="chevron-down" size={18} color={theme.colors.textMuted} />
       </TouchableOpacity>
 
       <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setOpen(false)}>
-          <TouchableOpacity style={styles.sheet} activeOpacity={1}>
+        <View style={styles.sheetWrap}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setOpen(false)} />
+          <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]}>
+            <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>Select exam</Text>
             <ScrollView showsVerticalScrollIndicator={false}>
               {options.map((o, i) => {
@@ -167,8 +169,8 @@ const ExamPicker = ({
                 );
               })}
             </ScrollView>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </>
   );
@@ -232,6 +234,12 @@ const PerformanceScreen = () => {
     ...examResults.map(e => ({ id: e.id, label: e.examName })),
   ];
 
+  const stats = [
+    { label: 'Marks', value: `${obtained}/${total}` },
+    { label: 'Subjects', value: String(subjects.length) },
+    ...(exam ? [] : [{ label: 'Exams', value: String(examResults.length) }]),
+  ];
+
   const selectExam = (id: string) => {
     setSelected(id);
     scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -240,34 +248,45 @@ const PerformanceScreen = () => {
   return (
     <View style={docStyles.root}>
       <DocHeader title={TITLE} />
+
+      {/* Exam selector, pinned under the header, with a full-width line below */}
+      <View style={styles.filterBar}>
+        <ExamPicker options={options} value={exam ? exam.id : ALL} onChange={selectExam} />
+      </View>
+      <View style={styles.fullDivider} />
+
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={docStyles.scroll}
+        contentContainerStyle={[docStyles.scroll, styles.scroll]}
         refreshControl={refreshControl}
       >
-        {/* Exam filter */}
-        <ExamPicker options={options} value={exam ? exam.id : ALL} onChange={selectExam} />
-
-        {/* Summary for the selection */}
+        {/* Score */}
         <View>
-          <View style={styles.summaryTop}>
-            <Text style={styles.bigPct}>{pct}%</Text>
-            <View style={styles.gradePill}>
-              <Text style={styles.gradePillText}>Grade {getGrade(pct)}</Text>
+          <View style={styles.hero}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroCaption}>Score</Text>
+              <Text style={styles.bigPct}>{pct}%</Text>
+              <Text style={styles.heroLabel}>{getPerformanceLabel(pct)}</Text>
+            </View>
+            <View style={styles.gradeBadge}>
+              <Text style={styles.gradeValue}>{getGrade(pct)}</Text>
+              <Text style={styles.gradeCaption}>Grade</Text>
             </View>
           </View>
-          <Text style={styles.summaryLine}>
-            {getPerformanceLabel(pct)} · {obtained} / {total} marks
-          </Text>
-          <View style={styles.summaryBar}>
+
+          <View style={styles.heroBar}>
             <ProgressBar pct={pct} />
           </View>
-          <Text style={styles.summaryMeta}>
-            {exam
-              ? plural(subjects.length, 'subject')
-              : `${plural(examResults.length, 'exam')} · ${plural(subjects.length, 'subject')}`}
-          </Text>
+
+          <View style={styles.stats}>
+            {stats.map((st, i) => (
+              <View key={st.label} style={[styles.stat, i > 0 && styles.statDivider]}>
+                <Text style={styles.statValue}>{st.value}</Text>
+                <Text style={styles.statLabel}>{st.label}</Text>
+              </View>
+            ))}
+          </View>
         </View>
 
         {/* Subjects */}
@@ -294,7 +313,7 @@ const PerformanceScreen = () => {
           })}
         </DocSection>
 
-        {/* Exams — only when viewing all; tapping one filters to it */}
+        {/* Exams — only when viewing all; tapping one selects it */}
         {!exam && (
           <DocSection title="Exams">
             {examResults.map((e, i) => {
@@ -332,55 +351,82 @@ const PerformanceScreen = () => {
 export default PerformanceScreen;
 
 const __mk_styles = () => StyleSheet.create({
-  // Exam picker
-  picker: {
+  // Filter bar
+  filterBar: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: theme.colors.card,
+  },
+  fullDivider: { height: 1, backgroundColor: theme.colors.border },
+  scroll: { paddingTop: 20 },
+
+  // Exam selector
+  select: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    height: 46,
+    paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.card,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    backgroundColor: theme.colors.background,
   },
-  pickerLabel: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted },
-  pickerValue: { fontSize: 15, color: theme.colors.textPrimary, marginTop: 2 },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
+  selectText: { flex: 1, fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+
+  // Bottom sheet
+  sheetWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' },
   sheet: {
-    width: '100%',
-    maxWidth: 420,
     maxHeight: '70%',
     backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 8,
+    paddingTop: 10,
   },
-  sheetTitle: { fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 6 },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.border,
+    marginBottom: 14,
+  },
+  sheetTitle: { fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 4 },
   sheetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
   sheetRowText: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
   sheetRowTextActive: { color: theme.colors.primary, fontWeight: '600' },
 
-  // Summary
-  summaryTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  bigPct: { fontSize: 36, fontWeight: '700', color: theme.colors.textPrimary, lineHeight: 42 },
-  gradePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: theme.radius.full,
+  // Score
+  hero: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  heroCaption: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted },
+  bigPct: { fontSize: 40, fontWeight: '700', color: theme.colors.textPrimary, lineHeight: 48 },
+  heroLabel: { fontSize: 14, color: theme.colors.textSecondary },
+  gradeBadge: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: theme.colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  gradePillText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
-  summaryLine: { fontSize: 14, color: theme.colors.textSecondary, marginTop: 2 },
-  summaryBar: { marginTop: 12 },
-  summaryMeta: { fontSize: 12, color: theme.colors.textMuted, marginTop: 8 },
+  gradeValue: { fontSize: 22, fontWeight: '700', color: theme.colors.primary, lineHeight: 26 },
+  gradeCaption: { fontSize: 11, color: theme.colors.primary },
+  heroBar: { marginTop: 16 },
+
+  // Stats
+  stats: {
+    flexDirection: 'row',
+    marginTop: 18,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+  },
+  stat: { flex: 1, alignItems: 'center', gap: 2 },
+  statDivider: { borderLeftWidth: 1, borderLeftColor: theme.colors.border },
+  statValue: { fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary },
+  statLabel: { fontSize: 12, color: theme.colors.textMuted },
 
   // Rows (subjects / exams)
   row: { paddingVertical: 12, gap: 6 },
@@ -392,7 +438,7 @@ const __mk_styles = () => StyleSheet.create({
 
   // Progress bar
   barBg: {
-    height: 6,
+    height: 5,
     borderRadius: 3,
     backgroundColor: theme.colors.border,
     overflow: 'hidden',
