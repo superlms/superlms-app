@@ -10,13 +10,7 @@ import { theme, onThemeChange } from '../../utils/theme';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getStudentProfile } from '../../api/studentApi';
-import {
-  DocHeader,
-  DocSection,
-  DocList,
-  DocLoading,
-  DocError,
-} from '../more/docUi';
+import { DocHeader, DocLoading, DocError } from '../more/docUi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ProfileData {
@@ -40,7 +34,7 @@ const val = (v: any): string => {
 
 const hasVal = (v: any) => val(v) !== '—';
 
-// ─── Info Row: label left, value right ────────────────────────────────────────
+// ─── Info Row: label, then value from the middle ──────────────────────────────
 const InfoRow = ({
   label, value, last,
 }: {
@@ -83,45 +77,29 @@ const StudentProfileScreen = () => {
 
   const { personal_info: p, family_info: f, address_info: a, academic_info: ac } = profile;
 
-  // Name and admission no. sit at the top, so they aren't repeated below.
-  // Empty fields are left out; a section with nothing to show is hidden.
-  const sections = [
-    {
-      title: 'Personal Information',
-      rows: [
-        ['Email', p.email],
-        ['Mobile', p.mobile_number],
-        ['DOB', p.dob],
-        ['Gender', p.gender],
-        ['Religion', p.religion],
-        ['Aadhar No', p.aadhar_no],
-        ['Father Name', f.father_name],
-        ['Mother Name', f.mother_name],
-      ],
-    },
-    {
-      title: 'Academic Information',
-      rows: [
-        ['Class', ac.standard_name],
-        ['Section', ac.section_name],
-        ['Roll No', ac.roll_no],
-        ['Date of Admission', ac.date_of_admission],
-        ['Board', ac.board],
-      ],
-    },
-    {
-      title: 'Address',
-      rows: [
-        ['Local Address', a.local_address],
-        ['Permanent Address', a.permanent_address],
-        ['City', a.city],
-        ['State', a.state],
-        ['Pincode', a.pincode],
-      ],
-    },
-  ]
-    .map(sec => ({ ...sec, rows: sec.rows.filter(([, v]) => hasVal(v)) as [string, any][] }))
-    .filter(sec => sec.rows.length > 0);
+  // One plain list: personal, then academic, then address details. Name and
+  // admission no. sit at the top, so they aren't repeated; empty fields are
+  // left out.
+  const rows = ([
+    ['Email', p.email],
+    ['Mobile', p.mobile_number],
+    ['DOB', p.dob],
+    ['Gender', p.gender],
+    ['Religion', p.religion],
+    ['Aadhar No', p.aadhar_no],
+    ['Father Name', f.father_name],
+    ['Mother Name', f.mother_name],
+    ['Class', ac.standard_name],
+    ['Section', ac.section_name],
+    ['Roll No', ac.roll_no],
+    ['Date of Admission', ac.date_of_admission],
+    ['Board', ac.board],
+    ['Local Address', a.local_address],
+    ['Permanent Address', a.permanent_address],
+    ['City', a.city],
+    ['State', a.state],
+    ['Pincode', a.pincode],
+  ] as [string, any][]).filter(([, v]) => hasVal(v));
 
   return (
     <View style={s.root}>
@@ -153,19 +131,13 @@ const StudentProfileScreen = () => {
         <View style={s.divider} />
 
         <View style={s.body}>
-          {sections.map(sec => (
-            <DocSection key={sec.title} title={sec.title}>
-              <DocList>
-                {sec.rows.map(([label, value], i) => (
-                  <InfoRow
-                    key={label}
-                    label={label}
-                    value={value}
-                    last={i === sec.rows.length - 1}
-                  />
-                ))}
-              </DocList>
-            </DocSection>
+          {rows.map(([label, value], i) => (
+            <InfoRow
+              key={label}
+              label={label}
+              value={value}
+              last={i === rows.length - 1}
+            />
           ))}
         </View>
       </ScrollView>
@@ -200,12 +172,13 @@ const __mk_s = () => StyleSheet.create({
   // Full-width thin line between the head and the details
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.divider },
 
-  body: { paddingHorizontal: 20, paddingTop: 24, gap: 28 },
+  body: { paddingHorizontal: 20, paddingTop: 4 },
 
-  infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, paddingVertical: 13 },
+  // Two left-aligned columns: label in the left half, value from the middle.
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 14 },
   infoRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-  infoLabel: { fontSize: 14, color: theme.colors.textSecondary },
-  infoValue: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary, textAlign: 'right' },
+  infoLabel: { width: '50%', paddingRight: 12, fontSize: 14, color: theme.colors.textSecondary },
+  infoValue: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
 });
 
 
