@@ -21,7 +21,6 @@ interface PrivacyData {
   last_updated: string;
 }
 
-const ACCENT = '#6366F1';
 const TITLE = 'Privacy Policy';
 
 const PrivacyPolicyScreen = () => {
@@ -65,7 +64,6 @@ const PrivacyPolicyScreen = () => {
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <DocHero
-          accent={ACCENT}
           iconSet="Ionicons"
           icon="lock-closed-outline"
           title={TITLE}
@@ -74,21 +72,20 @@ const PrivacyPolicyScreen = () => {
 
         {sections.length === 0 ? (
           <DocNoData
-            accent={ACCENT}
             icon="lock-closed-outline"
             title="No Data found"
             subtitle="The privacy policy hasn’t been added yet. Pull down to refresh."
           />
         ) : (
           sections.map((sec, i) => (
-            <DocCard key={i} accent={ACCENT} label={sec.head}>
+            <DocCard key={i} label={sec.head}>
               <DocBody>{sec.desc}</DocBody>
             </DocCard>
           ))
         )}
 
         {!!formattedDate && sections.length > 0 && (
-          <DocFooter accent={ACCENT} text={`Last updated: ${formattedDate}`} />
+          <DocFooter text={`Last updated: ${formattedDate}`} />
         )}
       </ScrollView>
     </View>

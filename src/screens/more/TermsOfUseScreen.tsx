@@ -21,7 +21,6 @@ interface TermsOfUseData {
   last_updated: string;
 }
 
-const ACCENT = '#0EA5E9';
 const TITLE = 'Terms of Use';
 
 const TermsOfUseScreen = () => {
@@ -65,7 +64,6 @@ const TermsOfUseScreen = () => {
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <DocHero
-          accent={ACCENT}
           iconSet="Ionicons"
           icon="document-text-outline"
           title={TITLE}
@@ -74,21 +72,20 @@ const TermsOfUseScreen = () => {
 
         {sections.length === 0 ? (
           <DocNoData
-            accent={ACCENT}
             icon="document-text-outline"
             title="No Data found"
             subtitle="The terms of use haven’t been added yet. Pull down to refresh."
           />
         ) : (
           sections.map((sec, i) => (
-            <DocCard key={i} accent={ACCENT} label={sec.head}>
+            <DocCard key={i} label={sec.head}>
               <DocBody>{sec.desc}</DocBody>
             </DocCard>
           ))
         )}
 
         {!!formattedDate && sections.length > 0 && (
-          <DocFooter accent={ACCENT} text={`Last updated: ${formattedDate}`} />
+          <DocFooter text={`Last updated: ${formattedDate}`} />
         )}
       </ScrollView>
     </View>

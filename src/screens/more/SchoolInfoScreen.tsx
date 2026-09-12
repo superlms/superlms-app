@@ -40,7 +40,6 @@ interface SchoolInfo {
   organization: { logo_url: string; name: string };
 }
 
-const ACCENT = '#10B981';
 const TITLE = 'School Info';
 
 const SchoolInfoScreen = () => {
@@ -95,7 +94,6 @@ const SchoolInfoScreen = () => {
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <DocHero
-          accent={ACCENT}
           logoUrl={info.organization?.logo_url}
           icon="school-outline"
           title={info.organization?.name || TITLE}
@@ -104,7 +102,6 @@ const SchoolInfoScreen = () => {
 
         {isEmpty && (
           <DocNoData
-            accent={ACCENT}
             icon="school-outline"
             title="No Data found"
             subtitle="The school info hasn’t been added yet. Pull down to refresh."
@@ -112,30 +109,28 @@ const SchoolInfoScreen = () => {
         )}
 
         {sections.map((sec, i) => (
-          <DocCard key={i} accent={ACCENT} label={sec.title}>
+          <DocCard key={i} label={sec.title}>
             <DocBody>{sec.content}</DocBody>
           </DocCard>
         ))}
 
         {team.length > 0 && (
-          <DocCard accent={ACCENT} label="School Management">
-            <DocPeople accent={ACCENT} people={team} />
+          <DocCard label="School Management">
+            <DocPeople people={team} />
           </DocCard>
         )}
 
         {documents.length > 0 && (
-          <DocCard accent={ACCENT} label="School Documents">
+          <DocCard label="School Documents">
             {documents.map((doc: any, i: number) => {
               const fileUrl = doc.file_url ?? doc.file_path ?? null;
               return (
                 <DocRow
                   key={doc.id ?? i}
-                  iconBg="#EF4444"
                   icon="file-text"
                   title={doc.title ?? doc.name ?? `Document ${i + 1}`}
                   sub={doc.file_type ? String(doc.file_type).toUpperCase() : undefined}
                   trailingIcon={fileUrl ? 'download-outline' : undefined}
-                  trailingColor={ACCENT}
                   onPress={fileUrl ? () => Linking.openURL(fileUrl) : undefined}
                   isLast={i === documents.length - 1}
                 />
@@ -145,43 +140,41 @@ const SchoolInfoScreen = () => {
         )}
 
         {hasContact && (
-        <DocCard accent={ACCENT} label="Contact Information">
+        <DocCard label="Contact Information">
           {!!info.website_url && (
             <DocRow
-              iconBg={ACCENT}
               icon="globe"
               title="Visit Website"
               trailingIcon="open-outline"
-              trailingColor={ACCENT}
               onPress={() => Linking.openURL(info.website_url)}
+              isLast={!info.school_mobile && !info.school_email && !info.school_address}
             />
           )}
           {!!info.school_mobile && (
             <DocRow
-              iconBg="#CE7DED"
               icon="phone-call"
               title={info.school_mobile}
-              sub="PHONE"
+              sub="Phone"
               trailingIcon="chevron-forward"
               onPress={() => Linking.openURL(`tel:${info.school_mobile}`)}
+              isLast={!info.school_email && !info.school_address}
             />
           )}
           {!!info.school_email && (
             <DocRow
-              iconBg="#3A7CF8"
               icon="mail"
               title={info.school_email}
-              sub="EMAIL"
+              sub="Email"
               trailingIcon="chevron-forward"
               onPress={() => Linking.openURL(`mailto:${info.school_email}`)}
+              isLast={!info.school_address}
             />
           )}
           {!!info.school_address && (
             <DocRow
-              iconBg="#8E54E9"
               icon="map-pin"
               title={info.school_address}
-              sub="ADDRESS"
+              sub="Address"
               isLast
             />
           )}

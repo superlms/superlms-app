@@ -33,14 +33,13 @@ interface TermsData {
   };
 }
 
-const ACCENT = '#8B5CF6';
 const TITLE = 'Terms & Conditions';
 
 const contactCfg = (key: string) => {
   const k = key.toLowerCase();
-  if (k.includes('email') || k.includes('mail')) return { icon: 'mail', bg: '#3B82F6', action: (v: string) => Linking.openURL(`mailto:${v}`) };
-  if (k.includes('phone') || k.includes('mobile')) return { icon: 'phone', bg: '#A78BFA', action: (v: string) => Linking.openURL(`tel:${v}`) };
-  return { icon: 'info', bg: '#10B981', action: undefined as undefined | ((v: string) => void) };
+  if (k.includes('email') || k.includes('mail')) return { icon: 'mail', action: (v: string) => Linking.openURL(`mailto:${v}`) };
+  if (k.includes('phone') || k.includes('mobile')) return { icon: 'phone', action: (v: string) => Linking.openURL(`tel:${v}`) };
+  return { icon: 'info', action: undefined as undefined | ((v: string) => void) };
 };
 
 const TermsConditionsScreen = () => {
@@ -90,7 +89,6 @@ const TermsConditionsScreen = () => {
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <DocHero
-          accent={ACCENT}
           logoUrl={platform_logo}
           icon="document-text-outline"
           title={platform_name || TITLE}
@@ -99,7 +97,6 @@ const TermsConditionsScreen = () => {
 
         {isEmpty ? (
           <DocNoData
-            accent={ACCENT}
             icon="document-text-outline"
             title="No Data found"
             subtitle="The terms & conditions haven’t been added yet. Pull down to refresh."
@@ -107,22 +104,20 @@ const TermsConditionsScreen = () => {
         ) : (
           <>
             {sections.map((sec, i) => (
-              <DocCard key={i} accent={ACCENT} label={sec.head}>
+              <DocCard key={i} label={sec.head}>
                 <DocBody>{sec.desc}</DocBody>
               </DocCard>
             ))}
 
             {files.length > 0 && (
-              <DocCard accent={ACCENT} label="Documents">
+              <DocCard label="Documents">
                 {files.map((file, i) => (
                   <DocRow
                     key={i}
-                    iconBg="#EF4444"
                     icon="file-text"
                     title={file.title}
                     sub={file.file_type?.toUpperCase()}
                     trailingIcon="download-outline"
-                    trailingColor={ACCENT}
                     onPress={() => Linking.openURL(file.file_path)}
                     isLast={i === files.length - 1}
                   />
@@ -131,13 +126,12 @@ const TermsConditionsScreen = () => {
             )}
 
             {additional.length > 0 && (
-              <DocCard accent={ACCENT} label="Contact">
+              <DocCard label="Contact">
                 {additional.map((item, i) => {
                   const cfg = contactCfg(item.key);
                   return (
                     <DocRow
                       key={i}
-                      iconBg={cfg.bg}
                       icon={cfg.icon}
                       title={item.value}
                       trailingIcon={cfg.action ? 'chevron-forward' : undefined}
@@ -152,7 +146,7 @@ const TermsConditionsScreen = () => {
         )}
 
         {!!formattedDate && !isEmpty && (
-          <DocFooter accent={ACCENT} text={`Last updated: ${formattedDate}`} />
+          <DocFooter text={`Last updated: ${formattedDate}`} />
         )}
       </ScrollView>
     </View>

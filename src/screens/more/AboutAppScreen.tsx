@@ -35,14 +35,13 @@ interface AboutData {
   documents: DocItem[];
 }
 
-const ACCENT = theme.colors.primary;
 const TITLE = 'About App';
 
 const contactCfg = (type: string) => {
   const t = type.toLowerCase();
-  if (t.includes('email') || t.includes('mail')) return { icon: 'mail', bg: '#6C63FF', action: (v: string) => Linking.openURL(`mailto:${v}`) };
-  if (t.includes('mobile') || t.includes('phone')) return { icon: 'phone', bg: '#CE7DED', action: (v: string) => Linking.openURL(`tel:${v}`) };
-  return { icon: 'map-pin', bg: '#8E54E9', action: undefined as undefined | ((v: string) => void) };
+  if (t.includes('email') || t.includes('mail')) return { icon: 'mail', action: (v: string) => Linking.openURL(`mailto:${v}`) };
+  if (t.includes('mobile') || t.includes('phone')) return { icon: 'phone', action: (v: string) => Linking.openURL(`tel:${v}`) };
+  return { icon: 'map-pin', action: undefined as undefined | ((v: string) => void) };
 };
 
 const socialIcon = (platform: string) => {
@@ -107,7 +106,6 @@ const AboutAppScreen = () => {
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <DocHero
-          accent={ACCENT}
           logoUrl={info.logo}
           title={info.heading || TITLE}
           subtitle={info.sub_heading}
@@ -115,7 +113,6 @@ const AboutAppScreen = () => {
 
         {!hasAnyBody && (
           <DocNoData
-            accent={ACCENT}
             icon="information-circle-outline"
             title="No Data found"
             subtitle="The app info hasn’t been added yet. Pull down to refresh."
@@ -123,22 +120,21 @@ const AboutAppScreen = () => {
         )}
 
         {content.map((item, i) => (
-          <DocCard key={i} accent={ACCENT} label={item.title}>
+          <DocCard key={i} label={item.title}>
             <DocBody>{item.description}</DocBody>
           </DocCard>
         ))}
 
         {hasContact && (
-          <DocCard accent={ACCENT} label="Contact Details">
+          <DocCard label="Contact Details">
             {contacts.map((item, i) => {
               const cfg = contactCfg(item.type);
               return (
                 <DocRow
                   key={i}
-                  iconBg={cfg.bg}
                   icon={cfg.icon}
                   title={item.value}
-                  sub={item.type.toUpperCase()}
+                  sub={item.type}
                   trailingIcon={cfg.action ? 'chevron-forward' : undefined}
                   onPress={cfg.action ? () => cfg.action!(item.value) : undefined}
                   isLast={!address && i === contacts.length - 1}
@@ -147,10 +143,9 @@ const AboutAppScreen = () => {
             })}
             {!!address && (
               <DocRow
-                iconBg="#8E54E9"
                 icon="map-pin"
                 title={address}
-                sub="ADDRESS"
+                sub="Address"
                 isLast
               />
             )}
@@ -158,9 +153,8 @@ const AboutAppScreen = () => {
         )}
 
         {team.length > 0 && (
-          <DocCard accent={ACCENT} label="Core Team">
+          <DocCard label="Core Team">
             <DocPeople
-              accent={ACCENT}
               people={team}
               onPressPerson={p => {
                 const link = p.url || p.photo_url;
@@ -171,16 +165,14 @@ const AboutAppScreen = () => {
         )}
 
         {documents.length > 0 && (
-          <DocCard accent={ACCENT} label="Documents">
+          <DocCard label="Documents">
             {documents.map((doc, i) => (
               <DocRow
                 key={doc.id ?? i}
-                iconBg="#EF4444"
                 icon="file-text"
                 title={doc.title || `Document ${i + 1}`}
                 sub={doc.file_type ? doc.file_type.toUpperCase() : undefined}
                 trailingIcon={doc.file_path ? 'download-outline' : undefined}
-                trailingColor={ACCENT}
                 onPress={doc.file_path ? () => Linking.openURL(doc.file_path!) : undefined}
                 isLast={i === documents.length - 1}
               />
@@ -189,16 +181,14 @@ const AboutAppScreen = () => {
         )}
 
         {socials.length > 0 && (
-          <DocCard accent={ACCENT} label="Follow Us">
+          <DocCard label="Follow Us">
             {socials.map((item, i) => (
               <DocRow
                 key={i}
                 iconSet="Ionicons"
-                iconBg={ACCENT}
                 icon={socialIcon(item.platform)}
                 title={item.platform}
                 trailingIcon="open-outline"
-                trailingColor={ACCENT}
                 onPress={() => Linking.openURL(item.url)}
                 isLast={i === socials.length - 1}
               />
