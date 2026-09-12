@@ -128,8 +128,8 @@ export const DaySelector = ({
 };
 
 // ── One period ───────────────────────────────────────────────────────────────
-//   (photo)  English            NOW      08:00 AM
-//            Deepak Singh                09:00 AM
+//   (photo)  08:00 AM   English                      NOW
+//            09:00 AM   Deepak Singh · Substitute
 export const PeriodRow = ({
   period,
   meta,
@@ -158,6 +158,11 @@ export const PeriodRow = ({
         </View>
       ))}
 
+    <View style={s.timeCol}>
+      <Text style={[s.timeFrom, isNow && s.timeNow]}>{fmtTime(period.start_time) || '—'}</Text>
+      {!!period.end_time && <Text style={s.timeTo}>{fmtTime(period.end_time)}</Text>}
+    </View>
+
     <View style={s.body}>
       <View style={s.line}>
         <Text style={s.subject} numberOfLines={1}>
@@ -170,11 +175,6 @@ export const PeriodRow = ({
           {meta}
         </Text>
       )}
-    </View>
-
-    <View style={s.timeCol}>
-      <Text style={[s.timeFrom, isNow && s.timeNow]}>{fmtTime(period.start_time) || '—'}</Text>
-      {!!period.end_time && <Text style={s.timeTo}>{fmtTime(period.end_time)}</Text>}
     </View>
   </View>
 );
@@ -200,8 +200,8 @@ const __mk_s = () => StyleSheet.create({
   dayDateActive: { color: theme.colors.white },
   dayTextToday: { color: theme.colors.primary },
 
-  // Period — the face leads, the clock closes
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  // Period — the face, then the clock, then what it is
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.colors.background },
   avatarFallback: { alignItems: 'center', justifyContent: 'center' },
@@ -211,7 +211,7 @@ const __mk_s = () => StyleSheet.create({
   subject: { flexShrink: 1, fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   now: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: theme.colors.primary },
   meta: { fontSize: 13, color: theme.colors.textSecondary },
-  timeCol: { alignItems: 'flex-end' },
+  timeCol: { width: 62 },
   timeFrom: { fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
   timeNow: { color: theme.colors.primary },
   timeTo: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
