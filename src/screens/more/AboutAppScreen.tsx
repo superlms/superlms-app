@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Header from '../../components/Header';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getAboutApp } from '../../api/authApi';
 import { theme, onThemeChange } from '../../utils/theme';
 import {
+  DocHeader,
   DocIntro,
   DocSection,
+  DocList,
   DocBody,
   DocRow,
   DocPeople,
@@ -99,7 +100,7 @@ const AboutAppScreen = () => {
 
   return (
     <View style={docStyles.root}>
-      <Header title={TITLE} />
+      <DocHeader title={TITLE} />
       <ScrollView
         contentContainerStyle={docStyles.scroll}
         showsVerticalScrollIndicator={false}
@@ -122,65 +123,73 @@ const AboutAppScreen = () => {
 
         {hasContact && (
           <DocSection title="Contact">
-            {contacts.map((item, i) => {
-              const cfg = contactCfg(item.type);
-              return (
-                <DocRow
-                  key={i}
-                  icon={cfg.icon}
-                  title={item.value}
-                  sub={item.type}
-                  trailingIcon={cfg.action ? 'chevron-forward' : undefined}
-                  onPress={cfg.action ? () => cfg.action!(item.value) : undefined}
-                  isLast={!address && i === contacts.length - 1}
-                />
-              );
-            })}
-            {!!address && <DocRow icon="map-pin" title={address} sub="Address" isLast />}
+            <DocList>
+              {contacts.map((item, i) => {
+                const cfg = contactCfg(item.type);
+                return (
+                  <DocRow
+                    key={i}
+                    icon={cfg.icon}
+                    title={item.value}
+                    sub={item.type}
+                    trailingIcon={cfg.action ? 'chevron-forward' : undefined}
+                    onPress={cfg.action ? () => cfg.action!(item.value) : undefined}
+                    isLast={!address && i === contacts.length - 1}
+                  />
+                );
+              })}
+              {!!address && <DocRow icon="map-pin" title={address} sub="Address" isLast />}
+            </DocList>
           </DocSection>
         )}
 
         {team.length > 0 && (
           <DocSection title="Core Team">
-            <DocPeople
-              people={team}
-              onPressPerson={p => {
-                const link = p.url || p.photo_url;
-                if (link) Linking.openURL(link);
-              }}
-            />
+            <DocList>
+              <DocPeople
+                people={team}
+                onPressPerson={p => {
+                  const link = p.url || p.photo_url;
+                  if (link) Linking.openURL(link);
+                }}
+              />
+            </DocList>
           </DocSection>
         )}
 
         {documents.length > 0 && (
           <DocSection title="Documents">
-            {documents.map((doc, i) => (
-              <DocRow
-                key={doc.id ?? i}
-                icon="file-text"
-                title={doc.title || `Document ${i + 1}`}
-                sub={doc.file_type ? doc.file_type.toUpperCase() : undefined}
-                trailingIcon={doc.file_path ? 'download-outline' : undefined}
-                onPress={doc.file_path ? () => Linking.openURL(doc.file_path!) : undefined}
-                isLast={i === documents.length - 1}
-              />
-            ))}
+            <DocList>
+              {documents.map((doc, i) => (
+                <DocRow
+                  key={doc.id ?? i}
+                  icon="file-text"
+                  title={doc.title || `Document ${i + 1}`}
+                  sub={doc.file_type ? doc.file_type.toUpperCase() : undefined}
+                  trailingIcon={doc.file_path ? 'download-outline' : undefined}
+                  onPress={doc.file_path ? () => Linking.openURL(doc.file_path!) : undefined}
+                  isLast={i === documents.length - 1}
+                />
+              ))}
+            </DocList>
           </DocSection>
         )}
 
         {socials.length > 0 && (
           <DocSection title="Follow Us">
-            {socials.map((item, i) => (
-              <DocRow
-                key={i}
-                iconSet="Ionicons"
-                icon={socialIcon(item.platform)}
-                title={item.platform}
-                trailingIcon="open-outline"
-                onPress={() => Linking.openURL(item.url)}
-                isLast={i === socials.length - 1}
-              />
-            ))}
+            <DocList>
+              {socials.map((item, i) => (
+                <DocRow
+                  key={i}
+                  iconSet="Ionicons"
+                  icon={socialIcon(item.platform)}
+                  title={item.platform}
+                  trailingIcon="open-outline"
+                  onPress={() => Linking.openURL(item.url)}
+                  isLast={i === socials.length - 1}
+                />
+              ))}
+            </DocList>
           </DocSection>
         )}
 

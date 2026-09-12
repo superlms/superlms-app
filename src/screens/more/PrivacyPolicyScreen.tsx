@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import Header from '../../components/Header';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getPrivacyPolicy } from '../../api/authApi';
 import {
+  DocHeader,
   DocIntro,
   DocSection,
   DocBody,
@@ -54,7 +54,7 @@ const PrivacyPolicyScreen = () => {
 
   return (
     <View style={docStyles.root}>
-      <Header title={TITLE} />
+      <DocHeader title={TITLE} />
       <ScrollView
         contentContainerStyle={docStyles.scroll}
         showsVerticalScrollIndicator={false}

@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Linking, ScrollView, View } from 'react-native';
-import Header from '../../components/Header';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getRulesRegulations } from '../../api/authApi';
 import {
+  DocHeader,
   DocIntro,
   DocSection,
+  DocList,
   DocBody,
   DocRow,
   DocNoData,
@@ -70,7 +71,7 @@ const RulesRegulationsScreen = () => {
 
   return (
     <View style={docStyles.root}>
-      <Header title={TITLE} />
+      <DocHeader title={TITLE} />
       <ScrollView
         contentContainerStyle={docStyles.scroll}
         showsVerticalScrollIndicator={false}
@@ -93,35 +94,39 @@ const RulesRegulationsScreen = () => {
 
         {files.length > 0 && (
           <DocSection title="Documents">
-            {files.map((file, i) => (
-              <DocRow
-                key={i}
-                icon="file-text"
-                title={file.title}
-                sub={file.file_type?.toUpperCase()}
-                trailingIcon="download-outline"
-                onPress={() => Linking.openURL(file.file_path)}
-                isLast={i === files.length - 1}
-              />
-            ))}
+            <DocList>
+              {files.map((file, i) => (
+                <DocRow
+                  key={i}
+                  icon="file-text"
+                  title={file.title}
+                  sub={file.file_type?.toUpperCase()}
+                  trailingIcon="download-outline"
+                  onPress={() => Linking.openURL(file.file_path)}
+                  isLast={i === files.length - 1}
+                />
+              ))}
+            </DocList>
           </DocSection>
         )}
 
         {additional.length > 0 && (
           <DocSection title="Contact">
-            {additional.map((item, i) => {
-              const cfg = contactCfg(item.key);
-              return (
-                <DocRow
-                  key={i}
-                  icon={cfg.icon}
-                  title={item.value}
-                  trailingIcon={cfg.action ? 'chevron-forward' : undefined}
-                  onPress={cfg.action ? () => cfg.action!(item.value) : undefined}
-                  isLast={i === additional.length - 1}
-                />
-              );
-            })}
+            <DocList>
+              {additional.map((item, i) => {
+                const cfg = contactCfg(item.key);
+                return (
+                  <DocRow
+                    key={i}
+                    icon={cfg.icon}
+                    title={item.value}
+                    trailingIcon={cfg.action ? 'chevron-forward' : undefined}
+                    onPress={cfg.action ? () => cfg.action!(item.value) : undefined}
+                    isLast={i === additional.length - 1}
+                  />
+                );
+              })}
+            </DocList>
           </DocSection>
         )}
       </ScrollView>

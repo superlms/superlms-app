@@ -7,8 +7,8 @@ import {
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
+import { DocHeader } from './docUi';
 import { theme, onThemeChange } from '../../utils/theme';
 
 /**
@@ -37,7 +37,7 @@ const MoreScreen = () => {
 
   return (
     <View style={s.root}>
-      <Header title="More" onBackPress={() => navigation.goBack()} />
+      <DocHeader title="More" onBackPress={() => navigation.goBack()} />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.scroll}

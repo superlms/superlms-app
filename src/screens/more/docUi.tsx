@@ -9,9 +9,10 @@ import { theme, onThemeChange } from '../../utils/theme';
  * Shared building blocks for the More info screens (About App, School Info,
  * Rules & Regulations, Terms & Conditions, Privacy Policy, Terms of Use).
  *
- * Minimal, document-style layout on a plain white page: no cards, strips,
- * shadows or coloured icon boxes — just headings, readable body text and
- * plain lists with inset hairline separators. Whitespace does the grouping.
+ * Minimal, document-style layout on a plain white page: headings and readable
+ * body text separated by whitespace, while list data (contacts, documents,
+ * team, links) sits in one plain bordered container with inset hairline
+ * separators. No accent strips, shadows or coloured icon boxes.
  */
 
 type IconSet = 'Ionicons' | 'Feather' | 'FontAwesome6' | 'MaterialCommunityIcons';
@@ -23,6 +24,16 @@ export const lastUpdated = (date?: string | null) => {
   if (isNaN(d.getTime())) return undefined;
   return `Last updated ${d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
 };
+
+// ── Screen header: a touch more compact, with a line under it so it separates
+// from the white page ──────────────────────────────────────────────────────────
+export const DocHeader = ({
+  title,
+  onBackPress,
+}: {
+  title: string;
+  onBackPress?: () => void;
+}) => <Header title={title} onBackPress={onBackPress} divider height={58} />;
 
 // ── Page intro: optional logo, title, subtitle and a small meta line ──────────
 // Renders nothing when there's nothing to say (the header already names the
@@ -65,6 +76,11 @@ export const DocSection = ({
 
 export const DocBody = ({ children }: { children: React.ReactNode }) => (
   <Text style={s.bodyText}>{children}</Text>
+);
+
+// ── Container for list data (DocRow / DocPeople) ──────────────────────────────
+export const DocList = ({ children }: { children: React.ReactNode }) => (
+  <View style={s.list}>{children}</View>
 );
 
 // ── List row: plain icon, title (+ sub), trailing icon, inset separator ───────
@@ -113,7 +129,7 @@ export const DocRow = ({
   </TouchableOpacity>
 );
 
-// ── People list (core team / management) ──────────────────────────────────────
+// ── People rows (core team / management) ──────────────────────────────────────
 export interface DocPerson {
   id: number;
   name: string;
@@ -184,10 +200,10 @@ export const DocNoData = ({
   </View>
 );
 
-// ── Shared loading / error full-screen states (include the Header) ─────────────
+// ── Shared loading / error full-screen states (include the header) ─────────────
 export const DocLoading = ({ title }: { title: string }) => (
   <View style={s.root}>
-    <Header title={title} />
+    <DocHeader title={title} />
     <View style={s.loading}>
       <Skeleton width="55%" height={20} />
       <Skeleton width="35%" height={12} />
@@ -210,7 +226,7 @@ export const DocError = ({
   onRetry: () => void;
 }) => (
   <View style={s.root}>
-    <Header title={title} />
+    <DocHeader title={title} />
     <View style={s.center}>
       <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
       <Text style={s.errorText}>{message}</Text>
@@ -223,7 +239,7 @@ export const DocError = ({
 
 const __mk_docStyles = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
-  scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 48, gap: 28 },
+  scroll: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 48, gap: 28 },
 });
 
 const __mk_s = () => StyleSheet.create({
@@ -243,8 +259,17 @@ const __mk_s = () => StyleSheet.create({
   introMeta: { fontSize: 12, color: theme.colors.textMuted, marginTop: 8 },
 
   // Section
-  sectionTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 6 },
+  sectionTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 8 },
   bodyText: { fontSize: 15, lineHeight: 24, color: theme.colors.textPrimary },
+
+  // List container
+  list: {
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingHorizontal: 14,
+  },
 
   // Row
   row: { flexDirection: 'row', alignItems: 'center', gap: 14 },

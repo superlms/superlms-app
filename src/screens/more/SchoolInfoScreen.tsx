@@ -1,12 +1,13 @@
 import React, { useCallback, useState } from 'react';
 import { Linking, ScrollView, View } from 'react-native';
-import Header from '../../components/Header';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getSchoolInfo } from '../../api/authApi';
 import {
+  DocHeader,
   DocIntro,
   DocSection,
+  DocList,
   DocBody,
   DocRow,
   DocPeople,
@@ -87,7 +88,7 @@ const SchoolInfoScreen = () => {
 
   return (
     <View style={docStyles.root}>
-      <Header title={TITLE} />
+      <DocHeader title={TITLE} />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={docStyles.scroll}
@@ -110,63 +111,69 @@ const SchoolInfoScreen = () => {
 
         {team.length > 0 && (
           <DocSection title="School Management">
-            <DocPeople people={team} />
+            <DocList>
+              <DocPeople people={team} />
+            </DocList>
           </DocSection>
         )}
 
         {documents.length > 0 && (
           <DocSection title="Documents">
-            {documents.map((doc: any, i: number) => {
-              const fileUrl = doc.file_url ?? doc.file_path ?? null;
-              return (
-                <DocRow
-                  key={doc.id ?? i}
-                  icon="file-text"
-                  title={doc.title ?? doc.name ?? `Document ${i + 1}`}
-                  sub={doc.file_type ? String(doc.file_type).toUpperCase() : undefined}
-                  trailingIcon={fileUrl ? 'download-outline' : undefined}
-                  onPress={fileUrl ? () => Linking.openURL(fileUrl) : undefined}
-                  isLast={i === documents.length - 1}
-                />
-              );
-            })}
+            <DocList>
+              {documents.map((doc: any, i: number) => {
+                const fileUrl = doc.file_url ?? doc.file_path ?? null;
+                return (
+                  <DocRow
+                    key={doc.id ?? i}
+                    icon="file-text"
+                    title={doc.title ?? doc.name ?? `Document ${i + 1}`}
+                    sub={doc.file_type ? String(doc.file_type).toUpperCase() : undefined}
+                    trailingIcon={fileUrl ? 'download-outline' : undefined}
+                    onPress={fileUrl ? () => Linking.openURL(fileUrl) : undefined}
+                    isLast={i === documents.length - 1}
+                  />
+                );
+              })}
+            </DocList>
           </DocSection>
         )}
 
         {hasContact && (
           <DocSection title="Contact">
-            {!!info.website_url && (
-              <DocRow
-                icon="globe"
-                title="Visit website"
-                trailingIcon="open-outline"
-                onPress={() => Linking.openURL(info.website_url)}
-                isLast={!info.school_mobile && !info.school_email && !info.school_address}
-              />
-            )}
-            {!!info.school_mobile && (
-              <DocRow
-                icon="phone"
-                title={info.school_mobile}
-                sub="Phone"
-                trailingIcon="chevron-forward"
-                onPress={() => Linking.openURL(`tel:${info.school_mobile}`)}
-                isLast={!info.school_email && !info.school_address}
-              />
-            )}
-            {!!info.school_email && (
-              <DocRow
-                icon="mail"
-                title={info.school_email}
-                sub="Email"
-                trailingIcon="chevron-forward"
-                onPress={() => Linking.openURL(`mailto:${info.school_email}`)}
-                isLast={!info.school_address}
-              />
-            )}
-            {!!info.school_address && (
-              <DocRow icon="map-pin" title={info.school_address} sub="Address" isLast />
-            )}
+            <DocList>
+              {!!info.website_url && (
+                <DocRow
+                  icon="globe"
+                  title="Visit website"
+                  trailingIcon="open-outline"
+                  onPress={() => Linking.openURL(info.website_url)}
+                  isLast={!info.school_mobile && !info.school_email && !info.school_address}
+                />
+              )}
+              {!!info.school_mobile && (
+                <DocRow
+                  icon="phone"
+                  title={info.school_mobile}
+                  sub="Phone"
+                  trailingIcon="chevron-forward"
+                  onPress={() => Linking.openURL(`tel:${info.school_mobile}`)}
+                  isLast={!info.school_email && !info.school_address}
+                />
+              )}
+              {!!info.school_email && (
+                <DocRow
+                  icon="mail"
+                  title={info.school_email}
+                  sub="Email"
+                  trailingIcon="chevron-forward"
+                  onPress={() => Linking.openURL(`mailto:${info.school_email}`)}
+                  isLast={!info.school_address}
+                />
+              )}
+              {!!info.school_address && (
+                <DocRow icon="map-pin" title={info.school_address} sub="Address" isLast />
+              )}
+            </DocList>
           </DocSection>
         )}
       </ScrollView>
