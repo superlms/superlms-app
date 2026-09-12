@@ -17,9 +17,10 @@ import { WEEK_LABELS, chunkWeeks } from './calendarTypes';
  */
 
 const { width } = Dimensions.get('window');
-// Seven cells across the page, inside its 20px padding.
-const CELL = Math.floor((width - 40) / 7);
-const DAY = Math.min(CELL - 10, 40);
+// Seven cells across the page, inside its 20px padding. Exported so any other
+// month grid (attendance) lines up with this one exactly.
+export const CELL = Math.floor((width - 40) / 7);
+export const DAY = Math.min(CELL - 10, 40);
 
 // "exam" → "Exam"
 export const capitalize = (s?: string | null) =>
