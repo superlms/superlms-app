@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   PermissionsAndroid,
@@ -21,6 +22,15 @@ import { useRefresh } from '../../hooks/useRefresh';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { studentContactAdmin, teacherContactAdmin } from '../../api/contactApi';
 import { DocHeader } from '../more/docUi';
+
+// Short, human label for the picked file's type.
+const attachmentKind = (type?: string) => {
+  if (!type) return 'File';
+  if (type.startsWith('image/')) return 'Image';
+  if (type.startsWith('video/')) return 'Video';
+  if (type === 'application/pdf') return 'PDF';
+  return 'File';
+};
 
 const ContactSchoolScreen = ({ navigation }: any) => {
   const [subject, setSubject] = useState('');
@@ -152,6 +162,8 @@ const ContactSchoolScreen = ({ navigation }: any) => {
     navigation.goBack();
   };
 
+  const isImage = !!attachment?.type?.startsWith('image/');
+
   return (
     <View style={s.root}>
       <DocHeader title="Contact School" onBackPress={() => navigation.goBack()} />
@@ -198,26 +210,48 @@ const ContactSchoolScreen = ({ navigation }: any) => {
           </View>
 
           {/* Attachment */}
-          {attachment ? (
-            <View style={s.attachRow}>
-              <VectorIcon iconSet="Feather" iconName="paperclip" size={16} color={theme.colors.textSecondary} />
-              <Text style={s.attachName} numberOfLines={1}>
-                {attachment.name}
-              </Text>
-              <TouchableOpacity onPress={() => setAttachment(null)} hitSlop={10}>
-                <VectorIcon iconSet="Ionicons" iconName="close" size={18} color={theme.colors.textMuted} />
+          <View>
+            <Text style={s.label}>Attachment</Text>
+            {attachment ? (
+              <View style={s.attachCard}>
+                {isImage ? (
+                  <Image source={{ uri: attachment.uri }} style={s.attachThumb} />
+                ) : (
+                  <View style={s.attachIcon}>
+                    <VectorIcon iconSet="Feather" iconName="file" size={18} color={theme.colors.primary} />
+                  </View>
+                )}
+                <View style={s.attachText}>
+                  <Text style={s.attachTitle} numberOfLines={1}>
+                    {attachment.name}
+                  </Text>
+                  <Text style={s.attachMeta}>{attachmentKind(attachment.type)}</Text>
+                </View>
+                <TouchableOpacity
+                  style={s.attachRemove}
+                  onPress={() => setAttachment(null)}
+                  hitSlop={8}
+                >
+                  <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={theme.colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={s.attachPicker}
+                onPress={handlePickAttachment}
+                activeOpacity={0.7}
+              >
+                <View style={s.attachIcon}>
+                  <VectorIcon iconSet="Feather" iconName="paperclip" size={18} color={theme.colors.primary} />
+                </View>
+                <View style={s.attachText}>
+                  <Text style={s.attachTitle}>Attach a file</Text>
+                  <Text style={s.attachMeta}>Optional · from your gallery</Text>
+                </View>
+                <VectorIcon iconSet="Ionicons" iconName="add" size={20} color={theme.colors.textMuted} />
               </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={s.attachBtn}
-              onPress={handlePickAttachment}
-              activeOpacity={0.6}
-            >
-              <VectorIcon iconSet="Feather" iconName="paperclip" size={16} color={theme.colors.primary} />
-              <Text style={s.attachBtnText}>Attach a file (optional)</Text>
-            </TouchableOpacity>
-          )}
+            )}
+          </View>
 
           {/* Submit */}
           <TouchableOpacity
@@ -281,26 +315,53 @@ const __mk_s = () => StyleSheet.create({
   inputFocused: { borderColor: theme.colors.primary },
   inputMulti: { minHeight: 140 },
 
-  // Attachment
-  attachBtn: {
+  // Attachment — dashed picker when empty, solid card once a file is picked
+  attachPicker: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
+    gap: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: theme.colors.textMuted,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.background,
   },
-  attachBtnText: { fontSize: 14, fontWeight: '500', color: theme.colors.primary },
-  attachRow: {
+  attachCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    height: 48,
-    paddingHorizontal: 14,
+    gap: 12,
+    padding: 12,
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.card,
   },
-  attachName: { flex: 1, fontSize: 14, color: theme.colors.textPrimary },
+  attachIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.background,
+  },
+  attachText: { flex: 1 },
+  attachTitle: { fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
+  attachMeta: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
+  attachRemove: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   // Submit
   submitBtn: {

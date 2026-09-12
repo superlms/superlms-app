@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import {
   Alert,
+  Image,
   Linking,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import moment from 'moment';
+import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
@@ -15,14 +18,7 @@ import { STATUS_META } from './queryTypes';
 import type { Query } from './queryTypes';
 import AttachmentPreviewModal from '../announcement/AttachmentPreviewModal';
 import constant from '../../utils/constant';
-import {
-  DocHeader,
-  DocSection,
-  DocBody,
-  DocList,
-  DocRow,
-  docStyles,
-} from '../more/docUi';
+import { DocHeader, DocSection, DocBody, docStyles } from '../more/docUi';
 
 // Files come from the same host as the API but outside the /api/v1 prefix
 const FILE_ORIGIN = constant.API_BASE_URL.replace(/\/api\/v\d+\/?$/, '');
@@ -101,28 +97,45 @@ const ViewQueryScreen = ({ navigation, route }: any) => {
 
         {(imageUrl || pdfUrl) && (
           <DocSection title="Attachments">
-            <DocList>
+            <View style={s.attachList}>
+              {/* Image: preview on top, name + action underneath */}
               {!!imageUrl && (
-                <DocRow
-                  icon="image"
-                  title={item.attachmentName || 'Image'}
-                  sub="Tap to view"
-                  trailingIcon="chevron-forward"
+                <TouchableOpacity
+                  style={s.attachCard}
+                  activeOpacity={0.85}
                   onPress={() => setImageVisible(true)}
-                  isLast={!pdfUrl}
-                />
+                >
+                  <Image source={{ uri: imageUrl }} style={s.attachPreview} resizeMode="cover" />
+                  <View style={s.attachFooter}>
+                    <VectorIcon iconSet="Feather" iconName="image" size={16} color={theme.colors.textSecondary} />
+                    <Text style={s.attachFooterName} numberOfLines={1}>
+                      {item.attachmentName || 'Image'}
+                    </Text>
+                    <Text style={s.attachAction}>View</Text>
+                  </View>
+                </TouchableOpacity>
               )}
+
+              {/* PDF: icon, name + type, open action */}
               {!!pdfUrl && (
-                <DocRow
-                  icon="file-text"
-                  title={item.attachmentName || 'PDF Document'}
-                  sub="Tap to open PDF"
-                  trailingIcon="open-outline"
+                <TouchableOpacity
+                  style={[s.attachCard, s.attachFileRow]}
+                  activeOpacity={0.85}
                   onPress={openPdf}
-                  isLast
-                />
+                >
+                  <View style={s.fileIcon}>
+                    <VectorIcon iconSet="Feather" iconName="file-text" size={18} color={theme.colors.primary} />
+                  </View>
+                  <View style={s.fileText}>
+                    <Text style={s.fileName} numberOfLines={1}>
+                      {item.attachmentName || 'PDF Document'}
+                    </Text>
+                    <Text style={s.fileMeta}>PDF document</Text>
+                  </View>
+                  <Text style={s.attachAction}>Open</Text>
+                </TouchableOpacity>
               )}
-            </DocList>
+            </View>
           </DocSection>
         )}
 
@@ -164,6 +177,41 @@ const __mk_s = () => StyleSheet.create({
 
   title: { fontSize: 20, fontWeight: '700', color: theme.colors.textPrimary, lineHeight: 27 },
   dateText: { fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
+
+  // Attachments
+  attachList: { gap: 12 },
+  attachCard: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.card,
+    overflow: 'hidden',
+  },
+  attachPreview: { width: '100%', height: 180, backgroundColor: theme.colors.background },
+  attachFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+  },
+  attachFooterName: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
+  attachAction: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
+
+  attachFileRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
+  fileIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fileText: { flex: 1 },
+  fileName: { fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
+  fileMeta: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
 
   replyMeta: { fontSize: 12, color: theme.colors.textMuted, marginBottom: 6 },
   mutedText: { fontSize: 14, color: theme.colors.textMuted, lineHeight: 21 },

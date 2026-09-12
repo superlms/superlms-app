@@ -180,9 +180,14 @@ const PastQueriesScreen = () => {
           <View>
             {[0, 1, 2, 3].map(i => (
               <View key={i} style={[s.skeletonRow, i < 3 && s.rowBorder]}>
-                <Skeleton width="60%" height={14} />
-                <Skeleton width="85%" height={12} />
-                <Skeleton width="30%" height={10} />
+                <View style={s.skeletonLine}>
+                  <Skeleton width="55%" height={14} />
+                  <Skeleton width={44} height={10} />
+                </View>
+                <View style={s.skeletonLine}>
+                  <Skeleton width="70%" height={12} />
+                  <Skeleton width={60} height={10} />
+                </View>
               </View>
             ))}
           </View>
@@ -226,10 +231,11 @@ export default PastQueriesScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
-  scroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
+  scroll: { paddingHorizontal: 24, paddingTop: 4, paddingBottom: 40 },
 
-  rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-  skeletonRow: { paddingVertical: 16, gap: 8 },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  skeletonRow: { paddingVertical: 14, gap: 8 },
+  skeletonLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
 
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
   errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
