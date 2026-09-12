@@ -1,11 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Image,
-  Keyboard,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -15,6 +12,8 @@ import {
 } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
+import { useKeyboardLift } from '../../hooks/useKeyboardLift';
+import { DayLabel, chatColors as CH } from './chatUi';
 
 type DrawerRole = 'student' | 'teacher';
 
@@ -24,6 +23,13 @@ interface Message {
   sender: 'me' | 'other';
   time: string;
   status: 'sent' | 'delivered' | 'read';
+}
+
+// A message with what it needs to know about its neighbours, so a run from the
+// same person reads as one block instead of six separate cards.
+interface GroupedMessage extends Message {
+  firstOfGroup: boolean;
+  lastOfGroup: boolean;
 }
 
 const INITIAL_MESSAGES: Message[] = [
@@ -86,19 +92,20 @@ const initials = (name?: string) =>
     .join('')
     .toUpperCase();
 
-// One tick when sent, two once it has landed; read turns them white.
+// One tick when sent, two once it has landed; read turns them the accent colour.
 const Ticks = ({ status }: { status: Message['status'] }) => (
   <VectorIcon
     iconSet="Ionicons"
     iconName={status === 'sent' ? 'checkmark' : 'checkmark-done'}
     size={13}
-    color={status === 'read' ? theme.colors.white : 'rgba(255,255,255,0.6)'}
+    color={status === 'read' ? CH.accent : CH.muted}
   />
 );
 
 // ── One message ──────────────────────────────────────────────────────────────
-// Mine are filled in the accent colour, theirs sit on the page's quiet grey.
-// No tails, no shadows — the side it sits on is what says who wrote it.
+// Mine sit on a soft indigo wash, theirs on white behind a hairline. The side a
+// bubble sits on is what says who wrote it — no tails, no shadows, no colour
+// beyond the wash. Only the last bubble of a run carries the time.
 const Bubble = ({
   msg,
   selected,
@@ -106,7 +113,7 @@ const Bubble = ({
   onLongPress,
   onPress,
 }: {
-  msg: Message;
+  msg: GroupedMessage;
   selected: boolean;
   selectionMode: boolean;
   onLongPress: () => void;
@@ -118,27 +125,31 @@ const Bubble = ({
       style={[
         s.bubbleWrap,
         isMe ? s.bubbleWrapMe : s.bubbleWrapOther,
+        msg.firstOfGroup && s.bubbleWrapFirst,
         selected && s.bubbleWrapSelected,
       ]}
       onLongPress={onLongPress}
       onPress={selectionMode ? onPress : undefined}
       activeOpacity={selectionMode ? 0.7 : 1}
     >
-      <View style={[s.bubble, isMe ? s.bubbleMe : s.bubbleOther]}>
-        <Text style={[s.bubbleText, isMe ? s.bubbleTextMe : s.bubbleTextOther]}>{msg.text}</Text>
-        <View style={s.meta}>
-          <Text style={[s.metaTime, isMe ? s.metaTimeMe : s.metaTimeOther]}>{msg.time}</Text>
-          {isMe && <Ticks status={msg.status} />}
-        </View>
+      <View
+        style={[
+          s.bubble,
+          isMe ? s.bubbleMe : s.bubbleOther,
+          msg.lastOfGroup && (isMe ? s.bubbleTailMe : s.bubbleTailOther),
+        ]}
+      >
+        <Text style={s.bubbleText}>{msg.text}</Text>
+        {msg.lastOfGroup && (
+          <View style={s.meta}>
+            <Text style={s.metaTime}>{msg.time}</Text>
+            {isMe && <Ticks status={msg.status} />}
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   );
 };
-
-// A plain centred line, not a pill.
-const DayLabel = ({ label }: { label: string }) => (
-  <Text style={s.dayLabel}>{label.toUpperCase()}</Text>
-);
 
 const ChatsScreen = ({ navigation, route }: any) => {
   // chat item passed from ChatsListScreen
@@ -160,14 +171,25 @@ const ChatsScreen = ({ navigation, route }: any) => {
 
   const selectionMode = selectedIds.length > 0;
 
-  // Keep the latest messages visible when the keyboard opens
+  // Android draws behind the keyboard, so the composer is lifted by hand.
+  const lift = useKeyboardLift();
+
+  // Mark where each run of messages from one person starts and ends.
+  const grouped = useMemo<GroupedMessage[]>(
+    () =>
+      messages.map((m, i) => ({
+        ...m,
+        firstOfGroup: i === 0 || messages[i - 1].sender !== m.sender,
+        lastOfGroup: i === messages.length - 1 || messages[i + 1].sender !== m.sender,
+      })),
+    [messages],
+  );
+
+  // Keep the newest message in view as the keyboard opens and closes.
   useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const sub = Keyboard.addListener(showEvent, () => {
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
-    });
-    return () => sub.remove();
-  }, []);
+    const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+    return () => clearTimeout(t);
+  }, [lift]);
 
   const send = () => {
     const text = input.trim();
@@ -209,11 +231,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
   const hasText = input.trim().length > 0;
 
   return (
-    <KeyboardAvoidingView
-      style={s.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      enabled={Platform.OS === 'ios'}
-    >
+    <View style={[s.root, { paddingBottom: lift }]}>
       <StatusBar barStyle="dark-content" backgroundColor={theme.colors.statusBar} />
 
       {/* ── Who you are talking to ── */}
@@ -227,7 +245,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
             iconSet="Ionicons"
             iconName={selectionMode ? 'close' : 'chevron-back'}
             size={22}
-            color={theme.colors.textPrimary}
+            color={CH.ink}
           />
         </TouchableOpacity>
 
@@ -267,11 +285,12 @@ const ChatsScreen = ({ navigation, route }: any) => {
       {/* ── Messages ── */}
       <FlatList
         ref={listRef}
-        data={messages}
+        data={grouped}
         keyExtractor={m => m.id}
         contentContainerStyle={s.msgList}
         showsVerticalScrollIndicator={false}
         style={s.flex}
+        keyboardShouldPersistTaps="handled"
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
         ListHeaderComponent={<DayLabel label="Today" />}
         renderItem={({ item }) => (
@@ -291,17 +310,14 @@ const ChatsScreen = ({ navigation, route }: any) => {
           <TextInput
             style={s.input}
             placeholder="Message"
-            placeholderTextColor={theme.colors.textMuted}
+            placeholderTextColor={CH.muted}
             value={input}
             onChangeText={setInput}
-            onFocus={() =>
-              setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
-            }
             multiline
             maxLength={500}
           />
           <TouchableOpacity activeOpacity={0.6} hitSlop={8}>
-            <VectorIcon iconSet="Feather" iconName="paperclip" size={18} color={theme.colors.textMuted} />
+            <VectorIcon iconSet="Feather" iconName="paperclip" size={18} color={CH.muted} />
           </TouchableOpacity>
         </View>
 
@@ -315,7 +331,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
             iconSet="Ionicons"
             iconName="arrow-up"
             size={19}
-            color={hasText ? theme.colors.white : theme.colors.textMuted}
+            color={hasText ? theme.colors.white : CH.muted}
           />
         </TouchableOpacity>
       </View>
@@ -354,26 +370,26 @@ const ChatsScreen = ({ navigation, route }: any) => {
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
 export default ChatsScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.card },
+  root: { flex: 1, backgroundColor: CH.page },
   flex: { flex: 1 },
 
-  // Top bar — the same 50px bar the rest of the app uses, with a face on it
+  // Top bar — the app's 50px bar, with a face on it
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     height: 50,
     paddingHorizontal: theme.spacing.lg,
-    backgroundColor: theme.colors.card,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.divider,
+    backgroundColor: CH.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: CH.surfaceLine,
   },
   backBtn: {
     width: 36,
@@ -382,53 +398,57 @@ const __mk_s = () => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: CH.surfaceLine,
   },
   headBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
-  topAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: theme.colors.background },
+  topAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: CH.page },
   topAvatarFallback: { alignItems: 'center', justifyContent: 'center' },
-  topAvatarInitials: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary },
+  topAvatarInitials: { fontSize: 13, fontWeight: '600', color: CH.sub },
   topInfo: { flex: 1 },
-  topName: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary },
-  topSubtitle: { fontSize: 12, color: theme.colors.textMuted, marginTop: 1 },
+  topName: { flex: 1, fontSize: 15, fontWeight: '600', color: CH.ink },
+  topSubtitle: { fontSize: 12, color: CH.muted, marginTop: 1 },
 
   // Messages
-  msgList: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16 },
-  dayLabel: {
-    alignSelf: 'center',
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.8,
-    color: theme.colors.textMuted,
-    marginBottom: 14,
-  },
+  msgList: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 14 },
 
-  bubbleWrap: { marginBottom: 8, maxWidth: '82%' },
+  bubbleWrap: { maxWidth: '82%', marginTop: 2 },
+  bubbleWrapFirst: { marginTop: 10 },
   bubbleWrapMe: { alignSelf: 'flex-end' },
   bubbleWrapOther: { alignSelf: 'flex-start' },
-  bubbleWrapSelected: { opacity: 0.55 },
-  bubble: { paddingHorizontal: 13, paddingTop: 9, paddingBottom: 7, borderRadius: 14 },
-  bubbleMe: { backgroundColor: theme.colors.primary, borderBottomRightRadius: 4 },
-  bubbleOther: { backgroundColor: theme.colors.background, borderBottomLeftRadius: 4 },
-  bubbleText: { fontSize: 14.5, lineHeight: 21 },
-  bubbleTextMe: { color: theme.colors.white },
-  bubbleTextOther: { color: theme.colors.textPrimary },
-  meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 3 },
-  metaTime: { fontSize: 10 },
-  metaTimeMe: { color: 'rgba(255,255,255,0.7)' },
-  metaTimeOther: { color: theme.colors.textMuted },
+  bubbleWrapSelected: { opacity: 0.5 },
+  bubble: {
+    paddingHorizontal: 13,
+    paddingTop: 9,
+    paddingBottom: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  bubbleMe: { backgroundColor: CH.mine, borderColor: CH.mineLine },
+  bubbleOther: { backgroundColor: CH.surface, borderColor: CH.surfaceLine },
+  // Only the closing bubble of a run squares off its corner.
+  bubbleTailMe: { borderBottomRightRadius: 5 },
+  bubbleTailOther: { borderBottomLeftRadius: 5 },
+  bubbleText: { fontSize: 14.5, lineHeight: 21, color: CH.ink },
+  meta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+    marginTop: 4,
+  },
+  metaTime: { fontSize: 10.5, color: CH.muted },
 
   // Write
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 10,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 10 : 12,
+    paddingBottom: 12,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.card,
+    borderTopColor: CH.surfaceLine,
+    backgroundColor: CH.surface,
   },
   inputPill: {
     flex: 1,
@@ -436,24 +456,25 @@ const __mk_s = () => StyleSheet.create({
     alignItems: 'flex-end',
     gap: 10,
     minHeight: 44,
-    maxHeight: 120,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: CH.surfaceLine,
     borderRadius: theme.radius.md,
+    backgroundColor: CH.page,
   },
-  input: { flex: 1, fontSize: 15, color: theme.colors.textPrimary, padding: 0, maxHeight: 100 },
+  input: { flex: 1, fontSize: 15, color: CH.ink, padding: 0, maxHeight: 100 },
   sendBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: CH.page,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: CH.surfaceLine,
   },
-  sendBtnActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  sendBtnActive: { backgroundColor: CH.accent, borderColor: CH.accent },
 
   // Confirm modal
   modalOverlay: {
@@ -466,12 +487,12 @@ const __mk_s = () => StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: theme.colors.card,
+    backgroundColor: CH.surface,
     borderRadius: theme.radius.lg,
     padding: 24,
   },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
-  modalDesc: { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: CH.ink },
+  modalDesc: { marginTop: 8, fontSize: 14, color: CH.sub, lineHeight: 20 },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
   modalBtn: {
     flex: 1,
@@ -480,8 +501,8 @@ const __mk_s = () => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
-  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  modalBtnGhost: { borderWidth: 1, borderColor: CH.surfaceLine },
+  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: CH.ink },
   modalBtnDanger: { backgroundColor: theme.colors.danger },
   modalBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
