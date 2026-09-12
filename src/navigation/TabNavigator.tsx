@@ -10,7 +10,6 @@ import TeacherHomeworkScreen from '../screens/homework/TeacherHomeworkScreen';
 import StudentHomeworkScreen from '../screens/homework/StudentHomeworkScreen';
 import markAttendanceScreen from '../screens/markAttendance/markAttendanceScreen';
 import FeesScreen from '../screens/fees/FeesScreen';
-import { SUBJECTS } from '../screens/subjects/subjectsData';
 import SubjectsScreen from '../screens/subjects/SubjectsScreen';
 import QuickLinksScreen from '../screens/home/QuickLinksScreen';
 

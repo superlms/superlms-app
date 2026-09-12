@@ -1,10 +1,6 @@
 import constant from '../../utils/constant';
 
-// Subjects stored in capitals ("MATHEMATICS") read in title case.
-export { quietCaps as subjectLabel } from '../../utils/quietCaps';
-
-// Covers, subject icons and PDFs come from the same host as the API but outside
-// the /api/v1 prefix.
+// Subject images come from the same host as the API but outside the /api/v1 prefix.
 const FILE_ORIGIN = constant.API_BASE_URL.replace(/\/api\/v\d+\/?$/, '');
 
 export const resolveFileUrl = (url?: string | null): string | undefined => {
@@ -12,3 +8,6 @@ export const resolveFileUrl = (url?: string | null): string | undefined => {
   if (/^https?:\/\//i.test(url)) return url;
   return `${FILE_ORIGIN}/${url.replace(/^\/+/, '')}`;
 };
+
+// "1 chapter", "10 chapters".
+export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;

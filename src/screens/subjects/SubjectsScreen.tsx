@@ -1,7 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import ScreenSkeleton from '../../components/Skeleton';
+import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Image,
   StyleSheet,
@@ -9,91 +7,79 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
+import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
-import constant from '../../utils/constant';
+import { quietCaps } from '../../utils/quietCaps';
+import { DocHeader, DocNoData } from '../more/docUi';
 import {
   getStudentSubjects,
   getChapters,
   contentErrorMessage,
-  subjectStyle,
   type SyllabusChapter,
 } from '../../api/contentApi';
+import { plural, resolveFileUrl } from './subjectsUi';
 
-// Subject images come from the same host as the API but outside the /api/v1 prefix.
-const FILE_ORIGIN = constant.API_BASE_URL.replace(/\/api\/v\d+\/?$/, '');
-const resolveFileUrl = (url?: string | null): string | undefined => {
-  if (!url) return undefined;
-  if (/^https?:\/\//i.test(url)) return url;
-  return `${FILE_ORIGIN}/${url.replace(/^\/+/, '')}`;
-};
+const TITLE = 'Subjects';
 
 interface SubjectRow {
   id: number;
   name: string;
-  color: string;
   image: string | null;
   chapters: SyllabusChapter[];
 }
 
-// ─── Subject card ─────────────────────────────────────────────────────────────
-const SubjectCard = ({ item, onPress }: { item: SubjectRow; onPress: () => void }) => {
-  const totalTopics = item.chapters.reduce((sum, c) => sum + c.topics.length, 0);
-  const imageUrl = resolveFileUrl(item.image);
+// ── One subject ──────────────────────────────────────────────────────────────
+//   (icon)  English                                          >
+//           10 chapters · 24 topics
+const SubjectItem = ({
+  item,
+  isLast,
+  onPress,
+}: {
+  item: SubjectRow;
+  isLast: boolean;
+  onPress: () => void;
+}) => {
   const [imgFailed, setImgFailed] = useState(false);
-  const showImage = !!imageUrl && !imgFailed;
-  return (
-    <TouchableOpacity style={s.card} onPress={onPress} activeOpacity={0.85}>
-      <View style={[s.accentBar, { backgroundColor: item.color }]} />
-      <View style={s.cardInner}>
-        <View style={s.cardTop}>
-          <View style={[s.iconWrap, { backgroundColor: item.color + '20' }]}>
-            {showImage ? (
-              <Image
-                source={{ uri: imageUrl }}
-                style={s.iconImage}
-                resizeMode="contain"
-                onError={() => setImgFailed(true)}
-              />
-            ) : (
-              // Fallback when the subject has no image: a clean book vector icon
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="book"
-                size={20}
-                color={item.color}
-              />
-            )}
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.cardTitle}>{item.name}</Text>
-            <Text style={s.cardSubtitle} numberOfLines={1}>
-              Tap to view chapters & topics
-            </Text>
-          </View>
-          <View style={s.chevronWrap}>
-            <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={16} color={theme.colors.textSecondary} />
-          </View>
-        </View>
+  const imageUrl = resolveFileUrl(item.image);
+  const chapters = item.chapters.length;
+  const topics = item.chapters.reduce((sum, c) => sum + c.topics.length, 0);
 
-        <View style={s.pillsRow}>
-          <View style={[s.pill, { backgroundColor: item.color + '15' }]}>
-            <VectorIcon iconSet="Ionicons" iconName="book-outline" size={12} color={item.color} />
-            <Text style={[s.pillText, { color: item.color }]}>
-              {item.chapters.length} Chapter{item.chapters.length !== 1 ? 's' : ''}
-            </Text>
-          </View>
-          <View style={s.pill}>
-            <VectorIcon iconSet="Ionicons" iconName="document-text-outline" size={12} color={theme.colors.primary} />
-            <Text style={s.pillText}>
-              {totalTopics} Topic{totalTopics !== 1 ? 's' : ''}
-            </Text>
-          </View>
-        </View>
+  const meta =
+    chapters === 0
+      ? 'No chapters yet'
+      : [plural(chapters, 'chapter'), topics > 0 ? plural(topics, 'topic') : null]
+          .filter(Boolean)
+          .join(' · ');
+
+  return (
+    <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onPress}>
+      <View style={s.iconSlot}>
+        {imageUrl && !imgFailed ? (
+          <Image
+            source={{ uri: imageUrl }}
+            style={s.icon}
+            resizeMode="contain"
+            onError={() => setImgFailed(true)}
+          />
+        ) : (
+          <VectorIcon iconSet="Ionicons" iconName="albums-outline" size={20} color={theme.colors.textMuted} />
+        )}
       </View>
+
+      <View style={s.body}>
+        <Text style={s.name} numberOfLines={1}>
+          {quietCaps(item.name)}
+        </Text>
+        <Text style={s.meta} numberOfLines={1}>
+          {meta}
+        </Text>
+      </View>
+
+      <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={16} color={theme.colors.textMuted} />
     </TouchableOpacity>
   );
 };
@@ -121,16 +107,12 @@ const SubjectsScreen = ({ navigation }: any) => {
         bySubject.set(c.subjectId, list);
       });
       setSubjects(
-        subs.map(sub => {
-          const style = subjectStyle(sub.id);
-          return {
-            id: sub.id,
-            name: sub.name,
-            color: style.color,
-            image: sub.image ?? null,
-            chapters: bySubject.get(sub.id) ?? [],
-          };
-        }),
+        subs.map(sub => ({
+          id: sub.id,
+          name: sub.name,
+          image: sub.image ?? null,
+          chapters: bySubject.get(sub.id) ?? [],
+        })),
       );
     } catch (e: any) {
       console.log('[SubjectsScreen] Error:', e?.response?.status, e?.message);
@@ -147,53 +129,55 @@ const SubjectsScreen = ({ navigation }: any) => {
 
   return (
     <View style={s.root}>
-      <Header title="Subjects" />
+      <DocHeader title={TITLE} />
 
-      {loading ? (
-        <View style={s.stateBox}>
-          <ScreenSkeleton variant="list" />
+      {/* Coming back to the list refetches quietly, without blanking it. */}
+      {loading && !refreshing && subjects.length === 0 ? (
+        <View style={s.list}>
+          {[0, 1, 2, 3, 4].map(i => (
+            <View key={i} style={[s.row, i < 4 && s.rowDivider]}>
+              <Skeleton width={40} height={40} radius={theme.radius.sm} />
+              <View style={s.skeletonBody}>
+                <Skeleton width="45%" height={14} />
+                <Skeleton width="35%" height={12} />
+              </View>
+            </View>
+          ))}
         </View>
-      ) : error ? (
-        <View style={s.stateBox}>
-          <View style={s.errorIconRing}>
-            <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.danger} />
-          </View>
-          <Text style={s.emptyTitle}>Couldn’t load subjects</Text>
-          <Text style={s.emptySub}>{error}</Text>
-          <TouchableOpacity style={s.retryBtn} onPress={load} activeOpacity={0.85}>
-            <VectorIcon iconSet="Ionicons" iconName="refresh" size={15} color={theme.colors.primary} />
-            <Text style={s.retryText}>Retry</Text>
+      ) : error && subjects.length === 0 ? (
+        <View style={s.centeredBox}>
+          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
+          <Text style={s.errorText}>{error}</Text>
+          <TouchableOpacity onPress={load} hitSlop={10}>
+            <Text style={s.linkText}>Try again</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
           data={subjects}
           keyExtractor={i => String(i.id)}
-          contentContainerStyle={s.list}
+          contentContainerStyle={[s.list, subjects.length === 0 && s.listEmpty]}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListHeaderComponent={
-            <>
-              <Text style={s.sectionTitle}>All Subjects</Text>
-              <Text style={s.sectionDesc}>Tap a subject to explore its chapters and topics.</Text>
-            </>
+            subjects.length > 0 ? <Text style={s.count}>{plural(subjects.length, 'subject')}</Text> : null
           }
           ListEmptyComponent={
-            <View style={s.empty}>
-              <VectorIcon iconSet="Ionicons" iconName="book-outline" size={44} color={theme.colors.textMuted} />
-              <Text style={s.emptyTitle}>No subjects yet</Text>
-              <Text style={s.emptySub}>No subjects have been assigned to your class.</Text>
-            </View>
+            <DocNoData
+              icon="albums-outline"
+              title="No subjects yet"
+              subtitle="No subjects have been assigned to your class."
+            />
           }
-          renderItem={({ item }) => (
-            <SubjectCard
+          renderItem={({ item, index }) => (
+            <SubjectItem
               item={item}
+              isLast={index === subjects.length - 1}
               onPress={() =>
                 navigation.navigate('SubjectDetails', {
                   subjectId: item.id,
                   subjectName: item.name,
+                  subjectImage: item.image,
                 })
               }
             />
@@ -207,68 +191,37 @@ const SubjectsScreen = ({ navigation }: any) => {
 export default SubjectsScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  list: { padding: theme.spacing.lg, paddingBottom: 32 },
+  root: { flex: 1, backgroundColor: theme.colors.card },
 
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 4 },
-  sectionDesc: { fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19, marginBottom: 16 },
+  // List
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
+  listEmpty: { flexGrow: 1 },
+  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
 
-  card: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    overflow: 'hidden',
-    elevation: 2,
-    marginBottom: 14,
-  },
-  accentBar: { height: 4, width: '100%' },
-  cardInner: { padding: theme.spacing.md, gap: 10 },
-
-  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  iconWrap: { width: 40, height: 40, borderRadius: theme.radius.sm, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  iconImage: { width: 28, height: 28 },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary },
-  cardSubtitle: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
-  chevronWrap: {
-    width: 30,
-    height: 30,
+  // Row — the subject's own icon on the page's grey, then its name and size
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  iconSlot: {
+    width: 40,
+    height: 40,
     borderRadius: theme.radius.sm,
     backgroundColor: theme.colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  icon: { width: 26, height: 26 },
+  body: { flex: 1, gap: 3 },
+  name: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  meta: { fontSize: 13, color: theme.colors.textSecondary },
 
-  pillsRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: theme.colors.primaryLight,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: theme.radius.full,
-  },
-  pillText: { fontSize: 12, fontWeight: '600', color: theme.colors.primary },
+  // Loading
+  skeletonBody: { flex: 1, gap: 8 },
 
-  // States
-  stateBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 10 },
-  errorIconRing: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
-  },
-  empty: { alignItems: 'center', paddingTop: 40, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.textSecondary },
-  emptySub: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', paddingHorizontal: 24, lineHeight: 19 },
-  retryBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    borderWidth: 1.5, borderColor: theme.colors.primary, borderRadius: theme.radius.full,
-    paddingHorizontal: 18, paddingVertical: 9, marginTop: 4,
-  },
-  retryText: { fontSize: 13, fontWeight: '700', color: theme.colors.primary },
+  // Error
+  centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
+  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  linkText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let s = __mk_s();
