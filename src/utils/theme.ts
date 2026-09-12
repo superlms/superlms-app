@@ -19,6 +19,7 @@ const lightColors = {
   white: '#FFFFFF',
 
   border: '#E2E8F0',
+  divider: 'rgba(0, 0, 0, 0.18)', // thin light-black line under compact headers
   statusBar: '#FFFFFF', // same as the top bars, so status bar + header read as one surface
   shadow: '#0F172A',
   iconActive: '#4F46E5',

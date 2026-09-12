@@ -22,7 +22,7 @@ interface HeaderProps {
   rightText?: string;
   /** Optional custom right-side content (e.g. multiple action buttons). */
   rightSlot?: React.ReactNode;
-  /** Draw a 1px line between the header and the screen below. */
+  /** Draw a thin line between the header and the screen below. */
   divider?: boolean;
   /** Bar height (default 60). */
   height?: number;
@@ -118,8 +118,8 @@ const __mk_styles = () => StyleSheet.create({
     paddingBottom: theme.spacing.sm,
   },
   divider: {
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.divider,
   },
   side: {
     width: 36,

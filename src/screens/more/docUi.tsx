@@ -25,7 +25,7 @@ export const lastUpdated = (date?: string | null) => {
   return `Last updated ${d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
 };
 
-// ── Screen header: a touch more compact, with a line under it so it separates
+// ── Screen header: compact 50px bar, with a thin line under it that separates it
 // from the white page ──────────────────────────────────────────────────────────
 export const DocHeader = ({
   title,
@@ -33,7 +33,7 @@ export const DocHeader = ({
 }: {
   title: string;
   onBackPress?: () => void;
-}) => <Header title={title} onBackPress={onBackPress} divider height={58} />;
+}) => <Header title={title} onBackPress={onBackPress} divider height={50} />;
 
 // ── Page intro: optional logo, title, subtitle and a small meta line ──────────
 // Renders nothing when there's nothing to say (the header already names the
