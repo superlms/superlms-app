@@ -27,7 +27,8 @@ const resolveFileUrl = (url?: string | null): string | undefined => {
   return `${FILE_ORIGIN}/${url.replace(/^\/+/, '')}`;
 };
 
-// Tappable attachment chip — opens the file straight away, no preview screen.
+// Tappable attachment chip — file-type icon + label only (no file name); opens
+// the file straight away, no preview screen.
 const AttachmentChip = ({
   icon,
   label,
@@ -39,7 +40,7 @@ const AttachmentChip = ({
 }) => (
   <TouchableOpacity style={s.chip} activeOpacity={0.7} onPress={onPress}>
     <VectorIcon iconSet="Feather" iconName={icon} size={14} color={theme.colors.primary} />
-    <Text style={s.chipText} numberOfLines={1} ellipsizeMode="middle">
+    <Text style={s.chipText} numberOfLines={1}>
       {label}
     </Text>
     <VectorIcon iconSet="Feather" iconName="external-link" size={12} color={theme.colors.textMuted} />
@@ -115,14 +116,14 @@ const ViewQueryScreen = ({ navigation, route }: any) => {
               {!!imageUrl && (
                 <AttachmentChip
                   icon="image"
-                  label={item.attachmentName || 'Image'}
+                  label="Image"
                   onPress={() => openFile(imageUrl)}
                 />
               )}
               {!!pdfUrl && (
                 <AttachmentChip
                   icon="file-text"
-                  label={item.attachmentName || 'PDF Document'}
+                  label="PDF"
                   onPress={() => openFile(pdfUrl)}
                 />
               )}

@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
   Alert,
-  Image,
   KeyboardAvoidingView,
   Modal,
   PermissionsAndroid,
@@ -23,6 +22,22 @@ import { useRefresh } from '../../hooks/useRefresh';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { studentContactAdmin, teacherContactAdmin } from '../../api/contactApi';
 import { DocHeader } from '../more/docUi';
+
+// Attachments show only a file-type icon and label, never the file name.
+const fileTypeIcon = (mime?: string) => {
+  if (mime?.startsWith('image/')) return 'image';
+  if (mime?.startsWith('video/')) return 'video';
+  if (mime === 'application/pdf') return 'file-text';
+  return 'file';
+};
+
+const fileTypeLabel = (mime?: string, name?: string) => {
+  if (mime?.startsWith('image/')) return 'Image';
+  if (mime?.startsWith('video/')) return 'Video';
+  if (mime === 'application/pdf') return 'PDF';
+  const ext = name?.includes('.') ? name.split('.').pop() : undefined;
+  return ext ? ext.toUpperCase() : 'File';
+};
 
 const ContactSchoolScreen = ({ navigation }: any) => {
   const [subject, setSubject] = useState('');
@@ -156,8 +171,6 @@ const ContactSchoolScreen = ({ navigation }: any) => {
     navigation.goBack();
   };
 
-  const isImage = !!attachment?.type?.startsWith('image/');
-
   return (
     <View style={s.root}>
       {/* The clip icon in the header attaches a file */}
@@ -195,6 +208,9 @@ const ContactSchoolScreen = ({ navigation }: any) => {
               onChangeText={setSubject}
               onFocus={() => setFocused('subject')}
               onBlur={() => setFocused(null)}
+              multiline
+              submitBehavior="submit"
+              textAlignVertical="top"
               returnKeyType="next"
               onSubmitEditing={() => messageRef.current?.focus()}
             />
@@ -224,13 +240,9 @@ const ContactSchoolScreen = ({ navigation }: any) => {
           {attachment ? (
             <View style={s.chips}>
               <View style={s.chip}>
-                {isImage ? (
-                  <Image source={{ uri: attachment.uri }} style={s.chipThumb} />
-                ) : (
-                  <VectorIcon iconSet="Feather" iconName="file" size={14} color={theme.colors.primary} />
-                )}
-                <Text style={s.chipText} numberOfLines={1} ellipsizeMode="middle">
-                  {attachment.name}
+                <VectorIcon iconSet="Feather" iconName={fileTypeIcon(attachment.type)} size={14} color={theme.colors.primary} />
+                <Text style={s.chipText} numberOfLines={1}>
+                  {fileTypeLabel(attachment.type, attachment.name)}
                 </Text>
                 <TouchableOpacity onPress={() => setAttachment(null)} hitSlop={8}>
                   <VectorIcon iconSet="Ionicons" iconName="close" size={15} color={theme.colors.textSecondary} />
@@ -317,15 +329,13 @@ const __mk_s = () => StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     maxWidth: 200,
-    paddingLeft: 8,
-    paddingRight: 10,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: theme.radius.full,
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.background,
   },
-  chipThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: theme.colors.border },
   chipText: { flexShrink: 1, fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
   hint: { fontSize: 12, color: theme.colors.textMuted },
 
