@@ -5,15 +5,15 @@ import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getTermsConditions } from '../../api/authApi';
 import {
-  DocHero,
-  DocCard,
+  DocIntro,
+  DocSection,
   DocBody,
   DocRow,
-  DocFooter,
   DocNoData,
   DocLoading,
   DocError,
   docStyles,
+  lastUpdated,
 } from './docUi';
 
 interface Section        { head: string; desc: string; }
@@ -75,10 +75,7 @@ const TermsConditionsScreen = () => {
   const additional = metadata?.additional_info ?? [];
 
   const isEmpty = sections.length === 0 && files.length === 0 && additional.length === 0;
-  const subtitleParts = [company_name, company_cin ? `CIN: ${company_cin}` : ''].filter(Boolean);
-  const formattedDate = last_updated
-    ? new Date(last_updated).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    : '';
+  const company = [company_name, company_cin ? `CIN: ${company_cin}` : ''].filter(Boolean).join(' · ');
 
   return (
     <View style={docStyles.root}>
@@ -88,65 +85,58 @@ const TermsConditionsScreen = () => {
         showsVerticalScrollIndicator={false}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <DocHero
+        <DocIntro
           logoUrl={platform_logo}
-          icon="document-text-outline"
-          title={platform_name || TITLE}
-          subtitle={subtitleParts.join('  ·  ') || 'Please read these terms carefully before using our services.'}
+          title={platform_name}
+          subtitle={company || undefined}
+          meta={isEmpty ? undefined : lastUpdated(last_updated)}
         />
 
-        {isEmpty ? (
+        {isEmpty && (
           <DocNoData
             icon="document-text-outline"
-            title="No Data found"
             subtitle="The terms & conditions haven’t been added yet. Pull down to refresh."
           />
-        ) : (
-          <>
-            {sections.map((sec, i) => (
-              <DocCard key={i} label={sec.head}>
-                <DocBody>{sec.desc}</DocBody>
-              </DocCard>
-            ))}
-
-            {files.length > 0 && (
-              <DocCard label="Documents">
-                {files.map((file, i) => (
-                  <DocRow
-                    key={i}
-                    icon="file-text"
-                    title={file.title}
-                    sub={file.file_type?.toUpperCase()}
-                    trailingIcon="download-outline"
-                    onPress={() => Linking.openURL(file.file_path)}
-                    isLast={i === files.length - 1}
-                  />
-                ))}
-              </DocCard>
-            )}
-
-            {additional.length > 0 && (
-              <DocCard label="Contact">
-                {additional.map((item, i) => {
-                  const cfg = contactCfg(item.key);
-                  return (
-                    <DocRow
-                      key={i}
-                      icon={cfg.icon}
-                      title={item.value}
-                      trailingIcon={cfg.action ? 'chevron-forward' : undefined}
-                      onPress={cfg.action ? () => cfg.action!(item.value) : undefined}
-                      isLast={i === additional.length - 1}
-                    />
-                  );
-                })}
-              </DocCard>
-            )}
-          </>
         )}
 
-        {!!formattedDate && !isEmpty && (
-          <DocFooter text={`Last updated: ${formattedDate}`} />
+        {sections.map((sec, i) => (
+          <DocSection key={i} title={sec.head}>
+            <DocBody>{sec.desc}</DocBody>
+          </DocSection>
+        ))}
+
+        {files.length > 0 && (
+          <DocSection title="Documents">
+            {files.map((file, i) => (
+              <DocRow
+                key={i}
+                icon="file-text"
+                title={file.title}
+                sub={file.file_type?.toUpperCase()}
+                trailingIcon="download-outline"
+                onPress={() => Linking.openURL(file.file_path)}
+                isLast={i === files.length - 1}
+              />
+            ))}
+          </DocSection>
+        )}
+
+        {additional.length > 0 && (
+          <DocSection title="Contact">
+            {additional.map((item, i) => {
+              const cfg = contactCfg(item.key);
+              return (
+                <DocRow
+                  key={i}
+                  icon={cfg.icon}
+                  title={item.value}
+                  trailingIcon={cfg.action ? 'chevron-forward' : undefined}
+                  onPress={cfg.action ? () => cfg.action!(item.value) : undefined}
+                  isLast={i === additional.length - 1}
+                />
+              );
+            })}
+          </DocSection>
         )}
       </ScrollView>
     </View>

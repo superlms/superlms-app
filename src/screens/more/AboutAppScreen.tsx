@@ -6,8 +6,8 @@ import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getAboutApp } from '../../api/authApi';
 import { theme, onThemeChange } from '../../utils/theme';
 import {
-  DocHero,
-  DocCard,
+  DocIntro,
+  DocSection,
   DocBody,
   DocRow,
   DocPeople,
@@ -66,7 +66,7 @@ const AboutAppScreen = () => {
     try {
       setInfo(await getAboutApp());
     } catch (e: any) {
-      // No record yet → show the "No Data found" empty state, not an error.
+      // No record yet → show the "No data found" empty state, not an error.
       if (e?.response?.status === 404) {
         setInfo({} as AboutData);
       } else {
@@ -105,28 +105,23 @@ const AboutAppScreen = () => {
         showsVerticalScrollIndicator={false}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <DocHero
-          logoUrl={info.logo}
-          title={info.heading || TITLE}
-          subtitle={info.sub_heading}
-        />
+        <DocIntro logoUrl={info.logo} title={info.heading} subtitle={info.sub_heading} />
 
         {!hasAnyBody && (
           <DocNoData
             icon="information-circle-outline"
-            title="No Data found"
             subtitle="The app info hasn’t been added yet. Pull down to refresh."
           />
         )}
 
         {content.map((item, i) => (
-          <DocCard key={i} label={item.title}>
+          <DocSection key={i} title={item.title}>
             <DocBody>{item.description}</DocBody>
-          </DocCard>
+          </DocSection>
         ))}
 
         {hasContact && (
-          <DocCard label="Contact Details">
+          <DocSection title="Contact">
             {contacts.map((item, i) => {
               const cfg = contactCfg(item.type);
               return (
@@ -141,19 +136,12 @@ const AboutAppScreen = () => {
                 />
               );
             })}
-            {!!address && (
-              <DocRow
-                icon="map-pin"
-                title={address}
-                sub="Address"
-                isLast
-              />
-            )}
-          </DocCard>
+            {!!address && <DocRow icon="map-pin" title={address} sub="Address" isLast />}
+          </DocSection>
         )}
 
         {team.length > 0 && (
-          <DocCard label="Core Team">
+          <DocSection title="Core Team">
             <DocPeople
               people={team}
               onPressPerson={p => {
@@ -161,11 +149,11 @@ const AboutAppScreen = () => {
                 if (link) Linking.openURL(link);
               }}
             />
-          </DocCard>
+          </DocSection>
         )}
 
         {documents.length > 0 && (
-          <DocCard label="Documents">
+          <DocSection title="Documents">
             {documents.map((doc, i) => (
               <DocRow
                 key={doc.id ?? i}
@@ -177,11 +165,11 @@ const AboutAppScreen = () => {
                 isLast={i === documents.length - 1}
               />
             ))}
-          </DocCard>
+          </DocSection>
         )}
 
         {socials.length > 0 && (
-          <DocCard label="Follow Us">
+          <DocSection title="Follow Us">
             {socials.map((item, i) => (
               <DocRow
                 key={i}
@@ -193,10 +181,12 @@ const AboutAppScreen = () => {
                 isLast={i === socials.length - 1}
               />
             ))}
-          </DocCard>
+          </DocSection>
         )}
 
-        {hasAnyBody && <Text style={cs.copyright}>© 2026 · All rights reserved</Text>}
+        {hasAnyBody && (
+          <Text style={cs.copyright}>© {new Date().getFullYear()} · All rights reserved</Text>
+        )}
       </ScrollView>
     </View>
   );
@@ -205,7 +195,7 @@ const AboutAppScreen = () => {
 export default AboutAppScreen;
 
 const __mk_cs = () => StyleSheet.create({
-  copyright: { textAlign: 'center', fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
+  copyright: { textAlign: 'center', fontSize: 12, color: theme.colors.textMuted },
 });
 
 

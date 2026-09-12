@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Header from '../../components/Header';
-import ScreenSkeleton from '../../components/Skeleton';
+import { Skeleton } from '../../components/Skeleton';
 import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
 
@@ -9,53 +9,57 @@ import { theme, onThemeChange } from '../../utils/theme';
  * Shared building blocks for the More info screens (About App, School Info,
  * Rules & Regulations, Terms & Conditions, Privacy Policy, Terms of Use).
  *
- * Deliberately minimal: flat white cards with a hairline border, section
- * labels above the card, one brand tint for icons (no per-screen accent
- * colours, strips or shadows) and left-aligned body text.
+ * Minimal, document-style layout on a plain white page: no cards, strips,
+ * shadows or coloured icon boxes — just headings, readable body text and
+ * plain lists with inset hairline separators. Whitespace does the grouping.
  */
 
 type IconSet = 'Ionicons' | 'Feather' | 'FontAwesome6' | 'MaterialCommunityIcons';
 
-// ── Page intro (logo / icon + title + subtitle), sits on the page ─────────────
-export const DocHero = ({
-  icon,
-  iconSet = 'Ionicons',
+// "Last updated 12 Sep 2026", or undefined when the date is missing/invalid.
+export const lastUpdated = (date?: string | null) => {
+  if (!date) return undefined;
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return undefined;
+  return `Last updated ${d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+};
+
+// ── Page intro: optional logo, title, subtitle and a small meta line ──────────
+// Renders nothing when there's nothing to say (the header already names the
+// page, so screens don't repeat it here).
+export const DocIntro = ({
   logoUrl,
   title,
   subtitle,
+  meta,
 }: {
-  icon?: string;
-  iconSet?: IconSet;
   logoUrl?: string | null;
-  title: string;
+  title?: string;
   subtitle?: string;
-}) => (
-  <View style={s.hero}>
-    <View style={s.heroIcon}>
-      {logoUrl ? (
-        <Image source={{ uri: logoUrl }} style={s.heroLogo} resizeMode="contain" />
-      ) : (
-        <VectorIcon iconSet={iconSet as any} iconName={icon || 'document-text-outline'} size={24} color={theme.colors.primary} />
-      )}
+  meta?: string;
+}) => {
+  if (!logoUrl && !title && !subtitle && !meta) return null;
+  return (
+    <View>
+      {!!logoUrl && <Image source={{ uri: logoUrl }} style={s.introLogo} resizeMode="contain" />}
+      {!!title && <Text style={s.introTitle}>{title}</Text>}
+      {!!subtitle && <Text style={s.introSub}>{subtitle}</Text>}
+      {!!meta && <Text style={s.introMeta}>{meta}</Text>}
     </View>
-    <View style={{ flex: 1 }}>
-      <Text style={s.heroTitle}>{title}</Text>
-      {!!subtitle && <Text style={s.heroSub}>{subtitle}</Text>}
-    </View>
-  </View>
-);
+  );
+};
 
-// ── Section: optional label above a flat card ─────────────────────────────────
-export const DocCard = ({
-  label,
+// ── Section: a heading and its content ────────────────────────────────────────
+export const DocSection = ({
+  title,
   children,
 }: {
-  label?: string;
+  title?: string;
   children: React.ReactNode;
 }) => (
   <View>
-    {!!label && <Text style={s.sectionLabel}>{label}</Text>}
-    <View style={s.card}>{children}</View>
+    {!!title && <Text style={s.sectionTitle}>{title}</Text>}
+    {children}
   </View>
 );
 
@@ -63,7 +67,7 @@ export const DocBody = ({ children }: { children: React.ReactNode }) => (
   <Text style={s.bodyText}>{children}</Text>
 );
 
-// ── A tappable row: icon + title (+ sub) + trailing icon ──────────────────────
+// ── List row: plain icon, title (+ sub), trailing icon, inset separator ───────
 export const DocRow = ({
   icon,
   iconSet = 'Feather',
@@ -84,30 +88,32 @@ export const DocRow = ({
   isLast?: boolean;
 }) => (
   <TouchableOpacity
-    style={[s.row, !isLast && s.rowBorder]}
+    style={s.row}
     onPress={onPress}
     activeOpacity={onPress ? 0.6 : 1}
     disabled={!onPress}
   >
     <View style={s.rowIcon}>
-      <VectorIcon iconSet={iconSet as any} iconName={icon} size={16} color={theme.colors.primary} />
+      <VectorIcon iconSet={iconSet as any} iconName={icon} size={18} color={theme.colors.textSecondary} />
     </View>
-    <View style={{ flex: 1 }}>
-      <Text style={s.rowTitle} numberOfLines={2}>{title}</Text>
-      {!!sub && <Text style={s.rowSub}>{sub}</Text>}
+    <View style={[s.rowMain, !isLast && s.rowBorder]}>
+      <View style={{ flex: 1 }}>
+        <Text style={s.rowTitle} numberOfLines={2}>{title}</Text>
+        {!!sub && <Text style={s.rowSub}>{sub}</Text>}
+      </View>
+      {!!trailingIcon && (
+        <VectorIcon
+          iconSet={trailingIconSet as any}
+          iconName={trailingIcon}
+          size={16}
+          color={theme.colors.textMuted}
+        />
+      )}
     </View>
-    {!!trailingIcon && (
-      <VectorIcon
-        iconSet={trailingIconSet as any}
-        iconName={trailingIcon}
-        size={16}
-        color={theme.colors.textMuted}
-      />
-    )}
   </TouchableOpacity>
 );
 
-// ── People grid (core team / management) ──────────────────────────────────────
+// ── People list (core team / management) ──────────────────────────────────────
 export interface DocPerson {
   id: number;
   name: string;
@@ -123,42 +129,38 @@ export const DocPeople = ({
   people: DocPerson[];
   onPressPerson?: (p: DocPerson) => void;
 }) => (
-  <View style={s.peopleRow}>
-    {people.map(p => {
+  <View>
+    {people.map((p, i) => {
       const tappable = !!onPressPerson && !!(p.url || p.photo_url);
       return (
         <TouchableOpacity
           key={p.id}
-          style={s.personCard}
+          style={s.row}
           activeOpacity={tappable ? 0.6 : 1}
           disabled={!tappable}
           onPress={tappable ? () => onPressPerson!(p) : undefined}
         >
           {p.photo_url ? (
-            <Image source={{ uri: p.photo_url }} style={s.personAvatar} />
+            <Image source={{ uri: p.photo_url }} style={s.avatar} />
           ) : (
-            <View style={[s.personAvatar, s.personAvatarFallback]}>
-              <Text style={s.personInitial}>{p.name.charAt(0).toUpperCase()}</Text>
+            <View style={[s.avatar, s.avatarFallback]}>
+              <Text style={s.avatarInitial}>{p.name.charAt(0).toUpperCase()}</Text>
             </View>
           )}
-          <Text style={s.personName} numberOfLines={2}>{p.name}</Text>
-          {!!p.designation && (
-            <Text style={s.personRole} numberOfLines={1}>{p.designation}</Text>
-          )}
+          <View style={[s.rowMain, i < people.length - 1 && s.rowBorder]}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.rowTitle} numberOfLines={1}>{p.name}</Text>
+              {!!p.designation && (
+                <Text style={s.rowSub} numberOfLines={1}>{p.designation}</Text>
+              )}
+            </View>
+            {tappable && (
+              <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={16} color={theme.colors.textMuted} />
+            )}
+          </View>
         </TouchableOpacity>
       );
     })}
-  </View>
-);
-
-export const DocFooter = ({ text }: { text: string }) => (
-  <Text style={s.footerText}>{text}</Text>
-);
-
-export const DocEmpty = ({ text }: { text: string }) => (
-  <View style={s.emptyBox}>
-    <VectorIcon iconSet="Ionicons" iconName="document-outline" size={40} color={theme.colors.textMuted} />
-    <Text style={s.emptyText}>{text}</Text>
   </View>
 );
 
@@ -175,10 +177,8 @@ export const DocNoData = ({
   title?: string;
   subtitle?: string;
 }) => (
-  <View style={s.noDataBox}>
-    <View style={s.noDataIcon}>
-      <VectorIcon iconSet={iconSet as any} iconName={icon} size={28} color={theme.colors.textMuted} />
-    </View>
+  <View style={s.noData}>
+    <VectorIcon iconSet={iconSet as any} iconName={icon} size={32} color={theme.colors.textMuted} />
     <Text style={s.noDataTitle}>{title}</Text>
     {!!subtitle && <Text style={s.noDataSub}>{subtitle}</Text>}
   </View>
@@ -188,9 +188,14 @@ export const DocNoData = ({
 export const DocLoading = ({ title }: { title: string }) => (
   <View style={s.root}>
     <Header title={title} />
-    <View style={s.center}>
-      <ScreenSkeleton variant="doc" />
-      <Text style={s.loadingText}>Loading…</Text>
+    <View style={s.loading}>
+      <Skeleton width="55%" height={20} />
+      <Skeleton width="35%" height={12} />
+      <View style={s.loadingBlock}>
+        {['100%', '100%', '92%', '100%', '64%'].map((w, i) => (
+          <Skeleton key={i} width={w} height={12} />
+        ))}
+      </View>
     </View>
   </View>
 );
@@ -207,116 +212,56 @@ export const DocError = ({
   <View style={s.root}>
     <Header title={title} />
     <View style={s.center}>
-      <VectorIcon iconSet="Ionicons" iconName="alert-circle-outline" size={40} color={theme.colors.danger} />
+      <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
       <Text style={s.errorText}>{message}</Text>
-      <TouchableOpacity style={s.retryBtn} onPress={onRetry}>
-        <Text style={s.retryText}>Retry</Text>
+      <TouchableOpacity onPress={onRetry} hitSlop={10}>
+        <Text style={s.retryText}>Try again</Text>
       </TouchableOpacity>
     </View>
   </View>
 );
 
 const __mk_docStyles = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16, paddingBottom: 40, gap: 20 },
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 48, gap: 28 },
 });
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
+  root: { flex: 1, backgroundColor: theme.colors.card },
 
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
-  loadingText: { fontSize: 13, color: theme.colors.textMuted, marginTop: 8 },
-  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center' },
-  retryBtn: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.card,
-    paddingHorizontal: 22,
-    paddingVertical: 9,
-    borderRadius: theme.radius.full,
-    marginTop: 4,
-  },
-  retryText: { color: theme.colors.primary, fontWeight: '600' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 24 },
+  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  retryText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary, marginTop: 4 },
+
+  loading: { padding: 20, gap: 10 },
+  loadingBlock: { marginTop: 18, gap: 10 },
 
   // Intro
-  hero: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingTop: 4 },
-  heroIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  heroLogo: { width: 40, height: 40 },
-  heroTitle: { fontSize: 18, fontWeight: '700', color: theme.colors.textPrimary, lineHeight: 24 },
-  heroSub: { fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19, marginTop: 2 },
+  introLogo: { width: 56, height: 56, marginBottom: 14 },
+  introTitle: { fontSize: 22, fontWeight: '700', color: theme.colors.textPrimary, lineHeight: 28 },
+  introSub: { fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20, marginTop: 4 },
+  introMeta: { fontSize: 12, color: theme.colors.textMuted, marginTop: 8 },
 
   // Section
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-    marginBottom: 8,
-    marginLeft: 2,
-  },
-  card: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 2,
-  },
-  bodyText: { fontSize: 14, color: theme.colors.textPrimary, lineHeight: 22, marginVertical: 12 },
+  sectionTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 6 },
+  bodyText: { fontSize: 15, lineHeight: 24, color: theme.colors.textPrimary },
 
   // Row
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  rowIcon: { width: 22, alignItems: 'center' },
+  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14 },
   rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-  rowIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowTitle: { fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
-  rowSub: { fontSize: 12, color: theme.colors.textMuted, marginTop: 1 },
+  rowTitle: { fontSize: 15, color: theme.colors.textPrimary },
+  rowSub: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
 
   // People
-  peopleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginVertical: 12 },
-  personCard: { width: 88, alignItems: 'center', gap: 4 },
-  personAvatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: theme.colors.background },
-  personAvatarFallback: { alignItems: 'center', justifyContent: 'center' },
-  personInitial: { fontSize: 20, fontWeight: '600', color: theme.colors.textSecondary },
-  personName: { fontSize: 12, fontWeight: '600', color: theme.colors.textPrimary, textAlign: 'center' },
-  personRole: { fontSize: 11, color: theme.colors.textMuted, textAlign: 'center' },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.background },
+  avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+  avatarInitial: { fontSize: 15, fontWeight: '600', color: theme.colors.textSecondary },
 
-  // Footer
-  footerText: { fontSize: 12, color: theme.colors.textMuted, textAlign: 'center' },
-
-  // Empty (inline, inside a card)
-  emptyBox: { alignItems: 'center', paddingVertical: 20, gap: 10 },
-  emptyText: { fontSize: 14, color: theme.colors.textMuted },
-
-  // No data (full state inside scroll)
-  noDataBox: { alignItems: 'center', justifyContent: 'center', paddingTop: 60, paddingHorizontal: 24 },
-  noDataIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  noDataTitle: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 4 },
+  // No data
+  noData: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 6 },
+  noDataTitle: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginTop: 8 },
   noDataSub: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', lineHeight: 19 },
 });
 

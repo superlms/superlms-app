@@ -5,8 +5,8 @@ import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getSchoolInfo } from '../../api/authApi';
 import {
-  DocHero,
-  DocCard,
+  DocIntro,
+  DocSection,
   DocBody,
   DocRow,
   DocPeople,
@@ -93,35 +93,29 @@ const SchoolInfoScreen = () => {
         contentContainerStyle={docStyles.scroll}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <DocHero
-          logoUrl={info.organization?.logo_url}
-          icon="school-outline"
-          title={info.organization?.name || TITLE}
-          subtitle="Everything about our school in one place."
-        />
+        <DocIntro logoUrl={info.organization?.logo_url} title={info.organization?.name} />
 
         {isEmpty && (
           <DocNoData
             icon="school-outline"
-            title="No Data found"
             subtitle="The school info hasn’t been added yet. Pull down to refresh."
           />
         )}
 
         {sections.map((sec, i) => (
-          <DocCard key={i} label={sec.title}>
+          <DocSection key={i} title={sec.title}>
             <DocBody>{sec.content}</DocBody>
-          </DocCard>
+          </DocSection>
         ))}
 
         {team.length > 0 && (
-          <DocCard label="School Management">
+          <DocSection title="School Management">
             <DocPeople people={team} />
-          </DocCard>
+          </DocSection>
         )}
 
         {documents.length > 0 && (
-          <DocCard label="School Documents">
+          <DocSection title="Documents">
             {documents.map((doc: any, i: number) => {
               const fileUrl = doc.file_url ?? doc.file_path ?? null;
               return (
@@ -136,49 +130,44 @@ const SchoolInfoScreen = () => {
                 />
               );
             })}
-          </DocCard>
+          </DocSection>
         )}
 
         {hasContact && (
-        <DocCard label="Contact Information">
-          {!!info.website_url && (
-            <DocRow
-              icon="globe"
-              title="Visit Website"
-              trailingIcon="open-outline"
-              onPress={() => Linking.openURL(info.website_url)}
-              isLast={!info.school_mobile && !info.school_email && !info.school_address}
-            />
-          )}
-          {!!info.school_mobile && (
-            <DocRow
-              icon="phone-call"
-              title={info.school_mobile}
-              sub="Phone"
-              trailingIcon="chevron-forward"
-              onPress={() => Linking.openURL(`tel:${info.school_mobile}`)}
-              isLast={!info.school_email && !info.school_address}
-            />
-          )}
-          {!!info.school_email && (
-            <DocRow
-              icon="mail"
-              title={info.school_email}
-              sub="Email"
-              trailingIcon="chevron-forward"
-              onPress={() => Linking.openURL(`mailto:${info.school_email}`)}
-              isLast={!info.school_address}
-            />
-          )}
-          {!!info.school_address && (
-            <DocRow
-              icon="map-pin"
-              title={info.school_address}
-              sub="Address"
-              isLast
-            />
-          )}
-        </DocCard>
+          <DocSection title="Contact">
+            {!!info.website_url && (
+              <DocRow
+                icon="globe"
+                title="Visit website"
+                trailingIcon="open-outline"
+                onPress={() => Linking.openURL(info.website_url)}
+                isLast={!info.school_mobile && !info.school_email && !info.school_address}
+              />
+            )}
+            {!!info.school_mobile && (
+              <DocRow
+                icon="phone"
+                title={info.school_mobile}
+                sub="Phone"
+                trailingIcon="chevron-forward"
+                onPress={() => Linking.openURL(`tel:${info.school_mobile}`)}
+                isLast={!info.school_email && !info.school_address}
+              />
+            )}
+            {!!info.school_email && (
+              <DocRow
+                icon="mail"
+                title={info.school_email}
+                sub="Email"
+                trailingIcon="chevron-forward"
+                onPress={() => Linking.openURL(`mailto:${info.school_email}`)}
+                isLast={!info.school_address}
+              />
+            )}
+            {!!info.school_address && (
+              <DocRow icon="map-pin" title={info.school_address} sub="Address" isLast />
+            )}
+          </DocSection>
         )}
       </ScrollView>
     </View>

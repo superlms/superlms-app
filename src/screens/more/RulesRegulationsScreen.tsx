@@ -5,15 +5,15 @@ import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getRulesRegulations } from '../../api/authApi';
 import {
-  DocHero,
-  DocCard,
+  DocIntro,
+  DocSection,
   DocBody,
   DocRow,
-  DocFooter,
   DocNoData,
   DocLoading,
   DocError,
   docStyles,
+  lastUpdated,
 } from './docUi';
 
 interface Section      { head: string; desc: string; }
@@ -67,9 +67,6 @@ const RulesRegulationsScreen = () => {
   const files = data.files ?? [];
   const additional = data.additional_info ?? [];
   const isEmpty = sections.length === 0 && files.length === 0 && additional.length === 0;
-  const formattedDate = data.last_updated
-    ? new Date(data.last_updated).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    : '';
 
   return (
     <View style={docStyles.root}>
@@ -79,29 +76,23 @@ const RulesRegulationsScreen = () => {
         showsVerticalScrollIndicator={false}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <DocHero
-          iconSet="Ionicons"
-          icon="shield-checkmark-outline"
-          title={TITLE}
-          subtitle="Please read and follow all rules and regulations carefully."
-        />
-
         {isEmpty ? (
           <DocNoData
             icon="shield-checkmark-outline"
-            title="No Data found"
             subtitle="Nothing has been added yet. Pull down to refresh."
           />
         ) : (
-          sections.map((sec, i) => (
-            <DocCard key={i} label={sec.head}>
-              <DocBody>{sec.desc}</DocBody>
-            </DocCard>
-          ))
+          <DocIntro meta={lastUpdated(data.last_updated)} />
         )}
 
+        {sections.map((sec, i) => (
+          <DocSection key={i} title={sec.head}>
+            <DocBody>{sec.desc}</DocBody>
+          </DocSection>
+        ))}
+
         {files.length > 0 && (
-          <DocCard label="Documents">
+          <DocSection title="Documents">
             {files.map((file, i) => (
               <DocRow
                 key={i}
@@ -113,11 +104,11 @@ const RulesRegulationsScreen = () => {
                 isLast={i === files.length - 1}
               />
             ))}
-          </DocCard>
+          </DocSection>
         )}
 
         {additional.length > 0 && (
-          <DocCard label="Contact">
+          <DocSection title="Contact">
             {additional.map((item, i) => {
               const cfg = contactCfg(item.key);
               return (
@@ -131,11 +122,7 @@ const RulesRegulationsScreen = () => {
                 />
               );
             })}
-          </DocCard>
-        )}
-
-        {!!formattedDate && !isEmpty && (
-          <DocFooter text={`Last updated: ${formattedDate}`} />
+          </DocSection>
         )}
       </ScrollView>
     </View>

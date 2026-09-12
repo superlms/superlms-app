@@ -12,8 +12,9 @@ import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
 
 /**
- * "More" hub — one plain list linking to the read-only info screens (About
- * App, School Info, policies, etc.), matching the minimal info screens.
+ * "More" hub — one plain list on a white page linking to the read-only info
+ * screens (About App, School Info, policies, etc.), in the same minimal
+ * language as those screens: plain icons and inset hairline separators.
  */
 
 interface MoreItem {
@@ -41,22 +42,22 @@ const MoreScreen = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.scroll}
       >
-        <View style={s.list}>
-          {ITEMS.map((item, i) => (
-            <TouchableOpacity
-              key={item.route}
-              activeOpacity={0.6}
-              onPress={() => navigation.navigate(item.route)}
-              style={[s.row, i < ITEMS.length - 1 && s.rowBorder]}
-            >
-              <View style={s.iconWrap}>
-                <VectorIcon iconSet="Ionicons" iconName={item.icon} size={18} color={theme.colors.primary} />
-              </View>
+        {ITEMS.map((item, i) => (
+          <TouchableOpacity
+            key={item.route}
+            activeOpacity={0.6}
+            onPress={() => navigation.navigate(item.route)}
+            style={s.row}
+          >
+            <View style={s.icon}>
+              <VectorIcon iconSet="Ionicons" iconName={item.icon} size={20} color={theme.colors.textSecondary} />
+            </View>
+            <View style={[s.rowMain, i < ITEMS.length - 1 && s.rowBorder]}>
               <Text style={s.title}>{item.title}</Text>
               <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={16} color={theme.colors.textMuted} />
-            </TouchableOpacity>
-          ))}
-        </View>
+            </View>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
     </View>
   );
@@ -65,27 +66,14 @@ const MoreScreen = () => {
 export default MoreScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16, paddingBottom: 32 },
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  scroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 32 },
 
-  list: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    paddingHorizontal: 14,
-  },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  icon: { width: 24, alignItems: 'center' },
+  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 16 },
   rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-  iconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { flex: 1, fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  title: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
 });
 
 

@@ -5,14 +5,14 @@ import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getPrivacyPolicy } from '../../api/authApi';
 import {
-  DocHero,
-  DocCard,
+  DocIntro,
+  DocSection,
   DocBody,
-  DocFooter,
   DocNoData,
   DocLoading,
   DocError,
   docStyles,
+  lastUpdated,
 } from './docUi';
 
 interface Section { head: string; desc: string; }
@@ -51,9 +51,6 @@ const PrivacyPolicyScreen = () => {
   if (error || !data) return <DocError title={TITLE} message={error || 'Something went wrong.'} onRetry={fetchData} />;
 
   const sections = data.metadata?.sections ?? [];
-  const formattedDate = data.last_updated
-    ? new Date(data.last_updated).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    : '';
 
   return (
     <View style={docStyles.root}>
@@ -63,29 +60,20 @@ const PrivacyPolicyScreen = () => {
         showsVerticalScrollIndicator={false}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <DocHero
-          iconSet="Ionicons"
-          icon="lock-closed-outline"
-          title={TITLE}
-          subtitle="Your privacy matters to us. Please read our policy carefully."
-        />
-
         {sections.length === 0 ? (
           <DocNoData
             icon="lock-closed-outline"
-            title="No Data found"
             subtitle="The privacy policy hasn’t been added yet. Pull down to refresh."
           />
         ) : (
-          sections.map((sec, i) => (
-            <DocCard key={i} label={sec.head}>
-              <DocBody>{sec.desc}</DocBody>
-            </DocCard>
-          ))
-        )}
-
-        {!!formattedDate && sections.length > 0 && (
-          <DocFooter text={`Last updated: ${formattedDate}`} />
+          <>
+            <DocIntro meta={lastUpdated(data.last_updated)} />
+            {sections.map((sec, i) => (
+              <DocSection key={i} title={sec.head}>
+                <DocBody>{sec.desc}</DocBody>
+              </DocSection>
+            ))}
+          </>
         )}
       </ScrollView>
     </View>
