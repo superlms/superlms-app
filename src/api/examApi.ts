@@ -98,6 +98,10 @@ export const mapExam = (e: ApiExam, syllabus: SyllabusItem[] = []): Exam => ({
   venue: '',
   instructions: DEFAULT_EXAM_INSTRUCTIONS,
   syllabus,
+  term: e.term || '',
+  startIso: e.start_date,
+  endIso: e.end_date,
+  description: e.description || '',
 });
 
 // ─── Endpoints ─────────────────────────────────────────────────────────────────

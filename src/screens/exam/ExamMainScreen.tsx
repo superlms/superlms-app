@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -6,110 +6,145 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
+import AppRefreshControl from '../../components/AppRefreshControl';
+import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
+import { DocHeader } from '../more/docUi';
+import { getExams } from '../../api/examApi';
+import type { Exam } from './examData';
+import { examWhen, shortRange, sortExams } from './examUi';
 
 /**
- * Student "Exams" hub — entry points for all exam-related screens.
- * Uses the same announcement-card visual language as MoreScreen.
+ * Student "Exams" hub — the way into everything exam-related, with the exam
+ * that matters right now underneath.
  */
 
-type IconSet = 'Ionicons' | 'Feather' | 'MaterialCommunityIcons';
+const TITLE = 'Exams';
 
-interface ExamItem {
-  title: string;
-  subtitle: string;
-  icon: string;
-  iconSet: IconSet;
-  accent: string;
-  route: string;
-}
-
-const ITEMS: ExamItem[] = [
+const ENTRIES = [
   {
     title: 'Exams',
-    subtitle: 'Upcoming, ongoing & completed exams',
-    icon: 'calendar',
-    iconSet: 'Ionicons',
-    accent: theme.colors.primary,
+    sub: 'Upcoming, ongoing and completed exams',
+    icon: 'calendar-outline',
     route: 'ExamsScreen',
   },
   {
     title: 'Admit Card',
-    subtitle: 'Download your exam admit card',
-    icon: 'card',
-    iconSet: 'Ionicons',
-    accent: '#10B981',
+    sub: 'Download your admit card',
+    icon: 'card-outline',
     route: 'AdmitCardScreen',
   },
   {
     title: 'Seating Plan',
-    subtitle: 'Find your room and seat number',
-    icon: 'grid',
-    iconSet: 'Ionicons',
-    accent: '#F59E0B',
+    sub: 'Your room and seat for each paper',
+    icon: 'grid-outline',
     route: 'SeatingPlanScreen',
   },
   {
     title: 'Exam Copy',
-    subtitle: 'View your evaluated answer copies',
-    icon: 'document-text',
-    iconSet: 'Ionicons',
-    accent: '#8B5CF6',
+    sub: 'Your evaluated answer sheets',
+    icon: 'document-text-outline',
     route: 'ExamCopyScreen',
   },
   {
     title: 'Report Card',
-    subtitle: 'Your results and performance report',
-    icon: 'stats-chart',
-    iconSet: 'Ionicons',
-    accent: '#EC4899',
+    sub: 'Your results and performance report',
+    icon: 'stats-chart-outline',
     route: 'ReportCardScreen',
   },
 ];
 
-const ExamItemCard = ({ item, onPress }: { item: ExamItem; onPress: () => void }) => (
-  <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={s.card}>
-    <View style={[s.accentStrip, { backgroundColor: item.accent }]} />
-    <View style={s.cardInner}>
-      <View style={[s.iconWrap, { backgroundColor: item.accent + '18' }]}>
-        <VectorIcon iconSet={item.iconSet as any} iconName={item.icon} size={22} color={item.accent} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={s.title}>{item.title}</Text>
-        <Text style={s.subtitle} numberOfLines={1}>{item.subtitle}</Text>
-      </View>
-      <View style={s.chevron}>
-        <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={16} color={theme.colors.textSecondary} />
-      </View>
-    </View>
-  </TouchableOpacity>
-);
+const ExamMainScreen = ({ navigation }: any) => {
+  // The exam under way, or else the next one coming. Best effort: when the list
+  // cannot be fetched the hub simply goes without it.
+  const [next, setNext] = useState<Exam | null>(null);
 
-const ExamMainScreen = () => {
-  const navigation = useNavigation<any>();
+  const load = useCallback(async () => {
+    try {
+      const list = await getExams();
+      setNext(sortExams(list).find(e => e.status !== 'Completed') ?? null);
+    } catch (e: any) {
+      console.log('[getExams] Error:', e?.response?.status, e?.message);
+    }
+  }, []);
+
+  const { refreshing, onRefresh } = useRefresh(load);
+
+  useFocusLoad(load);
+
+  const live = next?.status === 'Ongoing';
 
   return (
     <View style={s.root}>
-      <Header title="Exams" onBackPress={() => navigation.goBack()} />
+      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.scroll}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Text style={s.sectionTitle}>Exams</Text>
-        <Text style={s.sectionDesc}>
-          Everything you need before, during and after an exam.
-        </Text>
-
-        {ITEMS.map(item => (
-          <ExamItemCard
+        {ENTRIES.map((item, i) => (
+          <TouchableOpacity
             key={item.route}
-            item={item}
+            style={s.row}
+            activeOpacity={0.6}
             onPress={() => navigation.navigate(item.route)}
-          />
+          >
+            <View style={s.rowIcon}>
+              <VectorIcon
+                iconSet="Ionicons"
+                iconName={item.icon}
+                size={20}
+                color={theme.colors.textSecondary}
+              />
+            </View>
+            <View style={[s.rowMain, i < ENTRIES.length - 1 && s.rowDivider]}>
+              <View style={s.rowText}>
+                <Text style={s.rowTitle}>{item.title}</Text>
+                <Text style={s.rowSub} numberOfLines={1}>
+                  {item.sub}
+                </Text>
+              </View>
+              <VectorIcon
+                iconSet="Ionicons"
+                iconName="chevron-forward"
+                size={16}
+                color={theme.colors.textMuted}
+              />
+            </View>
+          </TouchableOpacity>
         ))}
+
+        {/* The exam that matters right now */}
+        {!!next && (
+          <>
+            <View style={s.divider} />
+            <TouchableOpacity
+              style={s.next}
+              activeOpacity={0.6}
+              onPress={() => navigation.navigate('ExamDetail', { examId: next.id, exam: next })}
+            >
+              <Text style={[s.kicker, live && s.accent]}>{live ? 'ONGOING' : 'UP NEXT'}</Text>
+              <View style={s.nextLine}>
+                <View style={s.rowText}>
+                  <Text style={s.nextName} numberOfLines={1}>
+                    {next.name}
+                  </Text>
+                  <Text style={s.nextWhen}>
+                    {[shortRange(next), examWhen(next)].filter(Boolean).join('  ·  ')}
+                  </Text>
+                </View>
+                <VectorIcon
+                  iconSet="Ionicons"
+                  iconName="chevron-forward"
+                  size={16}
+                  color={theme.colors.textMuted}
+                />
+              </View>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -118,44 +153,35 @@ const ExamMainScreen = () => {
 export default ExamMainScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16, paddingBottom: 32 },
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  scroll: { paddingTop: 4, paddingBottom: 40 },
 
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 4 },
-  sectionDesc: { fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19, marginBottom: 16 },
+  // Entries — plain icon, title and line, with an inset hairline
+  row: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingLeft: 20 },
+  rowIcon: { width: 22, alignItems: 'center' },
+  rowMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 15,
+    paddingRight: 20,
+  },
+  rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
+  rowText: { flex: 1 },
+  rowTitle: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  rowSub: { fontSize: 13, color: theme.colors.textMuted, marginTop: 2 },
 
-  card: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    overflow: 'hidden',
-    marginBottom: 12,
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  accentStrip: { height: 4, width: '100%' },
-  cardInner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
-  iconWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: theme.radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: { fontSize: 15, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 2 },
-  subtitle: { fontSize: 12, color: theme.colors.textMuted, fontWeight: '500' },
-  chevron: {
-    width: 30,
-    height: 30,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  divider: { height: 1, backgroundColor: theme.colors.divider, marginTop: 8 },
+
+  // Up next
+  next: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16 },
+  kicker: { fontSize: 11, fontWeight: '600', letterSpacing: 0.8, color: theme.colors.textMuted },
+  accent: { color: theme.colors.primary },
+  nextLine: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
+  nextName: { fontSize: 18, fontWeight: '600', color: theme.colors.textPrimary },
+  nextWhen: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 3 },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let s = __mk_s();

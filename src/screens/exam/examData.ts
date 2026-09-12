@@ -22,6 +22,11 @@ export interface Exam {
   venue: string;
   instructions: string[];
   syllabus: SyllabusItem[];
+  term?: string;
+  // Raw "YYYY-MM-DD" dates from the API, for working out how far off an exam is.
+  startIso?: string | null;
+  endIso?: string | null;
+  description?: string;
 }
 
 export const STATUS_CONFIG: Record<
@@ -63,13 +68,6 @@ export const DEFAULT_EXAM_INSTRUCTIONS: string[] = [
   'No electronic devices allowed inside the hall.',
   'Report 30 minutes before the exam starts.',
   'Use blue or black ink pen only.',
-];
-
-export const FILTERS: (ExamStatus | 'All')[] = [
-  'All',
-  'Upcoming',
-  'Ongoing',
-  'Completed',
 ];
 
 // ─── Student (demo) ──────────────────────────────────────────────────────────
