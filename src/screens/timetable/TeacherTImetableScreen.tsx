@@ -66,7 +66,7 @@ const TeacherTimetableScreen = ({ navigation }: any) => {
         <View style={s.list}>
           {[0, 1, 2, 3, 4].map(i => (
             <View key={i} style={[s.skeletonRow, i < 4 && s.rowDivider]}>
-              <Skeleton width={56} height={13} />
+              <Skeleton width={56} height={13} style={s.skeletonTime} />
               <View style={s.skeletonBody}>
                 <Skeleton width="55%" height={14} />
                 <Skeleton width="35%" height={12} />
@@ -133,7 +133,8 @@ const __mk_s = () => StyleSheet.create({
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
 
   // Loading
-  skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12 },
+  skeletonTime: { marginRight: 6 },
   skeletonBody: { flex: 1, gap: 8 },
 
   // Error

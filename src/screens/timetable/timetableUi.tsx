@@ -200,8 +200,10 @@ const __mk_s = () => StyleSheet.create({
   dayDateActive: { color: theme.colors.white },
   dayTextToday: { color: theme.colors.primary },
 
-  // Period — the face, then the clock, then what it is
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
+  // Period — the face, then the clock, then what it is. The gap before the
+  // subject is wider than the one before the clock, so the times read as their
+  // own column rather than as part of the name beside them.
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.colors.background },
   avatarFallback: { alignItems: 'center', justifyContent: 'center' },
@@ -211,7 +213,7 @@ const __mk_s = () => StyleSheet.create({
   subject: { flexShrink: 1, fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   now: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: theme.colors.primary },
   meta: { fontSize: 13, color: theme.colors.textSecondary },
-  timeCol: { width: 62 },
+  timeCol: { width: 62, marginRight: 6 },
   timeFrom: { fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
   timeNow: { color: theme.colors.primary },
   timeTo: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
