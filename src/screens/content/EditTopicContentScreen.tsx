@@ -14,26 +14,27 @@ import {
   View,
 } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
-import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
+import { quietCaps } from '../../utils/quietCaps';
+import { DocHeader } from '../more/docUi';
 import {
   updateTopicContent,
   contentErrorMessage,
   type SyllabusTopic,
   type ContentFile,
 } from '../../api/contentApi';
+import { ResourceRow } from './contentUi';
 
-const PRIMARY = theme.colors.primary;
+const TITLE = 'Topic Content';
 
-// Editor opened from the teacher content screen's topic arrow. Adds study
+// Editor opened from a topic on the teacher's study content. Adds study
 // material (text / link / image) INTO an existing topic, then returns. Chapters
 // & topics themselves are managed on the Syllabus screen.
 const EditTopicContentScreen = ({ navigation, route }: any) => {
   const topic: SyllabusTopic = route.params?.topic;
-  const chapterName: string = route.params?.chapterName ?? '';
-  const subjectName: string = route.params?.subjectName ?? '';
-  const accent: string = route.params?.subjectColor ?? PRIMARY;
+  const chapterName = quietCaps(route.params?.chapterName);
+  const subjectName = quietCaps(route.params?.subjectName);
 
   const [content, setContent] = useState(topic?.content ?? '');
   const [link, setLink] = useState(topic?.link ?? '');
@@ -94,112 +95,113 @@ const EditTopicContentScreen = ({ navigation, route }: any) => {
     }
   };
 
+  const kicker = [subjectName, chapterName].filter(Boolean).join(' · ');
+
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Header title="Add Content" onBackPress={() => navigation.goBack()} />
+      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
 
-      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        {/* Topic header */}
-        <View style={[s.topicCard, { borderLeftColor: accent }]}>
-          <View style={[s.topicIcon, { backgroundColor: accent + '20' }]}>
-            <VectorIcon iconSet="Ionicons" iconName="document-text-outline" size={18} color={accent} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.topicName} numberOfLines={2}>{topic?.name}</Text>
-            <Text style={s.topicMeta} numberOfLines={1}>
-              {subjectName}{chapterName ? ` · ${chapterName}` : ''}
-            </Text>
-          </View>
+      <ScrollView
+        contentContainerStyle={s.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Which topic this is */}
+        <View style={s.head}>
+          {!!kicker && <Text style={s.kicker}>{kicker.toUpperCase()}</Text>}
+          <Text style={s.title}>{quietCaps(topic?.name)}</Text>
         </View>
+        <View style={s.divider} />
 
-        {/* Text */}
-        <Text style={s.label}>Text</Text>
-        <TextInput
-          style={[s.input, s.inputMulti]}
-          placeholder="Write study content for this topic..."
-          placeholderTextColor={theme.colors.textMuted}
-          value={content}
-          onChangeText={setContent}
-          multiline
-          textAlignVertical="top"
-        />
+        <View style={s.form}>
+          {/* Notes */}
+          <View>
+            <Text style={s.label}>Study notes</Text>
+            <TextInput
+              style={[s.field, s.fieldMulti]}
+              placeholder="Write the study material for this topic"
+              placeholderTextColor={theme.colors.textMuted}
+              value={content}
+              onChangeText={setContent}
+              multiline
+              textAlignVertical="top"
+            />
+          </View>
 
-        {/* Link / Document URL */}
-        <Text style={s.label}>Link / Document URL</Text>
-        <View style={s.linkRow}>
-          <VectorIcon iconSet="Ionicons" iconName="link-outline" size={18} color={theme.colors.textMuted} />
-          <TextInput
-            style={s.linkInput}
-            placeholder="https://...  (web link, Google Drive / PDF doc, video)"
-            placeholderTextColor={theme.colors.textMuted}
-            value={link}
-            onChangeText={setLink}
-            keyboardType="url"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {!!link && (
-            <TouchableOpacity onPress={() => setLink('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <VectorIcon iconSet="Ionicons" iconName="close-circle" size={18} color={theme.colors.textMuted} />
-            </TouchableOpacity>
+          {/* Link / document URL */}
+          <View>
+            <Text style={s.label}>Link</Text>
+            <View style={[s.field, s.linkField]}>
+              <VectorIcon iconSet="Ionicons" iconName="link-outline" size={17} color={theme.colors.textMuted} />
+              <TextInput
+                style={s.linkInput}
+                placeholder="https:// — a web page, Drive file or video"
+                placeholderTextColor={theme.colors.textMuted}
+                value={link}
+                onChangeText={setLink}
+                keyboardType="url"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {!!link && (
+                <TouchableOpacity onPress={() => setLink('')} hitSlop={8} activeOpacity={0.6}>
+                  <VectorIcon iconSet="Ionicons" iconName="close-circle" size={17} color={theme.colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Image */}
+          <View>
+            <Text style={s.label}>Image</Text>
+            {preview ? (
+              <>
+                <Image source={{ uri: preview }} style={s.image} resizeMode="cover" />
+                <View style={s.imageActions}>
+                  <TouchableOpacity onPress={pickImage} hitSlop={8} activeOpacity={0.6}>
+                    <Text style={s.linkText}>Change</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={removeImage} hitSlop={8} activeOpacity={0.6}>
+                    <Text style={s.dangerText}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <TouchableOpacity style={[s.field, s.pickRow]} onPress={pickImage} activeOpacity={0.7}>
+                <VectorIcon iconSet="Ionicons" iconName="image-outline" size={18} color={theme.colors.textSecondary} />
+                <Text style={s.pickText}>Choose an image</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Existing document (managed from web/admin) */}
+          {!!existingPdf && (
+            <View>
+              <Text style={s.label}>Document</Text>
+              <ResourceRow
+                icon="document-attach-outline"
+                title="PDF document"
+                sub="Added on the web portal"
+                onPress={openPdf}
+                isLast
+              />
+            </View>
           )}
         </View>
-
-        {/* Image */}
-        <Text style={s.label}>Image</Text>
-        {preview ? (
-          <View style={s.imagePreviewWrap}>
-            <Image source={{ uri: preview }} style={s.imagePreview} resizeMode="cover" />
-            <TouchableOpacity style={s.imageRemove} onPress={removeImage}>
-              <VectorIcon iconSet="Ionicons" iconName="close" size={14} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={[s.imageChange, { borderColor: accent }]} onPress={pickImage} activeOpacity={0.8}>
-              <VectorIcon iconSet="Ionicons" iconName="image-outline" size={14} color={accent} />
-              <Text style={[s.imageChangeText, { color: accent }]}>Change</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity style={s.imagePicker} onPress={pickImage} activeOpacity={0.8}>
-            <VectorIcon iconSet="Ionicons" iconName="image-outline" size={20} color={theme.colors.textMuted} />
-            <Text style={s.imagePickerText}>Select an image</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Existing document (managed from web/admin) */}
-        {!!existingPdf && (
-          <>
-            <Text style={s.label}>Document</Text>
-            <TouchableOpacity style={s.pdfRow} onPress={openPdf} activeOpacity={0.85}>
-              <View style={s.pdfIcon}>
-                <VectorIcon iconSet="Feather" iconName="file-text" size={18} color="#EF4444" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.pdfTitle}>PDF Document</Text>
-                <Text style={s.pdfSub} numberOfLines={1}>Tap to open</Text>
-              </View>
-              <VectorIcon iconSet="Ionicons" iconName="open-outline" size={16} color={theme.colors.textMuted} />
-            </TouchableOpacity>
-          </>
-        )}
-
-        <View style={{ height: 24 }} />
       </ScrollView>
 
-      {/* Save bar */}
-      <View style={s.saveBar}>
+      {/* Save */}
+      <View style={s.bar}>
         <TouchableOpacity
-          style={[s.saveBtn, { backgroundColor: accent }, saving && { opacity: 0.7 }]}
+          style={[s.saveBtn, saving && s.saveBtnBusy]}
           onPress={save}
           activeOpacity={0.85}
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator size="small" color={theme.colors.white} />
           ) : (
-            <>
-              <VectorIcon iconSet="Ionicons" iconName="checkmark" size={18} color="#fff" />
-              <Text style={s.saveBtnText}>Submit Content</Text>
-            </>
+            <Text style={s.saveText}>Save</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -210,70 +212,56 @@ const EditTopicContentScreen = ({ navigation, route }: any) => {
 export default EditTopicContentScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16 },
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  scroll: { paddingBottom: 28 },
 
-  topicCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: theme.colors.card, borderRadius: theme.radius.md,
-    borderWidth: 1, borderColor: theme.colors.border, borderLeftWidth: 4,
-    padding: 14, marginBottom: 18, elevation: 1,
-  },
-  topicIcon: { width: 38, height: 38, borderRadius: theme.radius.sm, alignItems: 'center', justifyContent: 'center' },
-  topicName: { fontSize: 15, fontWeight: '800', color: theme.colors.textPrimary },
-  topicMeta: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2, fontWeight: '500' },
+  // Head
+  head: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 18 },
+  kicker: { fontSize: 11, fontWeight: '600', letterSpacing: 0.8, color: theme.colors.textMuted },
+  title: { fontSize: 20, fontWeight: '700', lineHeight: 27, color: theme.colors.textPrimary, marginTop: 6 },
 
-  label: { fontSize: 12, fontWeight: '800', color: theme.colors.textSecondary, marginBottom: 8, letterSpacing: 0.3 },
-  input: {
-    backgroundColor: theme.colors.card, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
-    fontSize: 14, color: theme.colors.textPrimary, borderWidth: 1.5, borderColor: theme.colors.border, marginBottom: 18,
-  },
-  inputMulti: { minHeight: 120 },
+  divider: { height: 1, backgroundColor: theme.colors.divider },
 
-  linkRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: theme.colors.card, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 4,
-    borderWidth: 1.5, borderColor: theme.colors.border, marginBottom: 18,
+  // Form
+  form: { paddingHorizontal: 20, paddingTop: 20, gap: 22 },
+  label: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 8 },
+  field: {
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: theme.colors.textPrimary,
   },
-  linkInput: { flex: 1, fontSize: 14, color: theme.colors.textPrimary, paddingVertical: 10 },
+  fieldMulti: { minHeight: 140, lineHeight: 22 },
+  linkField: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 0 },
+  linkInput: { flex: 1, fontSize: 15, color: theme.colors.textPrimary, paddingVertical: 12 },
 
-  imagePicker: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    borderWidth: 1.5, borderStyle: 'dashed', borderColor: theme.colors.border, borderRadius: 12,
-    paddingVertical: 20, marginBottom: 18, backgroundColor: theme.colors.card,
-  },
-  imagePickerText: { fontSize: 13, color: theme.colors.textMuted, fontWeight: '600' },
-  imagePreviewWrap: { marginBottom: 18 },
-  imagePreview: { width: '100%', height: 180, borderRadius: 12, backgroundColor: theme.colors.card },
-  imageRemove: {
-    position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 13,
-    backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center',
-  },
-  imageChange: {
-    position: 'absolute', bottom: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: theme.colors.card, borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5,
-  },
-  imageChangeText: { fontSize: 11, fontWeight: '800' },
+  image: { width: '100%', height: 180, borderRadius: theme.radius.md, backgroundColor: theme.colors.background },
+  imageActions: { flexDirection: 'row', gap: 22, marginTop: 10 },
+  linkText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
+  dangerText: { fontSize: 14, fontWeight: '500', color: theme.colors.danger },
+  pickRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14 },
+  pickText: { fontSize: 15, color: theme.colors.textSecondary },
 
-  pdfRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: theme.colors.card, borderRadius: theme.radius.md,
-    borderWidth: 1.5, borderColor: '#EF444440', paddingHorizontal: 12, paddingVertical: 10, marginBottom: 18,
-  },
-  pdfIcon: { width: 40, height: 40, borderRadius: theme.radius.sm, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center' },
-  pdfTitle: { fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary },
-  pdfSub: { fontSize: 12, color: theme.colors.textMuted },
-
-  saveBar: {
-    padding: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.card,
+  // Save
+  bar: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.card,
   },
   saveBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 15, borderRadius: 14,
+    height: 48,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  saveBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  saveBtnBusy: { opacity: 0.7 },
+  saveText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let s = __mk_s();

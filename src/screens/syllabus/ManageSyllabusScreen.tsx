@@ -1,24 +1,20 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import ScreenSkeleton from '../../components/Skeleton';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Modal,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
-import { theme, onThemeChange } from '../../utils/theme';
-import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
+import { theme, onThemeChange } from '../../utils/theme';
+import { quietCaps } from '../../utils/quietCaps';
+import { DocHeader, DocNoData } from '../more/docUi';
 import {
-  getTeacherSubjects,
-  getChapters,
   createChapter,
   updateChapter,
   deleteChapter,
@@ -26,64 +22,25 @@ import {
   updateTopic,
   deleteTopic,
   contentErrorMessage,
-  subjectStyle,
   type TeacherCombo,
   type SyllabusChapter,
   type SyllabusTopic,
 } from '../../api/contentApi';
+import { useChapters } from '../subjects/useChapters';
+import {
+  ChapterOutline,
+  TopicLine,
+  comboChapters,
+  comboClass,
+  comboLabel,
+} from '../subjects/outlineUi';
 
-const PRIMARY = theme.colors.primary;
+const TITLE = 'Manage Syllabus';
 
-// ─── Combo (class + subject) Dropdown ─────────────────────────────────────────
-const ComboDropdown = ({
-  combos,
-  selected,
-  onSelect,
-}: {
-  combos: TeacherCombo[];
-  selected: TeacherCombo;
-  onSelect: (c: TeacherCombo) => void;
-}) => {
-  const [open, setOpen] = useState(false);
-  return (
-    <View style={[s.dropWrap, open && { zIndex: 99 }]}>
-      <TouchableOpacity style={s.dropBtn} onPress={() => setOpen(v => !v)} activeOpacity={0.8}>
-        <View style={s.dropLeft}>
-          <Text style={s.dropIcon}>{subjectStyle(selected.subjectId).icon}</Text>
-          <Text style={s.dropSelected} numberOfLines={1}>{selected.label}</Text>
-        </View>
-        <VectorIcon iconSet="Ionicons" iconName={open ? 'chevron-up' : 'chevron-down'} size={18} color={PRIMARY} />
-      </TouchableOpacity>
-      {open && (
-        <View style={s.dropList}>
-          <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled>
-            {combos.map(c => (
-              <TouchableOpacity
-                key={c.key}
-                style={[s.dropItem, c.key === selected.key && s.dropItemActive]}
-                onPress={() => {
-                  onSelect(c);
-                  setOpen(false);
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={s.dropIcon}>{subjectStyle(c.subjectId).icon}</Text>
-                <Text style={[s.dropItemText, c.key === selected.key && s.dropItemTextActive]} numberOfLines={1}>
-                  {c.label}
-                </Text>
-                {c.key === selected.key && (
-                  <VectorIcon iconSet="Ionicons" iconName="checkmark" size={16} color={PRIMARY} />
-                )}
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-    </View>
-  );
-};
+const byOrder = <X extends { order: number; id: number }>(list: X[]): X[] =>
+  [...list].sort((a, b) => a.order - b.order || a.id - b.id);
 
-// ─── Name + Order modal — used for both chapter and topic ─────────────────────
+// ─── Name + order sheet — used for both chapters and topics ───────────────────
 const NameOrderModal = ({
   visible,
   title,
@@ -93,7 +50,6 @@ const NameOrderModal = ({
   initialName,
   initialOrder,
   saving,
-  accent,
   onClose,
   onSubmit,
 }: {
@@ -105,7 +61,6 @@ const NameOrderModal = ({
   initialName: string;
   initialOrder: string;
   saving: boolean;
-  accent: string;
   onClose: () => void;
   onSubmit: (name: string, order: number) => void;
 }) => {
@@ -119,30 +74,27 @@ const NameOrderModal = ({
     }
   }, [visible, initialName, initialOrder]);
 
+  const canSave = !!name.trim() && !saving;
+
   const submit = () => {
-    if (!name.trim() || saving) return;
+    if (!canSave) return;
     onSubmit(name.trim(), parseInt(order, 10) || 0);
   };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity activeOpacity={1} style={s.modalSheet}>
-          <View style={s.modalHandle} />
+      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={s.sheet}>
+          <Text style={s.sheetTitle}>{title}</Text>
+          {!!subtitle && (
+            <Text style={s.sheetSub} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          )}
 
-          <View style={s.modalTitleRow}>
-            <View style={[s.modalIconBox, { backgroundColor: accent + '22' }]}>
-              <VectorIcon iconSet="Ionicons" iconName="create-outline" size={18} color={accent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.modalTitle}>{title}</Text>
-              <Text style={s.modalSub} numberOfLines={1}>{subtitle}</Text>
-            </View>
-          </View>
-
-          <Text style={s.inputLabel}>{nameLabel}</Text>
+          <Text style={s.fieldLabel}>{nameLabel}</Text>
           <TextInput
-            style={s.modalInput}
+            style={s.field}
             placeholder={namePlaceholder}
             placeholderTextColor={theme.colors.textMuted}
             value={name}
@@ -150,9 +102,9 @@ const NameOrderModal = ({
             autoFocus
           />
 
-          <Text style={s.inputLabel}>Order</Text>
+          <Text style={s.fieldLabel}>Order</Text>
           <TextInput
-            style={s.modalInput}
+            style={s.field}
             placeholder="e.g. 1"
             placeholderTextColor={theme.colors.textMuted}
             value={order}
@@ -160,23 +112,25 @@ const NameOrderModal = ({
             keyboardType="number-pad"
           />
 
-          <View style={s.modalActions}>
-            <TouchableOpacity style={s.modalCancelBtn} onPress={onClose} activeOpacity={0.8} disabled={saving}>
-              <Text style={s.modalCancelText}>Cancel</Text>
+          <View style={s.sheetActions}>
+            <TouchableOpacity
+              style={[s.sheetBtn, s.sheetBtnGhost]}
+              onPress={onClose}
+              activeOpacity={0.7}
+              disabled={saving}
+            >
+              <Text style={s.sheetBtnGhostText}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[s.modalAddBtn, { backgroundColor: accent }, (!name.trim() || saving) && { opacity: 0.6 }]}
+              style={[s.sheetBtn, s.sheetBtnPrimary, !canSave && s.btnDisabled]}
               onPress={submit}
               activeOpacity={0.85}
-              disabled={!name.trim() || saving}
+              disabled={!canSave}
             >
               {saving ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color={theme.colors.white} />
               ) : (
-                <>
-                  <VectorIcon iconSet="Ionicons" iconName="checkmark" size={16} color="#fff" />
-                  <Text style={s.modalAddText}>Save</Text>
-                </>
+                <Text style={s.sheetBtnPrimaryText}>Save</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -193,98 +147,48 @@ type TopicModalState =
   | { mode: 'edit'; chapter: SyllabusChapter; topic: SyllabusTopic }
   | null;
 
+// Opened from a class-and-subject's syllabus, so the subject is already chosen.
 const ManageSyllabusScreen = ({ navigation, route }: any) => {
-  const initialKey: string | undefined = route?.params?.comboKey;
+  const combo: TeacherCombo | undefined = route?.params?.combo;
 
-  const [combos, setCombos] = useState<TeacherCombo[]>([]);
-  const [selected, setSelected] = useState<TeacherCombo | null>(null);
-  const [chapters, setChapters] = useState<SyllabusChapter[]>([]);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const outline = useChapters(() => (combo ? comboChapters(combo) : Promise.resolve([])));
+  const { refreshing, onRefresh } = useRefresh(outline.load);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [chaptersLoading, setChaptersLoading] = useState(false);
+  useFocusLoad(outline.load);
+
   const [busyChapterId, setBusyChapterId] = useState<number | null>(null);
-
   const [chapterModal, setChapterModal] = useState<ChapterModalState>(null);
   const [topicModal, setTopicModal] = useState<TopicModalState>(null);
   const [saving, setSaving] = useState(false);
 
-  const color = selected ? subjectStyle(selected.subjectId).color : PRIMARY;
-
-  // ── Loaders ──────────────────────────────────────────────────────────────
-  const loadChapters = useCallback(async (combo: TeacherCombo) => {
-    setChaptersLoading(true);
-    try {
-      const list = await getChapters({
-        standard_id: combo.standardId,
-        section_id: combo.sectionId,
-        subject_id: combo.subjectId,
-      });
-      setChapters(list);
-      setExpandedId(list[0]?.id ?? null);
-    } catch (e: any) {
-      console.log('[getChapters] Error:', e?.response?.status, e?.message);
-      setChapters([]);
-    } finally {
-      setChaptersLoading(false);
-    }
-  }, []);
-
-  const loadCombos = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const list = await getTeacherSubjects();
-      setCombos(list);
-      const start = list.find(c => c.key === initialKey) ?? list[0];
-      if (start) {
-        setSelected(start);
-        await loadChapters(start);
-      }
-    } catch (e: any) {
-      console.log('[getTeacherSubjects] Error:', e?.response?.status, e?.message);
-      setError(contentErrorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [loadChapters, initialKey]);
-
-  const { refreshing, onRefresh } = useRefresh(loadCombos);
-  useFocusLoad(loadCombos);
-
-  const selectCombo = (c: TeacherCombo) => {
-    setSelected(c);
-    setChapters([]);
-    setExpandedId(null);
-    loadChapters(c);
-  };
+  const chapterCount = outline.chapters?.length ?? 0;
 
   // ── Mutations ────────────────────────────────────────────────────────────
   const submitChapter = async (name: string, order: number) => {
-    if (!selected || !chapterModal) return;
+    if (!combo || !chapterModal) return;
     setSaving(true);
     try {
       if (chapterModal.mode === 'add') {
         const created = await createChapter({
-          standard_id: selected.standardId,
-          section_id: selected.sectionId,
-          subject_id: selected.subjectId,
+          standard_id: combo.standardId,
+          section_id: combo.sectionId,
+          subject_id: combo.subjectId,
           name,
           order,
         });
-        setChapters(prev =>
-          (prev.some(c => c.id === created.id) ? prev : [...prev, created]).sort(
-            (a, b) => a.order - b.order || a.id - b.id,
-          ),
-        );
-        setExpandedId(created.id);
+        outline.setChapters(prev => {
+          const list = prev ?? [];
+          return byOrder(list.some(c => c.id === created.id) ? list : [...list, created]);
+        });
+        outline.openChapter(created.id);
       } else {
         const updated = await updateChapter(chapterModal.chapter.id, { name, order });
-        setChapters(prev =>
-          prev
-            .map(c => (c.id === updated.id ? { ...c, name: updated.name, order: updated.order } : c))
-            .sort((a, b) => a.order - b.order || a.id - b.id),
+        outline.setChapters(prev =>
+          byOrder(
+            (prev ?? []).map(c =>
+              c.id === updated.id ? { ...c, name: updated.name, order: updated.order } : c,
+            ),
+          ),
         );
       }
       setChapterModal(null);
@@ -308,7 +212,7 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
             setBusyChapterId(chapter.id);
             try {
               await deleteChapter(chapter.id);
-              setChapters(prev => prev.filter(c => c.id !== chapter.id));
+              outline.setChapters(prev => (prev ?? []).filter(c => c.id !== chapter.id));
             } catch (e: any) {
               Alert.alert('Error', contentErrorMessage(e));
             } finally {
@@ -320,26 +224,24 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
     );
   };
 
-  const sortTopics = (topics: SyllabusTopic[]) =>
-    [...topics].sort((a, b) => a.order - b.order || a.id - b.id);
-
   const submitTopic = async (name: string, order: number) => {
     if (!topicModal) return;
     setSaving(true);
     try {
+      const chapterId = topicModal.chapter.id;
       if (topicModal.mode === 'add') {
-        const created = await createTopic(topicModal.chapter.id, name, order);
-        setChapters(prev =>
-          prev.map(c =>
-            c.id === topicModal.chapter.id ? { ...c, topics: sortTopics([...c.topics, created]) } : c,
+        const created = await createTopic(chapterId, name, order);
+        outline.setChapters(prev =>
+          (prev ?? []).map(c =>
+            c.id === chapterId ? { ...c, topics: byOrder([...c.topics, created]) } : c,
           ),
         );
       } else {
         const updated = await updateTopic(topicModal.topic.id, name, order);
-        setChapters(prev =>
-          prev.map(c =>
-            c.id === topicModal.chapter.id
-              ? { ...c, topics: sortTopics(c.topics.map(t => (t.id === updated.id ? updated : t))) }
+        outline.setChapters(prev =>
+          (prev ?? []).map(c =>
+            c.id === chapterId
+              ? { ...c, topics: byOrder(c.topics.map(t => (t.id === updated.id ? updated : t))) }
               : c,
           ),
         );
@@ -361,8 +263,8 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
         onPress: async () => {
           try {
             await deleteTopic(topic.id);
-            setChapters(prev =>
-              prev.map(c =>
+            outline.setChapters(prev =>
+              (prev ?? []).map(c =>
                 c.id === chapter.id ? { ...c, topics: c.topics.filter(t => t.id !== topic.id) } : c,
               ),
             );
@@ -375,198 +277,108 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
   };
 
   // ── Render ───────────────────────────────────────────────────────────────
-  const renderBody = () => {
-    if (loading) {
-      return (
-        <View style={s.stateBox}>
-          <ScreenSkeleton variant="list" />
-        </View>
-      );
-    }
-    if (error) {
-      return (
-        <View style={s.stateBox}>
-          <View style={s.errorIconRing}>
-            <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.danger} />
-          </View>
-          <Text style={s.emptyTitle}>Couldn’t load syllabus</Text>
-          <Text style={s.emptySubText}>{error}</Text>
-          <TouchableOpacity style={s.retryBtn} onPress={loadCombos} activeOpacity={0.85}>
-            <VectorIcon iconSet="Ionicons" iconName="refresh" size={15} color={PRIMARY} />
-            <Text style={s.retryText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    if (!selected) {
-      return (
-        <View style={s.stateBox}>
-          <VectorIcon iconSet="Ionicons" iconName="library-outline" size={48} color={theme.colors.textMuted} />
-          <Text style={s.emptyTitle}>No subjects assigned</Text>
-          <Text style={s.emptySubText}>You don’t teach any class + subject yet.</Text>
-        </View>
-      );
-    }
-
+  if (!combo) {
     return (
-      <>
-        <ScrollView
-          contentContainerStyle={s.scroll}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        >
-          <ComboDropdown combos={combos} selected={selected} onSelect={selectCombo} />
-
-          <View style={s.chapterCountRow}>
-            <Text style={s.chapterCountTitle}>Chapters</Text>
-            <View style={[s.chapterCountBadge, { backgroundColor: color + '18' }]}>
-              <Text style={[s.chapterCountBadgeText, { color }]}>{chapters.length}</Text>
-            </View>
-          </View>
-
-          {chaptersLoading ? (
-            <View style={s.chaptersLoading}>
-              <ActivityIndicator size="small" color={color} />
-            </View>
-          ) : chapters.length === 0 ? (
-            <View style={s.empty}>
-              <VectorIcon iconSet="Ionicons" iconName="book-outline" size={48} color={theme.colors.textMuted} />
-              <Text style={s.emptyTitle}>No chapters yet</Text>
-              <Text style={s.emptySubText}>Tap “Add New Chapter” to get started.</Text>
-            </View>
-          ) : (
-            chapters.map((chapter, i) => {
-              const expanded = expandedId === chapter.id;
-              const busy = busyChapterId === chapter.id;
-              return (
-                <View key={chapter.id} style={s.chapterCard}>
-                  <TouchableOpacity
-                    style={s.chapterHeader}
-                    onPress={() => setExpandedId(expanded ? null : chapter.id)}
-                    activeOpacity={0.8}
-                  >
-                    <View style={s.chapterLeft}>
-                      <View style={[s.chapterBadge, { backgroundColor: color }]}>
-                        <Text style={s.chapterBadgeText}>{i + 1}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.chapterName} numberOfLines={1}>{chapter.name}</Text>
-                        <Text style={s.chapterMeta}>
-                          Order {chapter.order} · {chapter.topics.length} topic
-                          {chapter.topics.length !== 1 ? 's' : ''}
-                        </Text>
-                      </View>
-                    </View>
-                    {busy ? (
-                      <ActivityIndicator size="small" color={color} />
-                    ) : (
-                      <VectorIcon
-                        iconSet="Ionicons"
-                        iconName={expanded ? 'chevron-up' : 'chevron-down'}
-                        size={18}
-                        color={theme.colors.textMuted}
-                      />
-                    )}
-                  </TouchableOpacity>
-
-                  {expanded && (
-                    <View style={s.chapterBody}>
-                      <View style={s.chapterActions}>
-                        <TouchableOpacity
-                          style={[s.chapterActionBtn, { backgroundColor: color + '18' }]}
-                          onPress={() => setChapterModal({ mode: 'edit', chapter })}
-                          activeOpacity={0.8}
-                        >
-                          <VectorIcon iconSet="Ionicons" iconName="create-outline" size={15} color={color} />
-                          <Text style={[s.chapterActionText, { color }]}>Edit</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[s.chapterActionBtn, s.chapterActionDanger]}
-                          onPress={() => confirmDeleteChapter(chapter)}
-                          activeOpacity={0.8}
-                        >
-                          <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={15} color={theme.colors.danger} />
-                          <Text style={[s.chapterActionText, { color: theme.colors.danger }]}>Delete</Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      <View style={s.topicsWrap}>
-                        {chapter.topics.length === 0 && (
-                          <Text style={s.noTopicsText}>No topics yet. Add one below.</Text>
-                        )}
-                        {chapter.topics.map((topic, ti) => (
-                          <View key={topic.id} style={s.topicRow}>
-                            <View style={[s.topicIndexBadge, { backgroundColor: color + '18' }]}>
-                              <Text style={[s.topicIndexText, { color }]}>{ti + 1}</Text>
-                            </View>
-                            <Text style={s.topicName} numberOfLines={2}>{topic.name}</Text>
-                            <Text style={s.topicOrder}>#{topic.order}</Text>
-                            <TouchableOpacity
-                              onPress={() => setTopicModal({ mode: 'edit', chapter, topic })}
-                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            >
-                              <VectorIcon iconSet="Ionicons" iconName="create-outline" size={16} color={theme.colors.textMuted} />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              onPress={() => confirmDeleteTopic(chapter, topic)}
-                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            >
-                              <VectorIcon iconSet="Ionicons" iconName="close-circle-outline" size={17} color={theme.colors.danger} />
-                            </TouchableOpacity>
-                          </View>
-                        ))}
-
-                        <TouchableOpacity
-                          style={[s.addTopicBtn, { borderColor: color }]}
-                          onPress={() => setTopicModal({ mode: 'add', chapter })}
-                          activeOpacity={0.8}
-                        >
-                          <VectorIcon iconSet="Ionicons" iconName="add" size={17} color={color} />
-                          <Text style={[s.addTopicText, { color }]}>Add Topic</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              );
-            })
-          )}
-
-          <View style={{ height: 100 }} />
-        </ScrollView>
-
-        <TouchableOpacity
-          style={[s.fab, { backgroundColor: color, shadowColor: color }]}
-          onPress={() => setChapterModal({ mode: 'add' })}
-          activeOpacity={0.85}
-        >
-          <VectorIcon iconSet="Ionicons" iconName="add" size={20} color="#fff" />
-          <Text style={s.fabText}>Add New Chapter</Text>
-        </TouchableOpacity>
-      </>
+      <View style={s.root}>
+        <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+        <DocNoData
+          icon="library-outline"
+          title="No subject chosen"
+          subtitle="Open a subject from the Syllabus screen to manage its chapters."
+        />
+      </View>
     );
-  };
+  }
 
   return (
     <View style={s.root}>
-      <Header title="Manage Syllabus" onBackPress={() => navigation.goBack()} />
-      {renderBody()}
+      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+
+      <ChapterOutline
+        outline={outline}
+        title={combo.subjectName}
+        subtitle={comboClass(combo)}
+        image={combo.subjectImage}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        emptyChapters={{
+          title: 'No chapters yet',
+          subtitle: 'Add the first chapter with the button below.',
+        }}
+        // Every chapter opens here, even an empty one — that is where its first
+        // topic gets added.
+        chapterExpandable={() => true}
+        renderTrailing={chapter =>
+          busyChapterId === chapter.id ? (
+            <ActivityIndicator size="small" color={theme.colors.primary} />
+          ) : undefined
+        }
+        renderTopics={(chapter, number) => (
+          <>
+            {chapter.topics.length === 0 && <Text style={s.noTopics}>No topics yet.</Text>}
+
+            {chapter.topics.map((topic, i) => (
+              <TopicLine
+                key={topic.id}
+                label={`${number}.${i + 1}`}
+                name={topic.name}
+                right={
+                  <View style={s.topicActions}>
+                    <TouchableOpacity
+                      hitSlop={8}
+                      activeOpacity={0.6}
+                      onPress={() => setTopicModal({ mode: 'edit', chapter, topic })}
+                    >
+                      <VectorIcon iconSet="Ionicons" iconName="create-outline" size={17} color={theme.colors.textMuted} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      hitSlop={8}
+                      activeOpacity={0.6}
+                      onPress={() => confirmDeleteTopic(chapter, topic)}
+                    >
+                      <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={17} color={theme.colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+                }
+              />
+            ))}
+
+            <View style={s.chapterActions}>
+              <TouchableOpacity hitSlop={8} activeOpacity={0.6} onPress={() => setTopicModal({ mode: 'add', chapter })}>
+                <Text style={s.actionPrimary}>Add topic</Text>
+              </TouchableOpacity>
+              <TouchableOpacity hitSlop={8} activeOpacity={0.6} onPress={() => setChapterModal({ mode: 'edit', chapter })}>
+                <Text style={s.action}>Edit chapter</Text>
+              </TouchableOpacity>
+              <TouchableOpacity hitSlop={8} activeOpacity={0.6} onPress={() => confirmDeleteChapter(chapter)}>
+                <Text style={s.actionDanger}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      />
+
+      {outline.chapters !== null && (
+        <View style={s.bar}>
+          <TouchableOpacity style={s.addBtn} activeOpacity={0.85} onPress={() => setChapterModal({ mode: 'add' })}>
+            <VectorIcon iconSet="Ionicons" iconName="add" size={18} color={theme.colors.white} />
+            <Text style={s.addBtnText}>Add chapter</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Chapter add / edit */}
       <NameOrderModal
         visible={!!chapterModal}
-        title={chapterModal?.mode === 'edit' ? 'Edit Chapter' : 'Add New Chapter'}
-        subtitle={selected?.label ?? ''}
-        nameLabel="Chapter Name"
+        title={chapterModal?.mode === 'edit' ? 'Edit chapter' : 'New chapter'}
+        subtitle={comboLabel(combo)}
+        nameLabel="Chapter name"
         namePlaceholder="e.g. Thermodynamics"
         initialName={chapterModal?.mode === 'edit' ? chapterModal.chapter.name : ''}
         initialOrder={
-          chapterModal?.mode === 'edit'
-            ? String(chapterModal.chapter.order)
-            : String(chapters.length + 1)
+          chapterModal?.mode === 'edit' ? String(chapterModal.chapter.order) : String(chapterCount + 1)
         }
         saving={saving}
-        accent={color}
         onClose={() => !saving && setChapterModal(null)}
         onSubmit={submitChapter}
       />
@@ -574,9 +386,9 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
       {/* Topic add / edit */}
       <NameOrderModal
         visible={!!topicModal}
-        title={topicModal?.mode === 'edit' ? 'Edit Topic' : 'Add Topic'}
-        subtitle={topicModal ? `in ${topicModal.chapter.name}` : ''}
-        nameLabel="Topic Name"
+        title={topicModal?.mode === 'edit' ? 'Edit topic' : 'New topic'}
+        subtitle={topicModal ? `In ${quietCaps(topicModal.chapter.name)}` : ''}
+        nameLabel="Topic name"
         namePlaceholder="e.g. Newton's Laws of Motion"
         initialName={topicModal?.mode === 'edit' ? topicModal.topic.name : ''}
         initialOrder={
@@ -587,7 +399,6 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
             : '1'
         }
         saving={saving}
-        accent={color}
         onClose={() => !saving && setTopicModal(null)}
         onSubmit={submitTopic}
       />
@@ -598,208 +409,64 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
 export default ManageSyllabusScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16 },
+  root: { flex: 1, backgroundColor: theme.colors.card },
 
-  // Dropdown
-  dropWrap: { marginBottom: 16, zIndex: 99 },
-  dropBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    elevation: 2,
-  },
-  dropLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  dropIcon: { fontSize: 18 },
-  dropSelected: { flex: 1, fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary },
-  dropList: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.md,
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    elevation: 5,
-    overflow: 'hidden',
-  },
-  dropItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  dropItemActive: { backgroundColor: theme.colors.primaryLight },
-  dropItemText: { flex: 1, fontSize: 14, color: theme.colors.textSecondary, fontWeight: '500' },
-  dropItemTextActive: { color: PRIMARY, fontWeight: '700' },
+  // Inside an open chapter
+  noTopics: { fontSize: 13, color: theme.colors.textMuted, paddingVertical: 6 },
+  topicActions: { flexDirection: 'row', alignItems: 'center', gap: 18 },
+  chapterActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 22, paddingTop: 10 },
+  actionPrimary: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
+  action: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
+  actionDanger: { fontSize: 13, fontWeight: '500', color: theme.colors.danger },
 
-  // Chapter count
-  chapterCountRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
-  chapterCountTitle: { fontSize: 18, fontWeight: '900', color: theme.colors.textPrimary },
-  chapterCountBadge: { minWidth: 26, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, alignItems: 'center' },
-  chapterCountBadgeText: { fontSize: 12, fontWeight: '800' },
-
-  // Chapter card
-  chapterCard: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.md,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    elevation: 2,
-    overflow: 'hidden',
-  },
-  chapterHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-  },
-  chapterLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  chapterBadge: { width: 34, height: 34, borderRadius: theme.radius.sm, alignItems: 'center', justifyContent: 'center' },
-  chapterBadgeText: { fontSize: 14, fontWeight: '900', color: '#fff' },
-  chapterName: { fontSize: 15, fontWeight: '800', color: theme.colors.textPrimary },
-  chapterMeta: { fontSize: 11, color: theme.colors.textMuted, marginTop: 2, fontWeight: '500' },
-
-  chapterBody: { borderTopWidth: 1, borderTopColor: theme.colors.border },
-  chapterActions: { flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingTop: 12 },
-  chapterActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: theme.radius.sm,
-  },
-  chapterActionDanger: { backgroundColor: '#FEE2E2' },
-  chapterActionText: { fontSize: 12, fontWeight: '700' },
-
-  topicsWrap: { paddingHorizontal: 14, paddingBottom: 14, paddingTop: 6 },
-  noTopicsText: { fontSize: 12, color: theme.colors.textMuted, paddingVertical: 10, fontStyle: 'italic' },
-  topicRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  topicIndexBadge: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  topicIndexText: { fontSize: 11, fontWeight: '800' },
-  topicName: { flex: 1, fontSize: 14, color: theme.colors.textPrimary, fontWeight: '500' },
-  topicOrder: { fontSize: 11, color: theme.colors.textMuted, fontWeight: '700' },
-  addTopicBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    marginTop: 12,
-    paddingVertical: 10,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderRadius: theme.radius.sm,
-  },
-  addTopicText: { fontSize: 13, fontWeight: '700' },
-
-  // FAB
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 28,
-    paddingVertical: 15,
-    borderRadius: 999,
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 8,
-  },
-  fabText: { fontSize: 15, fontWeight: '800', color: '#fff' },
-
-  // States
-  stateBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 10 },
-  chaptersLoading: { paddingVertical: 30, alignItems: 'center' },
-  errorIconRing: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
-  },
-  empty: { alignItems: 'center', paddingTop: 48, gap: 8 },
-  emptyTitle: { fontSize: 16, color: theme.colors.textSecondary, fontWeight: '800' },
-  emptySubText: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', paddingHorizontal: 24, lineHeight: 19 },
-  retryBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    borderWidth: 1.5, borderColor: PRIMARY, borderRadius: theme.radius.full,
-    paddingHorizontal: 18, paddingVertical: 9, marginTop: 4,
-  },
-  retryText: { fontSize: 13, fontWeight: '700', color: PRIMARY },
-
-  // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  modalSheet: {
-    backgroundColor: theme.colors.card,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-    paddingBottom: 36,
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 99,
-    backgroundColor: theme.colors.border,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  modalTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-  modalIconBox: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  modalTitle: { fontSize: 17, fontWeight: '900', color: theme.colors.textPrimary },
-  modalSub: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
-  inputLabel: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary, marginBottom: 6 },
-  modalInput: {
-    backgroundColor: theme.colors.background,
-    borderRadius: 12,
-    paddingHorizontal: 14,
+  // Add chapter
+  bar: {
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    fontSize: 14,
-    color: theme.colors.textPrimary,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    marginBottom: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.card,
   },
-  modalActions: { flexDirection: 'row', gap: 12, marginTop: 4 },
-  modalCancelBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: theme.colors.background,
-    alignItems: 'center',
-  },
-  modalCancelText: { fontSize: 14, fontWeight: '700', color: theme.colors.textSecondary },
-  modalAddBtn: {
-    flex: 1,
+  addBtn: {
+    height: 48,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: PRIMARY,
   },
-  modalAddText: { fontSize: 14, fontWeight: '800', color: '#fff' },
-});
+  addBtnText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 
+  // Sheet
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: theme.colors.card,
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 28,
+  },
+  sheetTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
+  sheetSub: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 3 },
+  fieldLabel: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginTop: 18, marginBottom: 8 },
+  field: {
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: theme.colors.textPrimary,
+  },
+  sheetActions: { flexDirection: 'row', gap: 10, marginTop: 24 },
+  sheetBtn: { flex: 1, height: 46, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center' },
+  sheetBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
+  sheetBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  sheetBtnPrimary: { backgroundColor: theme.colors.primary },
+  sheetBtnPrimaryText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
+  btnDisabled: { opacity: 0.5 },
+});
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let s = __mk_s();
