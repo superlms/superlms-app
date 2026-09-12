@@ -34,7 +34,7 @@ const val = (v: any): string => {
 
 const hasVal = (v: any) => val(v) !== '—';
 
-// ─── Info Row: label, then value from the middle ──────────────────────────────
+// ─── Info Row: label, then value from just left of the middle ─────────────────
 const InfoRow = ({
   label, value, last,
 }: {
@@ -174,10 +174,11 @@ const __mk_s = () => StyleSheet.create({
 
   body: { paddingHorizontal: 20, paddingTop: 4 },
 
-  // Two left-aligned columns: label in the left half, value from the middle.
+  // Two left-aligned columns: label in the left 40%, value from just left of
+  // the middle so longer values get more room.
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 14 },
   infoRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-  infoLabel: { width: '50%', paddingRight: 12, fontSize: 14, color: theme.colors.textSecondary },
+  infoLabel: { width: '40%', paddingRight: 12, fontSize: 14, color: theme.colors.textSecondary },
   infoValue: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
 });
 
