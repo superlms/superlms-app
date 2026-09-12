@@ -12,12 +12,10 @@ import {
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
 import { updatePassword } from '../../api/authApi';
-
-const ACCENT = '#6366F1';
+import { DocHeader } from '../more/docUi';
 
 // Mirrors the backend update-password validation rules so the checklist
 // and the API accept exactly the same passwords.
@@ -29,7 +27,7 @@ const passwordRules: { label: string; test: (p: string) => boolean }[] = [
   { label: 'One special character (@ $ ! % * # ? &)', test: p => /[@$!%*#?&]/.test(p) },
 ];
 
-// ── Field with leading lock icon + trailing eye toggle ─────────────────────────
+// ── Password field: label, plain bordered input, show/hide toggle ─────────────
 const PasswordField = ({
   label,
   placeholder,
@@ -45,20 +43,9 @@ const PasswordField = ({
   const [show, setShow] = useState(false);
 
   return (
-    <View style={s.fieldWrap}>
+    <View>
       <Text style={s.label}>{label}</Text>
-      <View
-        style={[
-          s.inputRow,
-          (focused || !!value) && { borderColor: ACCENT, backgroundColor: theme.colors.card },
-        ]}
-      >
-        <VectorIcon
-          iconSet="Ionicons"
-          iconName="lock-closed-outline"
-          size={18}
-          color={focused || !!value ? ACCENT : theme.colors.textMuted}
-        />
+      <View style={[s.inputRow, focused && s.inputRowFocused]}>
         <TextInput
           style={s.input}
           placeholder={placeholder}
@@ -124,125 +111,83 @@ const ChangePasswordScreen = () => {
   };
 
   const canSubmit = !!current && !!newPass && !!confirm && !loading;
+  const matches = newPass === confirm;
 
   return (
     <KeyboardAvoidingView
       style={s.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <Header title="Change Password" />
+      <DocHeader title="Change Password" />
       <ScrollView
         contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Hero card ── */}
-        <View style={s.card}>
-          <View style={[s.accentStrip, { backgroundColor: ACCENT }]} />
-          <View style={s.cardInner}>
-            <View style={s.heroRow}>
-              <View style={[s.heroIcon, { backgroundColor: ACCENT + '18' }]}>
-                <VectorIcon iconSet="Ionicons" iconName="shield-checkmark" size={26} color={ACCENT} />
+        <PasswordField
+          label="Current Password"
+          placeholder="Enter current password"
+          value={current}
+          onChangeText={t => { setCurrent(t); setError(''); }}
+        />
+        <PasswordField
+          label="New Password"
+          placeholder="Enter new password"
+          value={newPass}
+          onChangeText={t => { setNewPass(t); setError(''); }}
+        />
+        <PasswordField
+          label="Confirm New Password"
+          placeholder="Confirm new password"
+          value={confirm}
+          onChangeText={t => { setConfirm(t); setError(''); }}
+        />
+
+        {/* Requirements checklist */}
+        <View style={s.rules}>
+          {passwordRules.map(rule => {
+            const met = rule.test(newPass);
+            return (
+              <View key={rule.label} style={s.ruleRow}>
+                <VectorIcon
+                  iconSet="Ionicons"
+                  iconName={met ? 'checkmark' : 'ellipse-outline'}
+                  size={14}
+                  color={met ? theme.colors.success : theme.colors.textMuted}
+                />
+                <Text style={[s.ruleText, met && s.ruleTextMet]}>{rule.label}</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.heroTitle}>Update Password</Text>
-                <Text style={[s.heroSub, { color: ACCENT }]}>
-                  Keep your account safe — use a strong, unique password.
-                </Text>
-              </View>
+            );
+          })}
+          {!!confirm && (
+            <View style={s.ruleRow}>
+              <VectorIcon
+                iconSet="Ionicons"
+                iconName={matches ? 'checkmark' : 'close'}
+                size={14}
+                color={matches ? theme.colors.success : theme.colors.danger}
+              />
+              <Text style={[s.ruleText, matches ? s.ruleTextMet : s.ruleTextFail]}>
+                Passwords match
+              </Text>
             </View>
-          </View>
+          )}
         </View>
 
-        {/* ── Form card ── */}
-        <View style={s.card}>
-          <View style={[s.accentStrip, { backgroundColor: ACCENT }]} />
-          <View style={s.cardInner}>
-            <Text style={s.sectionLabel}>Your passwords</Text>
+        {!!error && <Text style={s.errorText}>{error}</Text>}
 
-            <PasswordField
-              label="Current Password"
-              placeholder="Enter current password"
-              value={current}
-              onChangeText={t => { setCurrent(t); setError(''); }}
-            />
-            <PasswordField
-              label="New Password"
-              placeholder="Enter new password"
-              value={newPass}
-              onChangeText={t => { setNewPass(t); setError(''); }}
-            />
-            <PasswordField
-              label="Confirm New Password"
-              placeholder="Confirm new password"
-              value={confirm}
-              onChangeText={t => { setConfirm(t); setError(''); }}
-            />
-
-            {/* Rules checklist */}
-            <View style={s.divider} />
-            <Text style={s.sectionLabel}>Password requirements</Text>
-            <View style={s.ruleList}>
-              {passwordRules.map(rule => {
-                const met = rule.test(newPass);
-                return (
-                  <View key={rule.label} style={s.ruleRow}>
-                    <VectorIcon
-                      iconSet="Ionicons"
-                      iconName={met ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={15}
-                      color={met ? theme.colors.success : theme.colors.textMuted}
-                    />
-                    <Text style={[s.ruleText, met && s.ruleTextMet]}>{rule.label}</Text>
-                  </View>
-                );
-              })}
-              {!!confirm && (
-                <View style={s.ruleRow}>
-                  <VectorIcon
-                    iconSet="Ionicons"
-                    iconName={newPass === confirm ? 'checkmark-circle' : 'close-circle'}
-                    size={15}
-                    color={newPass === confirm ? theme.colors.success : theme.colors.danger}
-                  />
-                  <Text
-                    style={[
-                      s.ruleText,
-                      newPass === confirm ? s.ruleTextMet : s.ruleTextFail,
-                    ]}
-                  >
-                    Passwords match
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {!!error && (
-              <View style={s.errorBox}>
-                <VectorIcon iconSet="Ionicons" iconName="alert-circle" size={16} color={theme.colors.danger} />
-                <Text style={s.errorText}>{error}</Text>
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={[s.button, { backgroundColor: ACCENT }, !canSubmit && s.buttonDisabled]}
-              onPress={handleChange}
-              activeOpacity={0.85}
-              disabled={!canSubmit}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <>
-                  <VectorIcon iconSet="Ionicons" iconName="checkmark-circle-outline" size={16} color="#fff" />
-                  <Text style={s.buttonText}>Change Password</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={{ height: 24 }} />
+        <TouchableOpacity
+          style={[s.button, !canSubmit && s.buttonDisabled]}
+          onPress={handleChange}
+          activeOpacity={0.85}
+          disabled={!canSubmit}
+        >
+          {loading ? (
+            <ActivityIndicator color={theme.colors.white} size="small" />
+          ) : (
+            <Text style={s.buttonText}>Change Password</Text>
+          )}
+        </TouchableOpacity>
       </ScrollView>
 
       {/* Success acknowledgement */}
@@ -254,14 +199,12 @@ const ChangePasswordScreen = () => {
       >
         <View style={s.modalOverlay}>
           <View style={s.modalCard}>
-            <View style={s.modalIconWrap}>
-              <VectorIcon iconSet="Ionicons" iconName="checkmark-circle" size={44} color={theme.colors.success} />
-            </View>
-            <Text style={s.modalTitle}>Password Changed</Text>
+            <VectorIcon iconSet="Ionicons" iconName="checkmark-circle-outline" size={44} color={theme.colors.success} />
+            <Text style={s.modalTitle}>Password changed</Text>
             <Text style={s.modalDesc}>{successMsg}</Text>
             <TouchableOpacity
-              style={[s.modalBtn, { backgroundColor: ACCENT }]}
-              activeOpacity={0.9}
+              style={s.modalBtn}
+              activeOpacity={0.85}
               onPress={() => {
                 setSuccessMsg('');
                 navigation.goBack();
@@ -279,115 +222,51 @@ const ChangePasswordScreen = () => {
 export default ChangePasswordScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16, paddingBottom: 32, gap: 14 },
-
-  // Card
-  card: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    overflow: 'hidden',
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  accentStrip: { height: 5 },
-  cardInner: { padding: 18 },
-
-  // Hero
-  heroRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  heroIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: theme.radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroTitle: { fontSize: 19, fontWeight: '800', color: theme.colors.textPrimary, lineHeight: 25 },
-  heroSub: { fontSize: 13, fontWeight: '600', lineHeight: 18, marginTop: 4 },
-
-  // Section label
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: theme.colors.textMuted,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginBottom: 12,
-  },
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 18 },
 
   // Fields
-  fieldWrap: { marginBottom: 14 },
-  label: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: theme.colors.textPrimary,
-    marginBottom: 6,
-  },
+  label: { fontSize: 13, color: theme.colors.textSecondary, marginBottom: 6 },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    borderWidth: 1.2,
+    height: 48,
+    paddingHorizontal: 14,
+    borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.background,
-    paddingHorizontal: 14,
-    height: 50,
+    backgroundColor: theme.colors.card,
   },
-  input: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.colors.textPrimary,
-    padding: 0,
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: theme.colors.border,
-    marginVertical: 14,
-  },
+  inputRowFocused: { borderColor: theme.colors.primary },
+  input: { flex: 1, fontSize: 15, color: theme.colors.textPrimary, padding: 0 },
 
   // Rules
-  ruleList: { gap: 7 },
+  rules: { gap: 6 },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  ruleText: { fontSize: 12.5, color: theme.colors.textSecondary, lineHeight: 18 },
-  ruleTextMet: { color: theme.colors.success, fontWeight: '600' },
-  ruleTextFail: { color: theme.colors.danger, fontWeight: '600' },
+  ruleText: { fontSize: 13, color: theme.colors.textMuted, lineHeight: 18 },
+  ruleTextMet: { color: theme.colors.success },
+  ruleTextFail: { color: theme.colors.danger },
 
   // Error
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FEE2E2',
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginTop: 14,
-  },
-  errorText: { flex: 1, fontSize: 12, fontWeight: '600', color: theme.colors.danger },
+  errorText: { fontSize: 13, color: theme.colors.danger, lineHeight: 18 },
 
   // Submit
   button: {
-    flexDirection: 'row',
+    height: 48,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: theme.radius.md,
-    marginTop: 16,
+    marginTop: 4,
   },
-  buttonDisabled: { opacity: 0.55 },
-  buttonText: { color: theme.colors.white, fontWeight: '800', fontSize: 14, letterSpacing: 0.3 },
+  buttonDisabled: { opacity: 0.5 },
+  buttonText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 
   // Success modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -400,16 +279,13 @@ const __mk_s = () => StyleSheet.create({
     padding: 24,
     alignItems: 'center',
   },
-  modalIconWrap: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.textPrimary,
+    textAlign: 'center',
+    marginTop: 12,
   },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: theme.colors.textPrimary, textAlign: 'center' },
   modalDesc: {
     marginTop: 6,
     fontSize: 14,
@@ -422,10 +298,11 @@ const __mk_s = () => StyleSheet.create({
     alignSelf: 'stretch',
     height: 48,
     borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalBtnText: { fontSize: 15, fontWeight: '700', color: theme.colors.white },
+  modalBtnText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
 
 
