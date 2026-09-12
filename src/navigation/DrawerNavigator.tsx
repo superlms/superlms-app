@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   Modal,
   View,
   Text,
@@ -168,6 +170,33 @@ const DrawerNavigator = ({ route }: any) => {
   const CustomDrawer = (props: any) => {
     const { navigation, state } = props;
     const [logoutVisible, setLogoutVisible] = useState(false);
+
+    // Logout dialog: the blurred backdrop and the card fade in together on our
+    // own animation (after the first frame), so nothing pops in before the popup.
+    const logoutAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+      if (!logoutVisible) return;
+      logoutAnim.setValue(0);
+      const frame = requestAnimationFrame(() => {
+        Animated.timing(logoutAnim, {
+          toValue: 1,
+          duration: 200,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }).start();
+      });
+      return () => cancelAnimationFrame(frame);
+    }, [logoutVisible, logoutAnim]);
+
+    const closeLogout = () => {
+      Animated.timing(logoutAnim, {
+        toValue: 0,
+        duration: 150,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }).start(() => setLogoutVisible(false));
+    };
     const [org, setOrg] = useState<{ name?: string; logo?: string | null } | null>(null);
 
     useEffect(() => {
@@ -324,25 +353,45 @@ const DrawerNavigator = ({ route }: any) => {
         <Modal
           transparent
           visible={logoutVisible}
-          animationType="fade"
+          animationType="none"
           statusBarTranslucent
-          onRequestClose={() => setLogoutVisible(false)}
+          onRequestClose={closeLogout}
         >
           <View style={styles.modalOverlay}>
             {/* Blur everything behind the popup, with a light tint for contrast */}
-            <BlurView
-              style={StyleSheet.absoluteFill}
-              blurType="light"
-              blurAmount={10}
-              reducedTransparencyFallbackColor="rgba(0,0,0,0.35)"
-            />
-            <View style={[StyleSheet.absoluteFill, styles.modalTint]} />
+            <Animated.View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, { opacity: logoutAnim }]}
+            >
+              <BlurView
+                style={StyleSheet.absoluteFill}
+                blurType="light"
+                blurAmount={10}
+                reducedTransparencyFallbackColor="rgba(0,0,0,0.35)"
+              />
+              <View style={[StyleSheet.absoluteFill, styles.modalTint]} />
+            </Animated.View>
 
-            <View style={styles.modalCard}>
+            <Animated.View
+              style={[
+                styles.modalCard,
+                {
+                  opacity: logoutAnim,
+                  transform: [
+                    {
+                      scale: logoutAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.96, 1],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            >
               {/* Small close button, top-right */}
               <TouchableOpacity
                 style={styles.modalClose}
-                onPress={() => setLogoutVisible(false)}
+                onPress={closeLogout}
                 hitSlop={10}
                 activeOpacity={0.7}
               >
@@ -366,7 +415,7 @@ const DrawerNavigator = ({ route }: any) => {
                 <TouchableOpacity
                   style={[styles.modalBtn, styles.modalBtnGhost]}
                   activeOpacity={0.85}
-                  onPress={() => setLogoutVisible(false)}
+                  onPress={closeLogout}
                 >
                   <Text style={[styles.modalBtnText, styles.modalBtnGhostText]}>
                     Cancel
@@ -385,7 +434,7 @@ const DrawerNavigator = ({ route }: any) => {
                   </Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </Animated.View>
           </View>
         </Modal>
       </>
