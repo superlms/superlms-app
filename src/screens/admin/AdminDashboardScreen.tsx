@@ -398,8 +398,6 @@ const s = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 14,
     backgroundColor: theme.colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
   },
   menuBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
   hello: { fontSize: 12, color: theme.colors.textMuted, fontWeight: '600' },

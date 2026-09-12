@@ -208,10 +208,6 @@ const __mk_styles = () => StyleSheet.create({
     backgroundColor: HEADER_BG,
     paddingTop: theme.spacing.md,
     paddingBottom: 14,
-    // Flat header: a 1px divider below the status bar and below the bar itself.
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: theme.colors.border,
   },
   wrap: {
     flexDirection: 'row',

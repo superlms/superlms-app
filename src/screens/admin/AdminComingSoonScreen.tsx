@@ -50,8 +50,6 @@ const s = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 14,
     backgroundColor: theme.colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
   },
   menuBtn: {
     width: 40,

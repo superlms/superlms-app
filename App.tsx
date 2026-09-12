@@ -1,12 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, StatusBar } from 'react-native';
+import { StyleSheet, StatusBar, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import {
   navigationRef,
   flushPendingNavigation,
 } from './src/navigation/navigationRef';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 
 import AppNavigator from './src/navigation/AppNavigator';
 import AppLock from './src/components/AppLock';
@@ -31,6 +35,7 @@ const AppInner = () => {
   // Avoid spamming setState every navigation event when the answer hasn't
   // changed (and it changes only a handful of times per session).
   const lastValue = useRef(false);
+  const insets = useSafeAreaInsets();
 
   const recheckRoute = useCallback(() => {
     const name = navigationRef.isReady() ? navigationRef.getCurrentRoute()?.name : undefined;
@@ -41,30 +46,39 @@ const AppInner = () => {
     }
   }, []);
 
+  // The status-bar strip is painted with the same colour as the top bars so
+  // the two read as one surface; the bottom inset keeps the page background.
   return (
-    <SafeAreaView
-      style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
-      edges={['top', 'bottom']}
+    <View
+      style={[
+        styles.safeArea,
+        { paddingTop: insets.top, backgroundColor: theme.colors.statusBar },
+      ]}
     >
       <StatusBar
         barStyle="dark-content"
-        backgroundColor={theme.colors.background}
+        backgroundColor={theme.colors.statusBar}
         translucent={false}
       />
-      <AppLock active={inMainApp}>
-        <NavigationContainer
-          ref={navigationRef}
-          onReady={() => {
-            recheckRoute();
-            // Open any notification tapped before the navigator was ready.
-            flushPendingNavigation();
-          }}
-          onStateChange={recheckRoute}
-        >
-          <AppNavigator />
-        </NavigationContainer>
-      </AppLock>
-    </SafeAreaView>
+      <SafeAreaView
+        style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
+        edges={['bottom']}
+      >
+        <AppLock active={inMainApp}>
+          <NavigationContainer
+            ref={navigationRef}
+            onReady={() => {
+              recheckRoute();
+              // Open any notification tapped before the navigator was ready.
+              flushPendingNavigation();
+            }}
+            onStateChange={recheckRoute}
+          >
+            <AppNavigator />
+          </NavigationContainer>
+        </AppLock>
+      </SafeAreaView>
+    </View>
   );
 };
 

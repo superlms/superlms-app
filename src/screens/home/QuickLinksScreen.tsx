@@ -419,8 +419,6 @@ const __mk_s = () => StyleSheet.create({
     paddingBottom: theme.spacing.sm,
     height: 60,
     justifyContent: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
   },
   headerTitle: {
     fontSize: 20,

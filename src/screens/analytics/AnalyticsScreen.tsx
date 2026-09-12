@@ -435,7 +435,7 @@ const AnalyticsScreen = () => {
 
   return (
     <View style={s.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.background} />
+      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.statusBar} />
       <Header title="Analytics" />
 
       <ScrollView

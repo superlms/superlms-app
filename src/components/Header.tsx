@@ -45,7 +45,7 @@ const Header = ({
 
   return (
     <>
-      {/* Status bar tinted with the page background; light icons in dark mode. */}
+      {/* Status bar tinted the same as the header, so there's no seam. */}
       <StatusBar
         barStyle="dark-content"
         backgroundColor={theme.colors.statusBar}
@@ -111,8 +111,6 @@ const __mk_styles = () => StyleSheet.create({
     paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing.sm,
     height: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
   },
   side: {
     width: 36,

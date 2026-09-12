@@ -19,7 +19,7 @@ const lightColors = {
   white: '#FFFFFF',
 
   border: '#E2E8F0',
-  statusBar: '#E2E8F0',
+  statusBar: '#FFFFFF', // same as the top bars, so status bar + header read as one surface
   shadow: '#0F172A',
   iconActive: '#4F46E5',
   iconInactive: '#94A3B8',

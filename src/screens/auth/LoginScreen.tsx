@@ -135,7 +135,7 @@ const LoginScreen = () => {
       <View style={styles.safeArea}>
         <StatusBar
           barStyle="dark-content"
-          backgroundColor={theme.colors.background}
+          backgroundColor={theme.colors.statusBar}
         />
 
         <ScrollView

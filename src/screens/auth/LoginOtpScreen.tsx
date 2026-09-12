@@ -244,7 +244,7 @@ const LoginOtpScreen = () => {
       <View style={styles.safeArea}>
         <StatusBar
           barStyle="dark-content"
-          backgroundColor={theme.colors.background}
+          backgroundColor={theme.colors.statusBar}
         />
         <Header
           title="Verify OTP"
