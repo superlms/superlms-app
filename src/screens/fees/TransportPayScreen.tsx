@@ -1,21 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import Header from '../../components/Header';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import { theme } from '../../utils/theme';
+import { DocHeader, DocNoData } from '../more/docUi';
+import { DashSection } from '../home/dashboardUi';
 import { MonthRow, PaymentStatusResponse, TransportFees, getTransportFees } from '../../api/feeApi';
 import { usePhonePePayment } from '../../hooks/usePhonePePayment';
+import { AmountField, FeeSkeleton, Note, PayAction, inr } from './feesUi';
 
-const inr = (n: number) => `₹ ${Number(n || 0).toLocaleString('en-IN')}`;
+const TITLE = 'Pay Transport Fee';
 
 /**
  * Transport payment: multi-select the months to clear, adjust the amount, pay.
@@ -59,6 +52,13 @@ const TransportPayScreen = ({ navigation }: any) => {
     setSelected(prev => ({ ...prev, [m.key]: !prev[m.key] }));
   };
 
+  const allSelected = payableMonths.length > 0 && payableMonths.every(m => selected[m.key]);
+
+  const toggleAll = () => {
+    setEdited(false);
+    setSelected(allSelected ? {} : Object.fromEntries(payableMonths.map(m => [m.key, true])));
+  };
+
   const onSettled = useCallback(
     (res: PaymentStatusResponse) => {
       if (res.state === 'COMPLETED') {
@@ -75,7 +75,6 @@ const TransportPayScreen = ({ navigation }: any) => {
   );
 
   const { phase, payFees, checkStatus, error } = usePhonePePayment(onSettled);
-  const busy = phase === 'initiating' || phase === 'checking';
 
   React.useEffect(() => {
     if (phase === 'error' && error) Alert.alert('Payment error', error);
@@ -93,10 +92,8 @@ const TransportPayScreen = ({ navigation }: any) => {
   if (loading) {
     return (
       <View style={s.root}>
-        <Header title="Pay Transport Fee" onBackPress={() => navigation.goBack()} />
-        <View style={s.center}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
+        <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+        <FeeSkeleton />
       </View>
     );
   }
@@ -104,89 +101,77 @@ const TransportPayScreen = ({ navigation }: any) => {
   if (!data) {
     return (
       <View style={s.root}>
-        <Header title="Pay Transport Fee" onBackPress={() => navigation.goBack()} />
-        <View style={s.center}>
-          <Text style={s.muted}>No transport route assigned to you.</Text>
-        </View>
+        <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+        <DocNoData icon="bus-outline" title="No transport route" subtitle="No transport route is assigned to you." />
       </View>
     );
   }
 
   return (
     <View style={s.root}>
-      <Header title="Pay Transport Fee" onBackPress={() => navigation.goBack()} />
+      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={s.routeName}>{data.route.route_name}</Text>
-        <Text style={s.monthly}>Monthly fee: {inr(data.totals.monthly_fee)}</Text>
+        {/* The route, and what it costs */}
+        <View style={s.head}>
+          <Text style={s.kicker}>TRANSPORT</Text>
+          <Text style={s.title}>{data.route.route_name}</Text>
+          <Text style={s.line}>{inr(data.totals.monthly_fee)} a month</Text>
+        </View>
 
-        <Text style={s.section}>Select months to pay</Text>
-        <View style={s.monthList}>
+        {/* Which months this payment clears */}
+        <DashSection
+          title="Months to pay"
+          action={payableMonths.length > 1 ? (allSelected ? 'Clear' : 'Select all') : undefined}
+          onAction={toggleAll}
+        >
           {payableMonths.length === 0 ? (
-            <Text style={s.muted}>All months are cleared. 🎉</Text>
+            <Note>Every month is paid.</Note>
           ) : (
-            payableMonths.map(m => {
+            payableMonths.map((m, i) => {
               const on = !!selected[m.key];
               return (
                 <TouchableOpacity
                   key={m.key}
-                  style={[s.monthRow, on && s.monthRowOn]}
+                  style={[s.monthRow, i < payableMonths.length - 1 && s.rowDivider]}
                   onPress={() => toggle(m)}
-                  activeOpacity={0.8}
+                  activeOpacity={0.6}
                 >
-                  <View style={[s.check, on && s.checkOn]}>
-                    {on && <VectorIcon iconSet="Ionicons" iconName="checkmark" size={14} color="#fff" />}
+                  <VectorIcon
+                    iconSet="Ionicons"
+                    iconName={on ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={22}
+                    color={on ? theme.colors.primary : theme.colors.textMuted}
+                  />
+                  <View style={s.monthBody}>
+                    <Text style={s.monthName}>{m.month}</Text>
+                    {m.status === 'partial' && (
+                      <Text style={s.monthMeta}>Partly paid · {inr(m.paid)} of {inr(m.amount)}</Text>
+                    )}
                   </View>
-                  <Text style={s.monthName}>{m.month}</Text>
-                  <View style={{ flex: 1 }} />
-                  {m.status === 'partial' && <Text style={s.partialTag}>partial</Text>}
-                  <Text style={s.monthAmt}>{inr(m.outstanding)}</Text>
+                  <Text style={s.monthAmount}>{inr(m.outstanding)}</Text>
                 </TouchableOpacity>
               );
             })
           )}
-        </View>
+        </DashSection>
 
-        <View style={s.card}>
-          <Text style={s.label}>Amount to pay</Text>
-          <View style={s.amountBox}>
-            <Text style={s.currency}>₹</Text>
-            <TextInput
-              style={s.input}
+        {/* How much, and pay */}
+        <DashSection title="Amount to pay">
+          <View style={s.amount}>
+            <AmountField
               value={amount}
-              onChangeText={t => {
+              onChange={v => {
                 setEdited(true);
-                setAmount(t.replace(/[^0-9.]/g, ''));
+                setAmount(v);
               }}
-              keyboardType="numeric"
-              placeholder="0"
-              placeholderTextColor={theme.colors.textMuted}
             />
+            <Text style={s.hint}>
+              Pay more than the months you picked and the extra carries forward to the next months
+              automatically.
+            </Text>
+            <PayAction phase={phase} value={value} onPay={onPay} onCheck={checkStatus} />
           </View>
-          <Text style={s.hint}>
-            Pay more than selected and the extra carries forward to your next months automatically.
-          </Text>
-        </View>
-
-        {phase === 'awaiting' ? (
-          <TouchableOpacity style={[s.payBtn, { backgroundColor: theme.colors.primary }]} onPress={checkStatus} activeOpacity={0.85}>
-            <VectorIcon iconSet="Ionicons" iconName="refresh" size={18} color="#fff" />
-            <Text style={s.payText}>I have paid — Check status</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[s.payBtn, { backgroundColor: value > 0 ? '#0EA5E9' : theme.colors.border }]}
-            onPress={onPay}
-            disabled={busy || value <= 0}
-            activeOpacity={0.85}
-          >
-            {busy ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <VectorIcon iconSet="Ionicons" iconName="flash" size={18} color="#fff" />
-            )}
-            <Text style={s.payText}>{busy ? 'Please wait…' : `Pay ${inr(value)}`}</Text>
-          </TouchableOpacity>
-        )}
+        </DashSection>
       </ScrollView>
     </View>
   );
@@ -195,68 +180,24 @@ const TransportPayScreen = ({ navigation }: any) => {
 export default TransportPayScreen;
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  muted: { fontSize: 14, color: theme.colors.textMuted },
-  routeName: { fontSize: 18, fontWeight: '900', color: theme.colors.textPrimary },
-  monthly: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 2, marginBottom: 6 },
-  section: { fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary, marginTop: 12, marginBottom: 8 },
-  monthList: {
-    backgroundColor: theme.colors.card,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    marginBottom: 16,
-  },
-  monthRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  monthRowOn: {},
-  check: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkOn: { backgroundColor: '#0EA5E9', borderColor: '#0EA5E9' },
-  monthName: { fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary },
-  monthAmt: { fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary },
-  partialTag: { fontSize: 10, fontWeight: '700', color: '#F59E0B', marginRight: 8, textTransform: 'uppercase' },
-  card: {
-    backgroundColor: theme.colors.card,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-  },
-  label: { fontSize: 13, fontWeight: '700', color: theme.colors.textSecondary, marginBottom: 12, textAlign: 'center' },
-  amountBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: '#0EA5E9',
-    alignSelf: 'center',
-    paddingHorizontal: 8,
-  },
-  currency: { fontSize: 24, fontWeight: '800', color: theme.colors.textPrimary, marginRight: 4 },
-  input: { fontSize: 34, fontWeight: '900', color: theme.colors.textPrimary, minWidth: 90, textAlign: 'center', padding: 0 },
-  hint: { fontSize: 11, color: theme.colors.textMuted, textAlign: 'center', marginTop: 12, lineHeight: 16 },
-  payBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 999,
-    paddingVertical: 16,
-  },
-  payText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  scroll: { paddingBottom: 40 },
+
+  // Head
+  head: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 20 },
+  kicker: { fontSize: 11, fontWeight: '600', letterSpacing: 0.8, color: theme.colors.textMuted },
+  title: { fontSize: 22, fontWeight: '700', lineHeight: 29, color: theme.colors.textPrimary, marginTop: 6 },
+  line: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 2 },
+
+  // Months
+  rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
+  monthRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13 },
+  monthBody: { flex: 1, gap: 2 },
+  monthName: { fontSize: 15, color: theme.colors.textPrimary },
+  monthMeta: { fontSize: 12, color: theme.colors.textMuted },
+  monthAmount: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary },
+
+  // Amount
+  amount: { paddingTop: 10, paddingBottom: 6 },
+  hint: { fontSize: 13, color: theme.colors.textMuted, lineHeight: 19, marginTop: 14 },
 });
