@@ -88,44 +88,6 @@ export const fmtTime = (t?: string | null): string => {
   return `${String(h).padStart(2, '0')}:${m} ${ampm}`;
 };
 
-const PALETTE = [
-  { color: '#F59E0B', bg: '#FEF3C7' },
-  { color: '#0EA5E9', bg: '#E0F2FE' },
-  { color: '#6366F1', bg: '#EEF2FF' },
-  { color: '#10B981', bg: '#D1FAE5' },
-  { color: '#EF4444', bg: '#FEE2E2' },
-  { color: '#22C55E', bg: '#DCFCE7' },
-  { color: '#8B5CF6', bg: '#EDE9FE' },
-  { color: '#EC4899', bg: '#FCE7F3' },
-];
-
-const EMOJI: { match: string; icon: string }[] = [
-  { match: 'math', icon: '📐' },
-  { match: 'eng', icon: '📖' },
-  { match: 'phys', icon: '⚛️' },
-  { match: 'chem', icon: '🧪' },
-  { match: 'bio', icon: '🌿' },
-  { match: 'sci', icon: '🔬' },
-  { match: 'hist', icon: '🏛️' },
-  { match: 'geo', icon: '🌍' },
-  { match: 'comp', icon: '💻' },
-  { match: 'hindi', icon: '🕉️' },
-  { match: 'art', icon: '🎨' },
-  { match: 'phys ed', icon: '🏅' },
-  { match: 'sport', icon: '🏅' },
-];
-
-// Deterministic colour + emoji for a subject name (server has no styling fields).
-export const subjectVisual = (subject: string): { icon: string; color: string; bg: string } => {
-  const name = (subject || '').toLowerCase();
-  const found = EMOJI.find(e => name.includes(e.match));
-  const icon = found?.icon ?? '📚';
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash + name.charCodeAt(i)) % PALETTE.length;
-  const pal = PALETTE[hash];
-  return { icon, ...pal };
-};
-
 export const timetableErrorMessage = (e: any): string => {
   const status = e?.response?.status;
   const serverMsg: string | undefined = e?.response?.data?.message;

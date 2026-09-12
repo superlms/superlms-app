@@ -1,92 +1,28 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import ScreenSkeleton from '../../components/Skeleton';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import Header from '../../components/Header';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
-import { theme, onThemeChange } from '../../utils/theme';
+import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
-import { DAYS } from './timetableData';
+import { theme, onThemeChange } from '../../utils/theme';
 import type { Day } from './timetableData';
+import { DaySelector, PeriodRow, currentPeriodId, todayDay } from './timetableUi';
+import { DocHeader, DocNoData } from '../more/docUi';
 import {
   getTeacherTimetable,
   buildDayMap,
-  subjectVisual,
-  fmtTime,
   timetableErrorMessage,
   type TimetablePeriod,
 } from '../../api/timetableApi';
 
-// ─── Period Row ───────────────────────────────────────────────────────────────
-const PeriodRow = ({
-  period,
-  isLast,
-}: {
-  period: TimetablePeriod;
-  isLast: boolean;
-}) => {
-  const v = subjectVisual(period.subject);
+const TITLE = 'Timetable';
 
-  return (
-    <View style={[s.periodRow, !isLast && s.rowBorder]}>
-      <View style={[s.periodIcon, { backgroundColor: v.bg }]}>
-        <Text style={s.periodEmoji}>{v.icon}</Text>
-      </View>
-
-      <View style={s.periodInfo}>
-        <Text style={s.periodSubject}>{period.subject}</Text>
-        <View style={s.metaRow}>
-          <VectorIcon
-            iconSet="Ionicons"
-            iconName="people-outline"
-            size={11}
-            color={theme.colors.textMuted}
-          />
-          <Text style={s.periodMeta}>
-            {period.standard} – {period.section}
-          </Text>
-          {period.has_substitute && (
-            <View style={s.subChip}>
-              <Text style={s.subChipText}>Arranged</Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      <View style={[s.timeBadge, { backgroundColor: v.color + '18' }]}>
-        <Text style={[s.timeBadgeText, { color: v.color }]}>
-          {fmtTime(period.start_time)}
-        </Text>
-        <Text style={[s.timeBadgeSub, { color: v.color }]}>
-          {fmtTime(period.end_time)}
-        </Text>
-      </View>
-    </View>
-  );
-};
-
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-const TeacherTImetableScreen = ({ navigation }: any) => {
-  const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-  }) as Day;
-  const defaultDay: Day = DAYS.includes(today as Day)
-    ? (today as Day)
-    : 'Monday';
-  const [selectedDay, setSelectedDay] = useState<Day>(defaultDay);
+const TeacherTimetableScreen = ({ navigation }: any) => {
+  const [selectedDay, setSelectedDay] = useState<Day>(todayDay());
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dayMap, setDayMap] = useState<Record<Day, TimetablePeriod[]> | null>(
-    null,
-  );
+  const [dayMap, setDayMap] = useState<Record<Day, TimetablePeriod[]> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,7 +31,7 @@ const TeacherTImetableScreen = ({ navigation }: any) => {
       const res = await getTeacherTimetable();
       setDayMap(buildDayMap(res?.timetable_by_day));
     } catch (e: any) {
-      console.log('[getTeacherTimetable] Error:', e?.response?.status, e?.message);
+      console.log('[getTeacherTimetable] ❌', e?.response?.status, e?.message);
       setError(timetableErrorMessage(e));
       setDayMap(null);
     } finally {
@@ -108,296 +44,98 @@ const TeacherTImetableScreen = ({ navigation }: any) => {
   useFocusLoad(load);
 
   const periods = useMemo(() => dayMap?.[selectedDay] ?? [], [dayMap, selectedDay]);
+  const liveId = currentPeriodId(periods, selectedDay === todayDay());
+
+  // Which class it is for, and whether someone else is covering it.
+  const classFor = (p: TimetablePeriod) =>
+    [
+      [p.standard, p.section].filter(Boolean).join(' – '),
+      p.has_substitute ? 'Arranged' : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
 
   return (
     <View style={s.root}>
-      <Header title="Timetable" onBackPress={() => navigation.goBack()} />
+      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
 
-      {/* ── Day selector ── */}
-      <View style={s.filterWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.filterRow}
-        >
-          {DAYS.map(day => {
-            const active = selectedDay === day;
-            return (
-              <TouchableOpacity
-                key={day}
-                style={[s.filterBtn, active && s.filterBtnActive]}
-                onPress={() => setSelectedDay(day)}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.filterText, active && s.filterTextActive]}>
-                  {day.slice(0, 3)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+      <DaySelector selected={selectedDay} onSelect={setSelectedDay} />
+      <View style={s.fullDivider} />
 
-      {loading ? (
-        <View style={s.center}>
-          <ScreenSkeleton variant="list" />
+      {loading && !refreshing ? (
+        <View style={s.list}>
+          {[0, 1, 2, 3, 4].map(i => (
+            <View key={i} style={[s.skeletonRow, i < 4 && s.rowDivider]}>
+              <Skeleton width={62} height={13} />
+              <View style={s.skeletonBody}>
+                <Skeleton width="55%" height={14} />
+                <Skeleton width="35%" height={12} />
+              </View>
+            </View>
+          ))}
         </View>
       ) : error ? (
-        <View style={s.center}>
-          <View style={s.stateIconWrap}>
-            <VectorIcon
-              iconSet="Ionicons"
-              iconName="cloud-offline-outline"
-              size={30}
-              color={theme.colors.danger}
-            />
-          </View>
-          <Text style={s.stateTitle}>Couldn't load timetable</Text>
-          <Text style={s.stateText}>{error}</Text>
-          <TouchableOpacity style={s.retryBtn} onPress={load} activeOpacity={0.85}>
-            <VectorIcon
-              iconSet="Ionicons"
-              iconName="refresh"
-              size={15}
-              color={theme.colors.primary}
-            />
-            <Text style={s.retryText}>Retry</Text>
+        <View style={s.centeredBox}>
+          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
+          <Text style={s.errorText}>{error}</Text>
+          <TouchableOpacity onPress={load} hitSlop={10}>
+            <Text style={s.linkText}>Try again</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={s.scroll}
-          refreshControl={
-            <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
+          contentContainerStyle={[s.list, periods.length === 0 && s.listEmpty]}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          {/* ── Single day card ── */}
-          <View style={s.card}>
-            <View style={[s.accentBar, { backgroundColor: theme.colors.primary }]} />
-            <View style={s.cardInner}>
-              <View style={s.cardTop}>
-                <View style={s.iconWrap}>
-                  <VectorIcon
-                    iconSet="Ionicons"
-                    iconName="school-outline"
-                    size={20}
-                    color={theme.colors.primary}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.cardTitle}>{selectedDay}</Text>
-                  <Text style={s.cardSubtitle}>
-                    {periods.length} class{periods.length !== 1 ? 'es' : ''} to teach
-                  </Text>
-                </View>
-              </View>
-
-              <View style={s.divider} />
-
-              {periods.length === 0 ? (
-                <View style={s.empty}>
-                  <Text style={{ fontSize: 40 }}>🎉</Text>
-                  <Text style={s.emptyTitle}>No Classes Today!</Text>
-                  <Text style={s.emptySub}>Enjoy your free day.</Text>
-                </View>
-              ) : (
-                periods.map((period, i) => (
-                  <PeriodRow
-                    key={period.id}
-                    period={period}
-                    isLast={i === periods.length - 1}
-                  />
-                ))
-              )}
-            </View>
-          </View>
+          {periods.length === 0 ? (
+            <DocNoData
+              icon="time-outline"
+              title="No classes"
+              subtitle={`You are not teaching on ${selectedDay}.`}
+            />
+          ) : (
+            <>
+              <Text style={s.count}>
+                {selectedDay} · {periods.length} {periods.length === 1 ? 'class' : 'classes'}
+              </Text>
+              {periods.map((p, i) => (
+                <PeriodRow
+                  key={p.id}
+                  period={p}
+                  meta={classFor(p)}
+                  isNow={p.id === liveId}
+                  isLast={i === periods.length - 1}
+                />
+              ))}
+            </>
+          )}
         </ScrollView>
       )}
     </View>
   );
 };
 
-export default TeacherTImetableScreen;
+export default TeacherTimetableScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: theme.spacing.lg, paddingBottom: 32 },
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  fullDivider: { height: 1, backgroundColor: theme.colors.border },
 
-  // States
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: theme.spacing.xl,
-    gap: 10,
-  },
-  stateIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
-  },
-  stateTitle: { fontSize: 15, fontWeight: '800', color: theme.colors.textPrimary },
-  stateText: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    fontWeight: '500',
-    textAlign: 'center',
-    paddingHorizontal: 12,
-  },
-  retryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1.5,
-    borderColor: theme.colors.primary,
-    borderRadius: theme.radius.full,
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    marginTop: 4,
-  },
-  retryText: { fontSize: 13, fontWeight: '700', color: theme.colors.primary },
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
+  listEmpty: { flexGrow: 1 },
+  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
 
-  // Substitute / arranged chip
-  subChip: {
-    backgroundColor: '#FEF3C7',
-    borderRadius: theme.radius.full,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    marginLeft: 4,
-  },
-  subChipText: { fontSize: 9, fontWeight: '700', color: '#D97706' },
+  // Loading
+  skeletonRow: { flexDirection: 'row', gap: 14, paddingVertical: 14 },
+  skeletonBody: { flex: 1, gap: 8 },
 
-  // Day selector (exam-style filter chips)
-  filterWrapper: {
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    backgroundColor: theme.colors.card,
-  },
-  filterRow: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    gap: 8,
-    alignItems: 'center',
-  },
-  filterBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.card,
-  },
-  filterBtnActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  filterText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-  },
-  filterTextActive: { color: '#fff' },
-
-  // Card (transport template)
-  card: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    overflow: 'hidden',
-    elevation: 2,
-  },
-  accentBar: { height: 4, width: '100%' },
-  cardInner: { padding: theme.spacing.md },
-
-  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.colors.textPrimary,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-    marginTop: 2,
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: theme.colors.border,
-    marginTop: 12,
-  },
-
-  // Period row
-  periodRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-  },
-  rowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  periodIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: theme.radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  periodEmoji: { fontSize: 18 },
-  periodInfo: { flex: 1, gap: 3 },
-  periodSubject: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: theme.colors.textPrimary,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    flexWrap: 'wrap',
-  },
-  metaDot: { fontSize: 12, color: theme.colors.textMuted },
-  periodMeta: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    fontWeight: '500',
-  },
-  timeBadge: {
-    alignItems: 'center',
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minWidth: 76,
-  },
-  timeBadgeText: { fontSize: 11, fontWeight: '800' },
-  timeBadgeSub: { fontSize: 10, fontWeight: '600', opacity: 0.7, marginTop: 1 },
-
-  // Empty
-  empty: { alignItems: 'center', paddingVertical: 32, gap: 6 },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: theme.colors.textPrimary,
-  },
-  emptySub: { fontSize: 13, color: theme.colors.textMuted },
+  // Error
+  centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
+  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  linkText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let s = __mk_s();
