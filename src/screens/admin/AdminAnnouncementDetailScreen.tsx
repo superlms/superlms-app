@@ -2,8 +2,8 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Linking,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,24 +11,48 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
-import { theme } from '../../utils/theme';
+import AppRefreshControl from '../../components/AppRefreshControl';
+import { useRefresh } from '../../hooks/useRefresh';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import {
   AdminAnnouncement,
-  AnnouncementType,
   deleteAnnouncement,
   getAdminAnnouncements,
 } from '../../api/adminContentApi';
+import { DocHeader, DocSection, DocBody, docStyles } from '../more/docUi';
+import { TYPE_LABEL, fmtDate } from './AdminAnnouncementScreen';
 
-const TYPE_LABEL: Record<AnnouncementType, string> = { all: 'Both', user: 'Students', teacher: 'Teachers' };
-const TYPE_COLOR: Record<AnnouncementType, string> = { all: '#6366F1', user: '#0EA5E9', teacher: '#EC4899' };
+const TITLE = 'Announcement';
+
+// Attachment as a chip: file-type icon and label only, opened in the device's
+// own viewer — the same treatment as the student announcement screen.
+const AttachmentChip = ({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity style={s.chip} activeOpacity={0.7} onPress={onPress}>
+    <VectorIcon iconSet="Feather" iconName={icon} size={14} color={theme.colors.primary} />
+    <Text style={s.chipText} numberOfLines={1}>
+      {label}
+    </Text>
+    <VectorIcon iconSet="Feather" iconName="external-link" size={12} color={theme.colors.textMuted} />
+  </TouchableOpacity>
+);
 
 const AdminAnnouncementDetailScreen = ({ navigation, route }: any) => {
   const [item, setItem] = useState<AdminAnnouncement | null>(route?.params?.item ?? null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // The item passed from the list shows straight away; this refreshes it in
+  // place (the list endpoint is the only source for a single announcement).
   const refresh = useCallback(async () => {
     if (!item?.id) return;
     try {
@@ -43,102 +67,211 @@ const AdminAnnouncementDetailScreen = ({ navigation, route }: any) => {
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
-  const remove = () =>
-    Alert.alert('Delete', `Delete "${item?.announcement_name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setDeleting(true);
-          try {
-            await deleteAnnouncement(item!.id);
-            navigation.goBack();
-          } catch (e) {
-            Alert.alert('Error', apiErr(e, 'Could not delete.'));
-          } finally {
-            setDeleting(false);
-          }
-        },
-      },
-    ]);
+  const { refreshing, onRefresh } = useRefresh(refresh);
+
+  const remove = async () => {
+    setDeleting(true);
+    try {
+      await deleteAnnouncement(item!.id);
+      setConfirmOpen(false);
+      navigation.goBack();
+    } catch (e) {
+      setConfirmOpen(false);
+      Alert.alert('Error', apiErr(e, 'Could not delete.'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const openFile = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Error', 'Unable to open this file on this device.');
+    }
+  };
 
   if (!item) {
     return (
-      <View style={s.root}>
-        <Header title="Announcement" onBackPress={() => navigation.goBack()} />
-        <View style={s.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>
+      <View style={docStyles.root}>
+        <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+        <View style={s.centeredBox}>
+          <ActivityIndicator size="small" color={theme.colors.primary} />
+        </View>
       </View>
     );
   }
 
-  const color = TYPE_COLOR[item.type];
+  const dateLabel = fmtDate(item.created_at);
 
   return (
-    <View style={s.root}>
-      <Header title="Announcement" onBackPress={() => navigation.goBack()} />
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        <View style={[s.badge, { backgroundColor: color + '18' }]}>
-          <VectorIcon iconSet="Ionicons" iconName="megaphone" size={13} color={color} />
-          <Text style={[s.badgeText, { color }]}>{TYPE_LABEL[item.type]}</Text>
+    <View style={docStyles.root}>
+      <DocHeader
+        title={TITLE}
+        onBackPress={() => navigation.goBack()}
+        rightIcon="create-outline"
+        onRightPress={() => navigation.navigate('AdminAnnouncementForm', { item })}
+      />
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={docStyles.scroll}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Audience, title, date */}
+        <View>
+          <Text style={s.metaText}>{TYPE_LABEL[item.type]}</Text>
+          <Text style={s.title}>{item.announcement_name}</Text>
+          {!!dateLabel && <Text style={s.dateText}>{dateLabel}</Text>}
         </View>
 
-        <Text style={s.title}>{item.announcement_name}</Text>
-        <Text style={s.meta}>
-          {item.creator_name ?? 'Admin'}{item.created_at ? ` · ${new Date(item.created_at).toLocaleDateString()}` : ''}
-        </Text>
+        {/* Content, with attachments as chips right under it */}
+        <DocSection title="Description">
+          <DocBody>{item.announcement_content || 'No description added.'}</DocBody>
+          {!!(item.image_url || item.pdf_url) && (
+            <View style={s.chips}>
+              {!!item.image_url && (
+                <AttachmentChip icon="image" label="Image" onPress={() => openFile(item.image_url!)} />
+              )}
+              {!!item.pdf_url && (
+                <AttachmentChip icon="file-text" label="PDF" onPress={() => openFile(item.pdf_url!)} />
+              )}
+            </View>
+          )}
+        </DocSection>
 
+        {/* Who posted it */}
         <View style={s.divider} />
+        <DocSection title="Posted By">
+          <Text style={s.postedBy}>{item.creator_name ?? 'Admin'}</Text>
+        </DocSection>
 
-        <Text style={s.content}>{item.announcement_content}</Text>
-
-        {!!item.image_url && <Image source={{ uri: item.image_url }} style={s.image} />}
-        {!!item.pdf_url && (
-          <TouchableOpacity style={s.pdfBtn} onPress={() => Linking.openURL(item.pdf_url!)} activeOpacity={0.85}>
-            <VectorIcon iconSet="Ionicons" iconName="document-text" size={18} color="#EF4444" />
-            <Text style={s.pdfText}>View attached PDF</Text>
-          </TouchableOpacity>
-        )}
-
-        <View style={s.actions}>
-          <TouchableOpacity style={[s.actBtn, s.editBtn]} activeOpacity={0.9}
-            onPress={() => navigation.navigate('AdminAnnouncementForm', { item })}>
-            <VectorIcon iconSet="Ionicons" iconName="create-outline" size={18} color="#fff" />
-            <Text style={s.actBtnText}>Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[s.actBtn, s.deleteBtn]} activeOpacity={0.9} onPress={remove} disabled={deleting}>
-            {deleting ? <ActivityIndicator color="#fff" /> : (
-              <>
-                <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={18} color="#fff" />
-                <Text style={s.actBtnText}>Delete</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-        <View style={{ height: 30 }} />
+        {/* Delete — a quiet text action, never a heavy red block */}
+        <TouchableOpacity
+          style={s.deleteBtn}
+          activeOpacity={0.6}
+          onPress={() => setConfirmOpen(true)}
+          hitSlop={8}
+        >
+          <VectorIcon iconSet="Feather" iconName="trash-2" size={15} color={theme.colors.danger} />
+          <Text style={s.deleteText}>Delete announcement</Text>
+        </TouchableOpacity>
       </ScrollView>
+
+      {/* Delete confirmation */}
+      <Modal
+        transparent
+        visible={confirmOpen}
+        animationType="fade"
+        onRequestClose={() => setConfirmOpen(false)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>Delete announcement?</Text>
+            <Text style={s.modalDesc}>
+              “{item.announcement_name}” and its attachment will be removed for everyone. This
+              cannot be undone.
+            </Text>
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                style={[s.modalBtn, s.modalBtnGhost]}
+                activeOpacity={0.7}
+                disabled={deleting}
+                onPress={() => setConfirmOpen(false)}
+              >
+                <Text style={s.modalBtnGhostText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalBtn, s.modalBtnDanger, deleting && s.modalBtnBusy]}
+                activeOpacity={0.85}
+                disabled={deleting}
+                onPress={remove}
+              >
+                {deleting ? (
+                  <ActivityIndicator size="small" color={theme.colors.white} />
+                ) : (
+                  <Text style={s.modalBtnDangerText}>Delete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
 
 export default AdminAnnouncementDetailScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll: { padding: 16 },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.radius.full },
-  badgeText: { fontSize: 11, fontWeight: '800' },
-  title: { fontSize: 20, fontWeight: '900', color: theme.colors.textPrimary, marginTop: 12 },
-  meta: { fontSize: 12, color: theme.colors.textMuted, marginTop: 6 },
-  divider: { height: 1, backgroundColor: theme.colors.border, marginVertical: 14 },
-  content: { fontSize: 15, color: theme.colors.textPrimary, lineHeight: 23 },
-  image: { width: '100%', height: 200, borderRadius: 14, marginTop: 16, resizeMode: 'cover' },
-  pdfBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: '#FECACA', backgroundColor: '#FEF2F2' },
-  pdfText: { fontSize: 14, fontWeight: '700', color: '#EF4444' },
-  actions: { flexDirection: 'row', gap: 12, marginTop: 24 },
-  actBtn: { flex: 1, height: 50, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  editBtn: { backgroundColor: theme.colors.primary },
-  deleteBtn: { backgroundColor: theme.colors.danger },
-  actBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+const __mk_s = () => StyleSheet.create({
+  centeredBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+
+  // Meta + title
+  metaText: { fontSize: 13, color: theme.colors.textMuted, marginBottom: 8 },
+  title: { fontSize: 20, fontWeight: '700', color: theme.colors.textPrimary, lineHeight: 27 },
+  dateText: { fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
+
+  // Attachment chips
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: 200,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+  },
+  chipText: { flexShrink: 1, fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
+
+  // Line between the content and who posted it
+  divider: { height: 1, backgroundColor: theme.colors.border },
+  postedBy: { fontSize: 15, color: theme.colors.textPrimary },
+
+  // Delete
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' },
+  deleteText: { fontSize: 14, fontWeight: '500', color: theme.colors.danger },
+
+  // Confirm modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.lg,
+    padding: 24,
+  },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
+  modalDesc: {
+    marginTop: 8,
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    lineHeight: 20,
+  },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
+  modalBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: theme.radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnBusy: { opacity: 0.7 },
+  modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
+  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  modalBtnDanger: { backgroundColor: theme.colors.danger },
+  modalBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });

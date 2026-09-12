@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Image,
   KeyboardAvoidingView,
+  Linking,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,9 +13,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Header from '../../components/Header';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import VectorIcon from '../../components/VectorIcon';
-import { theme } from '../../utils/theme';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr, pickImage, pickPdf } from '../../utils/filePickers';
 import { PickedFile } from '../../api/adminProfileApi';
 import {
@@ -23,12 +24,17 @@ import {
   createAnnouncement,
   updateAnnouncement,
 } from '../../api/adminContentApi';
+import { DocHeader } from '../more/docUi';
 
-const TYPES: { key: AnnouncementType; label: string; icon: string }[] = [
-  { key: 'all', label: 'Both', icon: 'people-outline' },
-  { key: 'user', label: 'Students', icon: 'school-outline' },
-  { key: 'teacher', label: 'Teachers', icon: 'person-outline' },
+const AUDIENCES: { key: AnnouncementType; label: string }[] = [
+  { key: 'all', label: 'Both' },
+  { key: 'user', label: 'Students' },
+  { key: 'teacher', label: 'Teachers' },
 ];
+
+// Attachments are named by type, never by file name.
+const fileLabel = (f: PickedFile) =>
+  f.type === 'application/pdf' || f.name?.toLowerCase().endsWith('.pdf') ? 'PDF' : 'Image';
 
 const AdminAnnouncementFormScreen = ({ navigation, route }: any) => {
   const item: AdminAnnouncement | undefined = route?.params?.item;
@@ -38,118 +44,406 @@ const AdminAnnouncementFormScreen = ({ navigation, route }: any) => {
   const [content, setContent] = useState(item?.announcement_content ?? '');
   const [type, setType] = useState<AnnouncementType>(item?.type ?? 'all');
   const [file, setFile] = useState<PickedFile | null>(null);
+  const [focused, setFocused] = useState<'title' | 'content' | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
 
-  const existingImage = !file && item?.image_url;
-  const existingPdf = !file && item?.pdf_url;
+  const titleRef = useRef<TextInput>(null);
+  const contentRef = useRef<TextInput>(null);
+  const insets = useSafeAreaInsets();
+
+  // Whatever is already attached to the announcement, while no new file is picked.
+  const existingFiles = file
+    ? []
+    : ([
+        item?.image_url ? { label: 'Image', icon: 'image', url: item.image_url } : null,
+        item?.pdf_url ? { label: 'PDF', icon: 'file-text', url: item.pdf_url } : null,
+      ].filter(Boolean) as { label: string; icon: string; url: string }[]);
 
   const attach = async (kind: 'image' | 'pdf') => {
+    setPickerOpen(false);
     const f = kind === 'image' ? await pickImage() : await pickPdf();
-    if (f) setFile(f);
+    if (f) {
+      setFile(f);
+      setError('');
+    }
   };
 
   const save = async () => {
-    if (!name.trim() || !content.trim()) {
-      Alert.alert('Required', 'Title and content are required.');
+    if (!name.trim()) {
+      setError('Enter a title for the announcement.');
       return;
     }
+    if (!content.trim()) {
+      setError('Write the announcement content.');
+      return;
+    }
+
+    setError('');
     setSaving(true);
     try {
-      const payload = { announcement_name: name.trim(), announcement_content: content.trim(), type, file };
+      const payload = {
+        announcement_name: name.trim(),
+        announcement_content: content.trim(),
+        type,
+        file,
+      };
       if (isEdit) await updateAnnouncement(item!.id, payload);
       else await createAnnouncement(payload);
-      Alert.alert('Success', `Announcement ${isEdit ? 'updated' : 'created'} successfully.`);
-      navigation.goBack();
+      setSuccessMsg(
+        isEdit
+          ? 'The announcement has been updated.'
+          : 'The announcement has been posted to your school.',
+      );
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save announcement.'));
+      setError(apiErr(e, 'Could not save announcement.'));
     } finally {
       setSaving(false);
     }
   };
 
+  const closeSuccess = () => {
+    setSuccessMsg('');
+    navigation.goBack();
+  };
+
   return (
     <View style={s.root}>
-      <Header title={isEdit ? 'Edit Announcement' : 'New Announcement'} onBackPress={() => navigation.goBack()} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <Text style={s.label}>Title *</Text>
-          <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Announcement title" placeholderTextColor={theme.colors.textMuted} />
+      {/* The clip icon in the header attaches an image or a PDF */}
+      <DocHeader
+        title={isEdit ? 'Edit Announcement' : 'New Announcement'}
+        onBackPress={() => navigation.goBack()}
+        rightIcon="attach"
+        onRightPress={() => setPickerOpen(true)}
+      />
 
-          <Text style={s.label}>Content *</Text>
-          <TextInput style={[s.input, s.inputMultiline]} value={content} onChangeText={setContent} placeholder="Write the announcement…" placeholderTextColor={theme.colors.textMuted} multiline />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Title card — tap anywhere on it to type */}
+          <Pressable
+            style={[s.field, focused === 'title' && s.fieldFocused]}
+            onPress={() => titleRef.current?.focus()}
+          >
+            <Text style={s.fieldLabel}>Title</Text>
+            <TextInput
+              ref={titleRef}
+              style={s.fieldInput}
+              placeholder="What is this announcement about?"
+              placeholderTextColor={theme.colors.textMuted}
+              value={name}
+              onChangeText={t => { setName(t); setError(''); }}
+              onFocus={() => setFocused('title')}
+              onBlur={() => setFocused(null)}
+              multiline
+              submitBehavior="submit"
+              textAlignVertical="top"
+              returnKeyType="next"
+              onSubmitEditing={() => contentRef.current?.focus()}
+            />
+          </Pressable>
 
-          <Text style={s.label}>Audience</Text>
-          <View style={s.typeRow}>
-            {TYPES.map(t => {
-              const active = type === t.key;
-              return (
-                <TouchableOpacity key={t.key} style={[s.typeChip, active && s.typeChipActive]} onPress={() => setType(t.key)} activeOpacity={0.8}>
-                  <VectorIcon iconSet="Ionicons" iconName={t.icon} size={15} color={active ? theme.colors.primary : theme.colors.textSecondary} />
-                  <Text style={[s.typeChipText, active && s.typeChipTextActive]}>{t.label}</Text>
+          {/* Content card */}
+          <Pressable
+            style={[s.field, focused === 'content' && s.fieldFocused]}
+            onPress={() => contentRef.current?.focus()}
+          >
+            <Text style={s.fieldLabel}>Content</Text>
+            <TextInput
+              ref={contentRef}
+              style={[s.fieldInput, s.fieldInputMulti]}
+              placeholder="Write the announcement here..."
+              placeholderTextColor={theme.colors.textMuted}
+              value={content}
+              onChangeText={t => { setContent(t); setError(''); }}
+              onFocus={() => setFocused('content')}
+              onBlur={() => setFocused(null)}
+              multiline
+              textAlignVertical="top"
+            />
+          </Pressable>
+
+          {/* Audience */}
+          <View>
+            <Text style={s.sectionLabel}>Audience</Text>
+            <View style={s.segment}>
+              {AUDIENCES.map(a => {
+                const active = type === a.key;
+                return (
+                  <TouchableOpacity
+                    key={a.key}
+                    activeOpacity={0.7}
+                    onPress={() => setType(a.key)}
+                    style={[s.segmentItem, active && s.segmentItemActive]}
+                  >
+                    <Text style={[s.segmentText, active && s.segmentTextActive]}>{a.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Attachment: the new file, the existing one, or a quiet hint */}
+          {file ? (
+            <View style={s.chips}>
+              <View style={s.chip}>
+                <VectorIcon
+                  iconSet="Feather"
+                  iconName={fileLabel(file) === 'PDF' ? 'file-text' : 'image'}
+                  size={14}
+                  color={theme.colors.primary}
+                />
+                <Text style={s.chipText} numberOfLines={1}>{fileLabel(file)}</Text>
+                <TouchableOpacity onPress={() => setFile(null)} hitSlop={8}>
+                  <VectorIcon iconSet="Ionicons" iconName="close" size={15} color={theme.colors.textSecondary} />
                 </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <Text style={s.label}>Attachment (optional)</Text>
-          {!!file && (
-            <View style={s.fileChip}>
-              <VectorIcon iconSet="Ionicons" iconName="attach" size={15} color={theme.colors.primary} />
-              <Text style={s.fileChipText} numberOfLines={1}>{file.name}</Text>
-              <TouchableOpacity onPress={() => setFile(null)}><VectorIcon iconSet="Ionicons" iconName="close" size={15} color={theme.colors.textMuted} /></TouchableOpacity>
+              </View>
             </View>
-          )}
-          {!!existingImage && <Image source={{ uri: existingImage as string }} style={s.previewImg} />}
-          {!!existingPdf && (
-            <View style={s.fileChip}>
-              <VectorIcon iconSet="Ionicons" iconName="document-text" size={15} color="#EF4444" />
-              <Text style={s.fileChipText} numberOfLines={1}>Current PDF attached</Text>
+          ) : existingFiles.length > 0 ? (
+            <View>
+              <View style={s.chips}>
+                {existingFiles.map(f => (
+                  <TouchableOpacity
+                    key={f.label}
+                    style={s.chip}
+                    activeOpacity={0.7}
+                    onPress={() => Linking.openURL(f.url)}
+                  >
+                    <VectorIcon iconSet="Feather" iconName={f.icon} size={14} color={theme.colors.primary} />
+                    <Text style={s.chipText} numberOfLines={1}>{f.label}</Text>
+                    <VectorIcon iconSet="Feather" iconName="external-link" size={12} color={theme.colors.textMuted} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={s.hint}>
+                Attach a new file with the clip icon at the top to replace this one.
+              </Text>
             </View>
-          )}
-          <View style={s.attachRow}>
-            <TouchableOpacity style={s.attachBtn} onPress={() => attach('image')} activeOpacity={0.8}>
-              <VectorIcon iconSet="Ionicons" iconName="image-outline" size={16} color={theme.colors.primary} />
-              <Text style={s.attachText}>Image</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.attachBtn} onPress={() => attach('pdf')} activeOpacity={0.8}>
-              <VectorIcon iconSet="Ionicons" iconName="document-outline" size={16} color={theme.colors.primary} />
-              <Text style={s.attachText}>PDF</Text>
-            </TouchableOpacity>
-          </View>
-          {isEdit && (existingImage || existingPdf) && (
-            <Text style={s.hint}>Pick a new file to replace the current attachment.</Text>
+          ) : (
+            <Text style={s.hint}>
+              Optional: attach an image or a PDF with the clip icon at the top.
+            </Text>
           )}
 
-          <TouchableOpacity style={[s.saveBtn, saving && { opacity: 0.7 }]} onPress={save} disabled={saving} activeOpacity={0.9}>
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>{isEdit ? 'Update Announcement' : 'Create Announcement'}</Text>}
+          {!!error && <Text style={s.errorText}>{error}</Text>}
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={save}
+            style={[s.submitBtn, saving && s.submitBtnBusy]}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator color={theme.colors.white} size="small" />
+            ) : (
+              <Text style={s.submitText}>
+                {isEdit ? 'Update Announcement' : 'Post Announcement'}
+              </Text>
+            )}
           </TouchableOpacity>
-          <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Attachment type chooser */}
+      <Modal
+        transparent
+        visible={pickerOpen}
+        animationType="fade"
+        onRequestClose={() => setPickerOpen(false)}
+      >
+        <View style={s.sheetWrap}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setPickerOpen(false)} />
+          <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
+            <View style={s.sheetHandle} />
+            <Text style={s.sheetTitle}>Attach a file</Text>
+            <TouchableOpacity style={[s.sheetRow, s.sheetRowDivider]} activeOpacity={0.6} onPress={() => attach('image')}>
+              <VectorIcon iconSet="Feather" iconName="image" size={18} color={theme.colors.textSecondary} />
+              <Text style={s.sheetRowText}>Image</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.sheetRow} activeOpacity={0.6} onPress={() => attach('pdf')}>
+              <VectorIcon iconSet="Feather" iconName="file-text" size={18} color={theme.colors.textSecondary} />
+              <Text style={s.sheetRowText}>PDF</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Saved */}
+      <Modal
+        transparent
+        visible={!!successMsg}
+        animationType="fade"
+        onRequestClose={closeSuccess}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <VectorIcon iconSet="Ionicons" iconName="checkmark-circle-outline" size={44} color={theme.colors.success} />
+            <Text style={s.modalTitle}>{isEdit ? 'Announcement updated' : 'Announcement posted'}</Text>
+            <Text style={s.modalDesc}>{successMsg}</Text>
+            <TouchableOpacity style={s.modalBtn} activeOpacity={0.85} onPress={closeSuccess}>
+              <Text style={s.modalBtnText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
 
 export default AdminAnnouncementFormScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16 },
-  label: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary, marginTop: 14, marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14, color: theme.colors.textPrimary, backgroundColor: theme.colors.card },
-  inputMultiline: { minHeight: 120, textAlignVertical: 'top' },
-  typeRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  typeChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: theme.radius.full, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
-  typeChipActive: { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primary },
-  typeChipText: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
-  typeChipTextActive: { color: theme.colors.primary },
-  fileChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.colors.card, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: theme.colors.border },
-  fileChipText: { flex: 1, fontSize: 13, color: theme.colors.textSecondary },
-  previewImg: { width: '100%', height: 160, borderRadius: 12, resizeMode: 'cover' },
-  attachRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
-  attachBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight },
-  attachText: { fontSize: 13, fontWeight: '700', color: theme.colors.primary },
-  hint: { fontSize: 11, color: theme.colors.textMuted, marginTop: 8 },
-  saveBtn: { marginTop: 24, height: 50, borderRadius: 14, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
-  saveBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 14 },
+
+  // Input cards — label inside, borderless input underneath
+  field: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.card,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  fieldFocused: { borderColor: theme.colors.primary },
+  fieldLabel: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted },
+  fieldInput: {
+    fontSize: 15,
+    color: theme.colors.textPrimary,
+    paddingHorizontal: 0,
+    paddingVertical: 4,
+    marginTop: 2,
+  },
+  fieldInputMulti: { minHeight: 140 },
+
+  // Audience segment
+  sectionLabel: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted, marginBottom: 8 },
+  segment: {
+    flexDirection: 'row',
+    padding: 3,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+  },
+  segmentItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  segmentItemActive: {
+    backgroundColor: theme.colors.card,
+    borderColor: theme.colors.border,
+  },
+  segmentText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
+  segmentTextActive: { color: theme.colors.primary, fontWeight: '600' },
+
+  // Attachment chip
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    maxWidth: 200,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+  },
+  chipText: { flexShrink: 1, fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
+  hint: { fontSize: 12, color: theme.colors.textMuted, marginTop: 8 },
+  errorText: { fontSize: 13, color: theme.colors.danger, lineHeight: 18 },
+
+  // Submit
+  submitBtn: {
+    height: 48,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  submitBtnBusy: { opacity: 0.7 },
+  submitText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
+
+  // Attachment sheet
+  sheetWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' },
+  sheet: {
+    backgroundColor: theme.colors.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.border,
+    marginBottom: 14,
+  },
+  sheetTitle: { fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 4 },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
+  sheetRowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  sheetRowText: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
+
+  // Success modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.lg,
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.textPrimary,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  modalDesc: {
+    marginTop: 6,
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  modalBtn: {
+    marginTop: 22,
+    alignSelf: 'stretch',
+    height: 48,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });

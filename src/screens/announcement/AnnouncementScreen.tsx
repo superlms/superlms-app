@@ -1,27 +1,22 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import ScreenSkeleton from '../../components/Skeleton';
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import Header from '../../components/Header';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Skeleton } from '../../components/Skeleton';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
-import { FILTERS, mapApiItem, TAG_META } from './announcementData';
-import type {
-  Announcement,
-  AnnouncementApiResponse,
-  FilterKey,
-} from './announcementData';
-import AnnouncementCard from './AnnouncementCard';
 import apiClient from '../../api/apiClient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FILTERS, mapApiItem } from './announcementData';
+import type { Announcement, FilterKey } from './announcementData';
+import AnnouncementRow from './AnnouncementRow';
+import { DocHeader, DocNoData } from '../more/docUi';
 
 // ── Role → allowed tags ───────────────────────────────────────────────────────
 const ROLE_TAGS: Record<string, Array<Announcement['tag']>> = {
@@ -30,7 +25,7 @@ const ROLE_TAGS: Record<string, Array<Announcement['tag']>> = {
   admin: ['All', 'Teacher', 'Student', 'Admin'],
 };
 
-const AnnouncementScreen = ({ navigation, route }: any) => {
+const AnnouncementScreen = ({ navigation }: any) => {
   const [role, setRole] = useState<string>('student');
   useEffect(() => {
     AsyncStorage.getItem('user_role').then(r => {
@@ -47,21 +42,20 @@ const AnnouncementScreen = ({ navigation, route }: any) => {
   const fetchAnnouncements = useCallback(async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const { data } = await apiClient.post('/announcement', {
         per_page: 50,
       });
-      
+
       console.log('[API Response]', JSON.stringify(data, null, 2));
-      
+
       const items = data?.data ?? data?.announcements ?? [];
       const mapped = items.map(mapApiItem);
-      
+
       console.log('[Mapped Data] First item:', mapped[0]);
-      
+
       setAnnouncements(mapped);
-      
     } catch (err: any) {
       console.error('[API Error]', err?.response?.data);
       const msg = err?.response?.data?.message ?? err?.message ?? 'Something went wrong';
@@ -87,94 +81,79 @@ const AnnouncementScreen = ({ navigation, route }: any) => {
     });
   }, [activeFilter, announcements, allowedTags]);
 
-  const handleCardPress = (item: Announcement) => {
+  const handleRowPress = (item: Announcement) => {
     navigation.navigate('ViewAnnouncement', { item });
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <View style={s.root}>
-      <Header title="Announcement" onBackPress={() => navigation.goBack()} />
+      <DocHeader title="Announcement" onBackPress={() => navigation.goBack()} />
 
-      {/* Filter chips */}
-      <View style={s.filtersWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.filtersRow}
-        >
+      {/* Date window — a segmented control pinned under the header */}
+      <View style={s.filterBar}>
+        <View style={s.segment}>
           {FILTERS.map(f => {
             const active = activeFilter === f.label;
             return (
               <TouchableOpacity
                 key={f.label}
-                activeOpacity={0.8}
+                activeOpacity={0.7}
                 onPress={() => setActiveFilter(f.label)}
-                style={[s.chip, active && s.chipActive]}
+                style={[s.segmentItem, active && s.segmentItemActive]}
               >
-                {active && (
-                  <VectorIcon
-                    iconSet="Ionicons"
-                    iconName="checkmark-circle"
-                    size={13}
-                    color="#fff"
-                  />
-                )}
-                <Text style={[s.chipText, active && s.chipTextActive]}>
+                <Text style={[s.segmentText, active && s.segmentTextActive]}>
                   {f.label}
                 </Text>
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
-        <View style={s.filtersDivider} />
+        </View>
       </View>
+      <View style={s.fullDivider} />
 
       {/* Body */}
       {loading ? (
-        <View style={s.centeredBox}>
-          <ScreenSkeleton variant="list" />
+        <View style={s.list}>
+          {[0, 1, 2, 3, 4].map(i => (
+            <View key={i} style={[s.skeletonRow, i < 4 && s.rowDivider]}>
+              <View style={s.skeletonLine}>
+                <Skeleton width="55%" height={14} />
+                <Skeleton width={44} height={10} />
+              </View>
+              <Skeleton width="80%" height={12} />
+            </View>
+          ))}
         </View>
       ) : error ? (
         <View style={s.centeredBox}>
-          <VectorIcon
-            iconSet="Ionicons"
-            iconName="cloud-offline-outline"
-            size={36}
-            color={theme.colors.textMuted}
-          />
+          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
           <Text style={s.errorText}>{error}</Text>
-          <TouchableOpacity style={s.retryBtn} onPress={fetchAnnouncements}>
-            <Text style={s.retryText}>Retry</Text>
+          <TouchableOpacity onPress={fetchAnnouncements} hitSlop={10}>
+            <Text style={s.linkText}>Try again</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={s.listContent}
+          contentContainerStyle={s.list}
           refreshControl={
             <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
           {filtered.length === 0 ? (
-            <View style={s.emptyBox}>
-              <View style={s.emptyIconRing}>
-                <VectorIcon
-                  iconSet="Ionicons"
-                  iconName="megaphone-outline"
-                  size={36}
-                  color={theme.colors.primary}
-                />
-              </View>
-              <Text style={s.emptyTitle}>No announcements</Text>
-              <Text style={s.emptySubtitle}>Nothing posted in this period</Text>
-            </View>
+            <DocNoData
+              icon="megaphone-outline"
+              title="No announcements"
+              subtitle="Nothing posted in this period."
+            />
           ) : (
-            filtered.map(item => (
-              <AnnouncementCard
+            filtered.map((item, i) => (
+              <AnnouncementRow
                 key={item.id}
                 item={item}
-                onPress={handleCardPress}
+                isLast={i === filtered.length - 1}
+                onPress={handleRowPress}
               />
             ))
           )}
@@ -187,81 +166,50 @@ const AnnouncementScreen = ({ navigation, route }: any) => {
 export default AnnouncementScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
+  root: { flex: 1, backgroundColor: theme.colors.card },
 
-  filtersWrapper: { paddingTop: 12 },
-  filtersRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
-  filtersDivider: {
-    height: 1,
-    backgroundColor: theme.colors.border,
-    marginTop: 12,
-  },
-  chip: {
+  // Filter bar
+  filterBar: { paddingHorizontal: 20, paddingVertical: 12 },
+  segment: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: theme.radius.full,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: theme.colors.card,
-    borderWidth: 1.5,
+    padding: 3,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
     borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
   },
-  chipActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  chipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-  },
-  chipTextActive: { color: theme.colors.white },
-
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 40,
-    paddingTop: 14,
-    gap: 14,
-  },
-
-  centeredBox: {
+  segmentItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 7,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  segmentItemActive: {
+    backgroundColor: theme.colors.card,
+    borderColor: theme.colors.border,
+  },
+  segmentText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
+  segmentTextActive: { color: theme.colors.primary, fontWeight: '600' },
+  fullDivider: { height: 1, backgroundColor: theme.colors.border },
+
+  // List
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  skeletonRow: { paddingVertical: 14, gap: 8 },
+  skeletonLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 12,
   },
-  errorText: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-  },
-  retryBtn: {
-    marginTop: 4,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.primary,
-  },
-  retryText: { fontSize: 14, fontWeight: '700', color: theme.colors.white },
 
-  emptyBox: { alignItems: 'center', paddingTop: 60 },
-  emptyIconRing: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: theme.colors.textPrimary,
-    marginBottom: 4,
-  },
-  emptySubtitle: { fontSize: 13, color: theme.colors.textMuted },
+  // Error
+  centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
+  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  linkText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

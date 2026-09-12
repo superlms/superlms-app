@@ -1,38 +1,40 @@
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
+  Modal,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import VectorIcon from '../../components/VectorIcon';
-import Header from '../../components/Header';
-import ListRow from '../../components/ListRow';
+import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
-import { theme } from '../../utils/theme';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import {
   AdminAnnouncement,
-  AnnouncementStats,
   AnnouncementType,
   getAdminAnnouncements,
 } from '../../api/adminContentApi';
+import { DocHeader, DocNoData } from '../more/docUi';
 
-type FilterKey = 'all_filter' | 'all' | 'user' | 'teacher';
-const FILTERS: { key: FilterKey; label: string }[] = [
+const TITLE = 'Announcements';
+
+// 'all_filter' asks the API for everything; the other keys are real audiences.
+type FilterKey = 'all_filter' | AnnouncementType;
+
+const AUDIENCES: { key: FilterKey; label: string }[] = [
   { key: 'all_filter', label: 'All' },
   { key: 'all', label: 'Both' },
   { key: 'user', label: 'Students' },
   { key: 'teacher', label: 'Teachers' },
 ];
 
-const DAY_OPTIONS: { label: string; value: number | null }[] = [
+const PERIODS: { label: string; value: number | null }[] = [
   { label: 'All time', value: null },
   { label: 'Last 7 days', value: 7 },
   { label: 'Last 15 days', value: 15 },
@@ -41,157 +43,328 @@ const DAY_OPTIONS: { label: string; value: number | null }[] = [
   { label: 'Last 60 days', value: 60 },
 ];
 
-const TYPE_LABEL: Record<AnnouncementType, string> = { all: 'Both', user: 'Students', teacher: 'Teachers' };
-const TYPE_COLOR: Record<AnnouncementType, string> = { all: '#6366F1', user: '#0EA5E9', teacher: '#EC4899' };
+export const TYPE_LABEL: Record<AnnouncementType, string> = {
+  all: 'Both',
+  user: 'Students',
+  teacher: 'Teachers',
+};
+
+// "12 Sep 2026", or nothing when the date is missing / unparseable.
+export const fmtDate = (iso?: string | null) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+// ── One announcement as a plain three-line row, separated by a divider ────────
+//   title ......................... 12 Sep 2026
+//   content preview ........................ 📎
+//   Students · Principal
+const AnnouncementRow = ({
+  item,
+  isLast,
+  onPress,
+}: {
+  item: AdminAnnouncement;
+  isLast: boolean;
+  onPress: () => void;
+}) => {
+  const hasFile = !!(item.image_url || item.pdf_url);
+
+  return (
+    <TouchableOpacity
+      style={[s.row, !isLast && s.rowDivider]}
+      activeOpacity={0.6}
+      onPress={onPress}
+    >
+      <View style={s.rowLine}>
+        <Text style={s.rowTitle} numberOfLines={1}>
+          {item.announcement_name}
+        </Text>
+        <Text style={s.rowDate}>{fmtDate(item.created_at)}</Text>
+      </View>
+
+      {(!!item.announcement_content || hasFile) && (
+        <View style={s.rowLine}>
+          <Text style={s.rowPreview} numberOfLines={1}>
+            {item.announcement_content}
+          </Text>
+          {hasFile && (
+            <VectorIcon iconSet="Feather" iconName="paperclip" size={13} color={theme.colors.textMuted} />
+          )}
+        </View>
+      )}
+
+      <Text style={s.rowMeta} numberOfLines={1}>
+        {TYPE_LABEL[item.type]}
+        {item.creator_name ? ` · ${item.creator_name}` : ''}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+// ── Period chooser: a quiet text button that opens a plain bottom sheet ───────
+const PeriodSheet = ({
+  visible,
+  value,
+  onPick,
+  onClose,
+}: {
+  visible: boolean;
+  value: number | null;
+  onPick: (v: number | null) => void;
+  onClose: () => void;
+}) => {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
+      <View style={s.sheetWrap}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
+        <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
+          <View style={s.sheetHandle} />
+          <Text style={s.sheetTitle}>Select period</Text>
+          {PERIODS.map((p, i) => {
+            const active = p.value === value;
+            return (
+              <TouchableOpacity
+                key={p.label}
+                style={[s.sheetRow, i < PERIODS.length - 1 && s.rowDivider]}
+                activeOpacity={0.6}
+                onPress={() => {
+                  onPick(p.value);
+                  onClose();
+                }}
+              >
+                <Text style={[s.sheetRowText, active && s.sheetRowTextActive]}>{p.label}</Text>
+                {active && (
+                  <VectorIcon iconSet="Ionicons" iconName="checkmark" size={18} color={theme.colors.primary} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    </Modal>
+  );
+};
 
 const AdminAnnouncementScreen = ({ navigation }: any) => {
   const [items, setItems] = useState<AdminAnnouncement[]>([]);
-  const [stats, setStats] = useState<AnnouncementStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<FilterKey>('all_filter');
+  const [error, setError] = useState<string | null>(null);
+  const [audience, setAudience] = useState<FilterKey>('all_filter');
   const [days, setDays] = useState<number | null>(null);
-  const [filterOpen, setFilterOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await getAdminAnnouncements(filter === 'all_filter' ? undefined : filter, days ?? undefined);
+      const res = await getAdminAnnouncements(
+        audience === 'all_filter' ? undefined : audience,
+        days ?? undefined,
+      );
       setItems(res.announcements);
-      setStats(res.stats);
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load announcements.'));
+      setError(apiErr(e, 'Could not load announcements.'));
     } finally {
       setLoading(false);
     }
-  }, [filter, days]);
+  }, [audience, days]);
 
+  // Refetch on focus and whenever a filter changes.
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const { refreshing, onRefresh } = useRefresh(load);
 
-  const activeDayLabel = DAY_OPTIONS.find(d => d.value === days)?.label ?? 'All time';
+  const periodLabel = PERIODS.find(p => p.value === days)?.label ?? 'All time';
+  const countLabel = `${items.length} ${items.length === 1 ? 'announcement' : 'announcements'}`;
 
   return (
     <View style={s.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.card} />
-      <Header
-        title="Announcements"
-        onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
-        rightSlot={
-          <TouchableOpacity style={s.headBtn} onPress={() => setFilterOpen(true)} activeOpacity={0.8}>
-            <VectorIcon iconSet="Ionicons" iconName="filter" size={18} color={theme.colors.primary} />
-            {days != null && <View style={s.headDot} />}
-          </TouchableOpacity>
+      <DocHeader
+        title={TITLE}
+        onBackPress={() =>
+          navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome')
         }
+        rightIcon="add"
+        onRightPress={() => navigation.navigate('AdminAnnouncementForm')}
       />
 
-      {/* Audience filter chips */}
-      <View style={s.filterRow}>
-        {FILTERS.map(f => {
-          const active = filter === f.key;
-          return (
-            <TouchableOpacity key={f.key} style={[s.chip, active && s.chipActive]} onPress={() => setFilter(f.key)} activeOpacity={0.8}>
-              <Text style={[s.chipText, active && s.chipTextActive]}>{f.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-      {days != null && (
-        <View style={s.dayBanner}>
-          <Text style={s.dayBannerText}>Showing: {activeDayLabel}</Text>
-          <TouchableOpacity onPress={() => setDays(null)}><Text style={s.dayBannerClear}>Clear</Text></TouchableOpacity>
+      {/* Audience segment and period, pinned under the header */}
+      <View style={s.filterBar}>
+        <View style={s.segment}>
+          {AUDIENCES.map(a => {
+            const active = audience === a.key;
+            return (
+              <TouchableOpacity
+                key={a.key}
+                activeOpacity={0.7}
+                onPress={() => setAudience(a.key)}
+                style={[s.segmentItem, active && s.segmentItemActive]}
+              >
+                <Text style={[s.segmentText, active && s.segmentTextActive]} numberOfLines={1}>
+                  {a.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-      )}
+
+        <View style={s.metaBar}>
+          <Text style={s.metaBarText}>{loading ? '' : countLabel}</Text>
+          <TouchableOpacity
+            style={s.periodBtn}
+            activeOpacity={0.6}
+            onPress={() => setSheetOpen(true)}
+            hitSlop={8}
+          >
+            <Text style={s.periodText}>{periodLabel}</Text>
+            <VectorIcon iconSet="Ionicons" iconName="chevron-down" size={14} color={theme.colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+      </View>
+      <View style={s.fullDivider} />
 
       {loading && !refreshing ? (
-        <View style={s.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>
+        <View style={s.list}>
+          {[0, 1, 2, 3, 4].map(i => (
+            <View key={i} style={[s.skeletonRow, i < 4 && s.rowDivider]}>
+              <View style={s.rowLine}>
+                <Skeleton width="55%" height={14} />
+                <Skeleton width={60} height={10} />
+              </View>
+              <Skeleton width="80%" height={12} />
+              <Skeleton width="35%" height={10} />
+            </View>
+          ))}
+        </View>
+      ) : error ? (
+        <View style={s.centeredBox}>
+          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
+          <Text style={s.errorText}>{error}</Text>
+          <TouchableOpacity onPress={load} hitSlop={10}>
+            <Text style={s.linkText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <ScrollView
-          contentContainerStyle={s.scroll}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.list}
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          {items.length === 0 && <Text style={s.empty}>No announcements found.</Text>}
-          {items.map(a => (
-            <ListRow
-              key={a.id}
-              color={TYPE_COLOR[a.type]}
-              title={a.announcement_name}
-              subtitle={a.announcement_content}
-              metaIcon="person-outline"
-              meta={`${a.creator_name ?? 'Admin'}${a.created_at ? ` · ${new Date(a.created_at).toLocaleDateString()}` : ''}${a.image_url ? ' · 📷' : ''}${a.pdf_url ? ' · 📄' : ''}`}
-              tag={TYPE_LABEL[a.type]}
-              tagColor={TYPE_COLOR[a.type]}
-              onPress={() => navigation.navigate('AdminAnnouncementDetail', { item: a })}
+          {items.length === 0 ? (
+            <DocNoData
+              icon="megaphone-outline"
+              title="No announcements"
+              subtitle="Nothing posted for this audience and period."
             />
-          ))}
-          <View style={{ height: 90 }} />
+          ) : (
+            items.map((item, i) => (
+              <AnnouncementRow
+                key={item.id}
+                item={item}
+                isLast={i === items.length - 1}
+                onPress={() => navigation.navigate('AdminAnnouncementDetail', { item })}
+              />
+            ))
+          )}
         </ScrollView>
       )}
 
-      <TouchableOpacity style={s.fab} onPress={() => navigation.navigate('AdminAnnouncementForm')} activeOpacity={0.9}>
-        <VectorIcon iconSet="Ionicons" iconName="add" size={28} color="#fff" />
-      </TouchableOpacity>
-
-      {/* Days filter popup (top-right) */}
-      {filterOpen && (
-        <View style={s.pOverlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setFilterOpen(false)} />
-          <View style={s.pCard}>
-            <Text style={s.pTitle}>Filter by period</Text>
-            {DAY_OPTIONS.map((d, i) => {
-              const active = d.value === days;
-              return (
-                <TouchableOpacity key={i} style={[s.pRow, i === DAY_OPTIONS.length - 1 && { borderBottomWidth: 0 }]} activeOpacity={0.7}
-                  onPress={() => { setDays(d.value); setFilterOpen(false); }}>
-                  <Text style={[s.pRowText, active && s.pRowTextActive]}>{d.label}</Text>
-                  {active && <VectorIcon iconSet="Ionicons" iconName="checkmark" size={16} color={theme.colors.primary} />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-      )}
+      <PeriodSheet
+        visible={sheetOpen}
+        value={days}
+        onPick={setDays}
+        onClose={() => setSheetOpen(false)}
+      />
     </View>
   );
 };
 
 export default AdminAnnouncementScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
 
-  headBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
-  headDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.primary },
+  // Filter bar
+  filterBar: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10, gap: 10 },
+  segment: {
+    flexDirection: 'row',
+    padding: 3,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+  },
+  segmentItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 2,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  segmentItemActive: {
+    backgroundColor: theme.colors.card,
+    borderColor: theme.colors.border,
+  },
+  segmentText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
+  segmentTextActive: { color: theme.colors.primary, fontWeight: '600' },
 
-  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 12, flexWrap: 'wrap' },
-  chip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: theme.radius.full, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
-  chipActive: { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primary },
-  chipText: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
-  chipTextActive: { color: theme.colors.primary },
+  metaBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  metaBarText: { fontSize: 12, color: theme.colors.textMuted },
+  periodBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  periodText: { fontSize: 12, fontWeight: '500', color: theme.colors.textSecondary },
 
-  dayBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.colors.primaryLight },
-  dayBannerText: { fontSize: 12, fontWeight: '700', color: theme.colors.primary },
-  dayBannerClear: { fontSize: 12, fontWeight: '700', color: theme.colors.danger },
+  fullDivider: { height: 1, backgroundColor: theme.colors.border },
 
-  scroll: { paddingHorizontal: 16, paddingTop: 4 },
-  empty: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', marginTop: 30 },
+  // List
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
+  row: { paddingVertical: 12, gap: 4 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  rowLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rowTitle: { flex: 1, fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  rowDate: { fontSize: 12, color: theme.colors.textMuted },
+  rowPreview: { flex: 1, fontSize: 13, color: theme.colors.textSecondary },
+  rowMeta: { fontSize: 12, color: theme.colors.textMuted },
 
-  // Compact card
-  card: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.colors.card, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: theme.colors.border },
-  typeBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: theme.radius.full },
-  typeBadgeText: { fontSize: 10, fontWeight: '800' },
-  cardTitle: { fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary },
-  cardBody: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
-  cardMeta: { fontSize: 11, color: theme.colors.textMuted, marginTop: 3 },
+  // Loading skeleton
+  skeletonRow: { paddingVertical: 14, gap: 8 },
 
-  fab: { position: 'absolute', right: 18, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  // Error
+  centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
+  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  linkText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 
-  pOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'flex-end', justifyContent: 'flex-start', paddingTop: 66, paddingRight: 12 },
-  pCard: { width: 220, backgroundColor: theme.colors.card, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 14, paddingVertical: 6, elevation: 8, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
-  pTitle: { fontSize: 12, fontWeight: '800', color: theme.colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4, paddingVertical: 10 },
-  pRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  pRowText: { fontSize: 14, color: theme.colors.textPrimary },
-  pRowTextActive: { color: theme.colors.primary, fontWeight: '700' },
+  // Period sheet
+  sheetWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' },
+  sheet: {
+    maxHeight: '70%',
+    backgroundColor: theme.colors.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.border,
+    marginBottom: 14,
+  },
+  sheetTitle: { fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 4 },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
+  sheetRowText: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
+  sheetRowTextActive: { color: theme.colors.primary, fontWeight: '600' },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });
