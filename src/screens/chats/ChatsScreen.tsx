@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -77,15 +78,27 @@ const INITIAL_MESSAGES: Message[] = [
   },
 ];
 
+const initials = (name?: string) =>
+  (name ?? 'S')
+    .split(' ')
+    .map(n => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+// One tick when sent, two once it has landed; read turns them white.
 const Ticks = ({ status }: { status: Message['status'] }) => (
   <VectorIcon
     iconSet="Ionicons"
     iconName={status === 'sent' ? 'checkmark' : 'checkmark-done'}
-    size={14}
-    color={status === 'read' ? '#A5B4FC' : 'rgba(255,255,255,0.6)'}
+    size={13}
+    color={status === 'read' ? theme.colors.white : 'rgba(255,255,255,0.6)'}
   />
 );
 
+// ── One message ──────────────────────────────────────────────────────────────
+// Mine are filled in the accent colour, theirs sit on the page's quiet grey.
+// No tails, no shadows — the side it sits on is what says who wrote it.
 const Bubble = ({
   msg,
   selected,
@@ -109,17 +122,12 @@ const Bubble = ({
       ]}
       onLongPress={onLongPress}
       onPress={selectionMode ? onPress : undefined}
-      delayLongPress={2000}
       activeOpacity={selectionMode ? 0.7 : 1}
     >
       <View style={[s.bubble, isMe ? s.bubbleMe : s.bubbleOther]}>
-        <Text style={[s.bubbleText, isMe ? s.bubbleTextMe : s.bubbleTextOther]}>
-          {msg.text}
-        </Text>
+        <Text style={[s.bubbleText, isMe ? s.bubbleTextMe : s.bubbleTextOther]}>{msg.text}</Text>
         <View style={s.meta}>
-          <Text style={[s.metaTime, isMe ? s.metaTimeMe : s.metaTimeOther]}>
-            {msg.time}
-          </Text>
+          <Text style={[s.metaTime, isMe ? s.metaTimeMe : s.metaTimeOther]}>{msg.time}</Text>
           {isMe && <Ticks status={msg.status} />}
         </View>
       </View>
@@ -127,12 +135,9 @@ const Bubble = ({
   );
 };
 
-const DateChip = ({ label }: { label: string }) => (
-  <View style={s.chipWrap}>
-    <View style={s.dateChip}>
-      <Text style={s.dateChipText}>{label}</Text>
-    </View>
-  </View>
+// A plain centred line, not a pill.
+const DayLabel = ({ label }: { label: string }) => (
+  <Text style={s.dayLabel}>{label.toUpperCase()}</Text>
 );
 
 const ChatsScreen = ({ navigation, route }: any) => {
@@ -145,8 +150,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
   };
 
   // userRole = who is logged in right now
-  const userRole: DrawerRole =
-    route?.params?.userRole === 'teacher' ? 'teacher' : 'student';
+  const userRole: DrawerRole = route?.params?.userRole === 'teacher' ? 'teacher' : 'student';
 
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState('');
@@ -158,8 +162,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
 
   // Keep the latest messages visible when the keyboard opens
   useEffect(() => {
-    const showEvent =
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const sub = Keyboard.addListener(showEvent, () => {
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
     });
@@ -175,10 +178,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
         id: String(Date.now()),
         sender: 'me',
         text,
-        time: new Date().toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         status: 'sent',
       },
     ]);
@@ -187,9 +187,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
   };
 
   const toggleSelect = (id: string) =>
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
-    );
+    setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
 
   const deleteSelected = () => {
     setMessages(prev => prev.filter(m => !selectedIds.includes(m.id)));
@@ -203,9 +201,9 @@ const ChatsScreen = ({ navigation, route }: any) => {
     - logged in as TEACHER  → talking to a Student → show "Student"
   */
   const subtitle = chat.online
-    ? 'online'
+    ? 'Online'
     : userRole === 'student'
-    ? `Teacher · ${chat.subject ?? ''}`
+    ? ['Teacher', chat.subject].filter(Boolean).join(' · ')
     : 'Student';
 
   const hasText = input.trim().length > 0;
@@ -216,55 +214,44 @@ const ChatsScreen = ({ navigation, route }: any) => {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       enabled={Platform.OS === 'ios'}
     >
-      {/* ── Top bar ── */}
+      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.statusBar} />
+
+      {/* ── Who you are talking to ── */}
       <View style={s.topBar}>
+        <TouchableOpacity
+          style={s.backBtn}
+          activeOpacity={0.7}
+          onPress={() => (selectionMode ? setSelectedIds([]) : navigation.goBack())}
+        >
+          <VectorIcon
+            iconSet="Ionicons"
+            iconName={selectionMode ? 'close' : 'chevron-back'}
+            size={22}
+            color={theme.colors.textPrimary}
+          />
+        </TouchableOpacity>
+
         {selectionMode ? (
           <>
+            <Text style={s.topName}>{selectedIds.length} selected</Text>
             <TouchableOpacity
-              onPress={() => setSelectedIds([])}
-              style={s.topIconBtn}
-              activeOpacity={0.7}
-            >
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="close"
-                size={22}
-                color="#fff"
-              />
-            </TouchableOpacity>
-            <Text style={s.selectionTitle}>
-              {selectedIds.length} selected
-            </Text>
-            <TouchableOpacity
+              style={s.headBtn}
+              activeOpacity={0.6}
+              hitSlop={8}
               onPress={() => setConfirmDelete(true)}
-              style={s.topIconBtn}
-              activeOpacity={0.7}
             >
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="trash-outline"
-                size={20}
-                color="#fff"
-              />
+              <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={19} color={theme.colors.danger} />
             </TouchableOpacity>
           </>
         ) : (
           <>
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              style={s.topIconBtn}
-              activeOpacity={0.7}
-            >
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="arrow-back"
-                size={22}
-                color="#fff"
-              />
-            </TouchableOpacity>
-
-            <Image source={{ uri: chat.avatar }} style={s.topAvatar} />
-
+            {chat.avatar ? (
+              <Image source={{ uri: chat.avatar }} style={s.topAvatar} />
+            ) : (
+              <View style={[s.topAvatar, s.topAvatarFallback]}>
+                <Text style={s.topAvatarInitials}>{initials(chat.name)}</Text>
+              </View>
+            )}
             <View style={s.topInfo}>
               <Text style={s.topName} numberOfLines={1}>
                 {chat.name}
@@ -285,10 +272,8 @@ const ChatsScreen = ({ navigation, route }: any) => {
         contentContainerStyle={s.msgList}
         showsVerticalScrollIndicator={false}
         style={s.flex}
-        onContentSizeChange={() =>
-          listRef.current?.scrollToEnd({ animated: false })
-        }
-        ListHeaderComponent={<DateChip label="Today" />}
+        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+        ListHeaderComponent={<DayLabel label="Today" />}
         renderItem={({ item }) => (
           <Bubble
             msg={item}
@@ -300,7 +285,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
         )}
       />
 
-      {/* ── Input bar ── */}
+      {/* ── Write ── */}
       <View style={s.inputBar}>
         <View style={s.inputPill}>
           <TextInput
@@ -310,21 +295,13 @@ const ChatsScreen = ({ navigation, route }: any) => {
             value={input}
             onChangeText={setInput}
             onFocus={() =>
-              setTimeout(
-                () => listRef.current?.scrollToEnd({ animated: true }),
-                100,
-              )
+              setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
             }
             multiline
             maxLength={500}
           />
-          <TouchableOpacity activeOpacity={0.7}>
-            <VectorIcon
-              iconSet="Ionicons"
-              iconName="attach"
-              size={22}
-              color={theme.colors.textMuted}
-            />
+          <TouchableOpacity activeOpacity={0.6} hitSlop={8}>
+            <VectorIcon iconSet="Feather" iconName="paperclip" size={18} color={theme.colors.textMuted} />
           </TouchableOpacity>
         </View>
 
@@ -332,17 +309,18 @@ const ChatsScreen = ({ navigation, route }: any) => {
           style={[s.sendBtn, hasText && s.sendBtnActive]}
           onPress={send}
           activeOpacity={0.85}
+          disabled={!hasText}
         >
           <VectorIcon
             iconSet="Ionicons"
-            iconName="send"
-            size={18}
-            color={hasText ? '#fff' : theme.colors.textMuted}
+            iconName="arrow-up"
+            size={19}
+            color={hasText ? theme.colors.white : theme.colors.textMuted}
           />
         </TouchableOpacity>
       </View>
 
-      {/* ── Delete confirmation (logout style) ── */}
+      {/* Delete confirmation */}
       <Modal
         transparent
         visible={confirmDelete}
@@ -351,42 +329,26 @@ const ChatsScreen = ({ navigation, route }: any) => {
       >
         <View style={s.modalOverlay}>
           <View style={s.modalCard}>
-            <View style={s.modalIconWrap}>
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="trash-outline"
-                size={28}
-                color={theme.colors.danger}
-              />
-            </View>
-
             <Text style={s.modalTitle}>
-              Delete Message{selectedIds.length > 1 ? 's' : ''}?
+              Delete {selectedIds.length === 1 ? 'message' : `${selectedIds.length} messages`}?
             </Text>
             <Text style={s.modalDesc}>
-              {selectedIds.length} message{selectedIds.length > 1 ? 's' : ''}{' '}
-              will be deleted. This cannot be undone.
+              They will be removed from this conversation. This cannot be undone.
             </Text>
-
             <View style={s.modalActions}>
               <TouchableOpacity
                 style={[s.modalBtn, s.modalBtnGhost]}
-                activeOpacity={0.85}
+                activeOpacity={0.7}
                 onPress={() => setConfirmDelete(false)}
               >
-                <Text style={[s.modalBtnText, s.modalBtnGhostText]}>
-                  Cancel
-                </Text>
+                <Text style={s.modalBtnGhostText}>Cancel</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={[s.modalBtn, s.modalBtnDanger]}
-                activeOpacity={0.9}
+                activeOpacity={0.85}
                 onPress={deleteSelected}
               >
-                <Text style={[s.modalBtnText, s.modalBtnDangerText]}>
-                  Delete
-                </Text>
+                <Text style={s.modalBtnDangerText}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -399,214 +361,130 @@ const ChatsScreen = ({ navigation, route }: any) => {
 export default ChatsScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#EEF2FF' },
+  root: { flex: 1, backgroundColor: theme.colors.card },
   flex: { flex: 1 },
 
-  // Top bar
+  // Top bar — the same 50px bar the rest of the app uses, with a face on it
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.primary,
-    paddingHorizontal: 8,
-    paddingTop: Platform.OS === 'ios' ? 52 : 14,
-    paddingBottom: 12,
-    gap: 8,
-    elevation: 4,
+    gap: 10,
+    height: 50,
+    paddingHorizontal: theme.spacing.lg,
+    backgroundColor: theme.colors.card,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.divider,
   },
-  topIconBtn: {
+  backBtn: {
     width: 36,
     height: 36,
+    borderRadius: theme.radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  topAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.35)',
-  },
-  topInfo: { flex: 1, marginLeft: 2 },
-  topName: { fontSize: 16, fontWeight: '700', color: '#fff' },
-  topSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.78)',
-    fontWeight: '500',
-    marginTop: 1,
-  },
-  selectionTitle: {
-    flex: 1,
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#fff',
-    marginLeft: 4,
-  },
-
-  msgList: { paddingHorizontal: 12, paddingBottom: 8, paddingTop: 4 },
-
-  // Date chip
-  chipWrap: { alignItems: 'center', marginVertical: 10 },
-  dateChip: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.full,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
-  dateChipText: {
+  headBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  topAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: theme.colors.background },
+  topAvatarFallback: { alignItems: 'center', justifyContent: 'center' },
+  topAvatarInitials: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary },
+  topInfo: { flex: 1 },
+  topName: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary },
+  topSubtitle: { fontSize: 12, color: theme.colors.textMuted, marginTop: 1 },
+
+  // Messages
+  msgList: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16 },
+  dayLabel: {
+    alignSelf: 'center',
     fontSize: 11,
-    color: theme.colors.textSecondary,
     fontWeight: '600',
+    letterSpacing: 0.8,
+    color: theme.colors.textMuted,
+    marginBottom: 14,
   },
 
-  // Bubbles
-  bubbleWrap: { marginBottom: 4, borderRadius: theme.radius.sm },
-  bubbleWrapMe: { alignItems: 'flex-end' },
-  bubbleWrapOther: { alignItems: 'flex-start' },
-  bubbleWrapSelected: {
-    backgroundColor: `${theme.colors.primary}26`,
-  },
-  bubble: {
-    maxWidth: '80%',
-    borderRadius: 12,
-    paddingHorizontal: 11,
-    paddingTop: 7,
-    paddingBottom: 5,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-  },
-  bubbleMe: {
-    backgroundColor: theme.colors.primary,
-    borderTopRightRadius: 2,
-  },
-  bubbleOther: {
-    backgroundColor: theme.colors.card,
-    borderTopLeftRadius: 2,
-  },
-  bubbleText: { fontSize: 14.5, lineHeight: 20 },
-  bubbleTextMe: { color: '#fff' },
+  bubbleWrap: { marginBottom: 8, maxWidth: '82%' },
+  bubbleWrapMe: { alignSelf: 'flex-end' },
+  bubbleWrapOther: { alignSelf: 'flex-start' },
+  bubbleWrapSelected: { opacity: 0.55 },
+  bubble: { paddingHorizontal: 13, paddingTop: 9, paddingBottom: 7, borderRadius: 14 },
+  bubbleMe: { backgroundColor: theme.colors.primary, borderBottomRightRadius: 4 },
+  bubbleOther: { backgroundColor: theme.colors.background, borderBottomLeftRadius: 4 },
+  bubbleText: { fontSize: 14.5, lineHeight: 21 },
+  bubbleTextMe: { color: theme.colors.white },
   bubbleTextOther: { color: theme.colors.textPrimary },
-  meta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    alignSelf: 'flex-end',
-    marginTop: 2,
-    marginLeft: 8,
-  },
-  metaTime: { fontSize: 10.5 },
-  metaTimeMe: { color: 'rgba(255,255,255,0.65)' },
+  meta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 3 },
+  metaTime: { fontSize: 10 },
+  metaTimeMe: { color: 'rgba(255,255,255,0.7)' },
   metaTimeOther: { color: theme.colors.textMuted },
 
-  // Input bar
+  // Write
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 10,
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 10 : 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.card,
   },
   inputPill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: theme.colors.card,
-    borderRadius: 24,
+    gap: 10,
+    minHeight: 44,
+    maxHeight: 120,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    gap: 10,
-    elevation: 1,
+    borderRadius: theme.radius.md,
   },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    color: theme.colors.textPrimary,
-    maxHeight: 110,
-    paddingVertical: 2,
-    paddingHorizontal: 0,
-  },
+  input: { flex: 1, fontSize: 15, color: theme.colors.textPrimary, padding: 0, maxHeight: 100 },
   sendBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: theme.colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: theme.colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  sendBtnActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-    elevation: 3,
-  },
+  sendBtnActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
 
-  // Delete confirmation modal (logout style)
+  // Confirm modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.lg,
+    padding: 24,
   },
   modalCard: {
     width: '100%',
     maxWidth: 420,
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.lg,
-    padding: theme.spacing.xl,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    padding: 24,
   },
-  modalIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: theme.radius.full,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: theme.spacing.md,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: theme.colors.textPrimary,
-    textAlign: 'center',
-  },
-  modalDesc: {
-    marginTop: theme.spacing.sm,
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-    marginTop: theme.spacing.xl,
-  },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
+  modalDesc: { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
   modalBtn: {
     flex: 1,
-    height: 48,
+    height: 46,
     borderRadius: theme.radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalBtnText: { fontSize: 15, fontWeight: '700' },
-  modalBtnGhost: { backgroundColor: theme.colors.border },
-  modalBtnGhostText: { color: theme.colors.textPrimary },
+  modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
+  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   modalBtnDanger: { backgroundColor: theme.colors.danger },
-  modalBtnDangerText: { color: theme.colors.white },
+  modalBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let s = __mk_s();

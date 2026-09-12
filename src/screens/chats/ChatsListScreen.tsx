@@ -3,7 +3,6 @@ import {
   FlatList,
   Image,
   Modal,
-  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -11,10 +10,12 @@ import {
   View,
 } from 'react-native';
 
+import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
-import { theme, onThemeChange } from '../../utils/theme';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
+import { theme, onThemeChange } from '../../utils/theme';
+import { DocNoData } from '../more/docUi';
 
 type DrawerRole = 'student' | 'teacher';
 
@@ -151,71 +152,72 @@ const TEACHER_CHATS: ChatItem[] = [
   },
 ];
 
+const initials = (name: string) =>
+  name
+    .split(' ')
+    .map(n => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+// ── One conversation as a plain row, separated by a divider ──────────────────
+//   [photo]  Ravi Sharma · Physics            10:42 AM
+//            Please submit your assignment…          2
 const ChatRow = ({
   item,
   isStudent,
   selected,
+  isLast,
   onPress,
   onLongPress,
 }: {
   item: ChatItem;
   isStudent: boolean;
   selected: boolean;
+  isLast: boolean;
   onPress: () => void;
   onLongPress: () => void;
 }) => (
   <TouchableOpacity
-    style={[s.row, selected && s.rowSelected]}
+    style={[s.row, !isLast && s.rowDivider, selected && s.rowSelected]}
     onPress={onPress}
     onLongPress={onLongPress}
-    delayLongPress={2000}
-    activeOpacity={0.7}
+    activeOpacity={0.6}
   >
-    <View style={s.avatarWrap}>
-      <Image source={{ uri: item.avatar }} style={s.avatar} />
+    <View>
+      {item.avatar ? (
+        <Image source={{ uri: item.avatar }} style={s.avatar} />
+      ) : (
+        <View style={[s.avatar, s.avatarFallback]}>
+          <Text style={s.avatarInitials}>{initials(item.name)}</Text>
+        </View>
+      )}
       {selected ? (
-        <View style={s.selectedDot}>
-          <VectorIcon
-            iconSet="Ionicons"
-            iconName="checkmark"
-            size={11}
-            color="#fff"
-          />
+        <View style={s.tick}>
+          <VectorIcon iconSet="Ionicons" iconName="checkmark" size={11} color={theme.colors.white} />
         </View>
       ) : (
         item.online && <View style={s.onlineDot} />
       )}
     </View>
 
-    <View style={s.body}>
-      <View style={s.topRow}>
-        <View style={s.nameRow}>
-          <Text style={s.name} numberOfLines={1}>
-            {item.name}
-          </Text>
-          {/* subject badge only when student views teacher */}
-          {isStudent && item.subject && (
-            <View style={s.subjectBadge}>
-              <Text style={s.subjectText}>{item.subject}</Text>
-            </View>
-          )}
-        </View>
-        <Text
-          style={[s.time, item.unread > 0 && { color: theme.colors.primary }]}
-        >
-          {item.time}
+    <View style={s.rowText}>
+      <View style={s.rowLine}>
+        <Text style={s.name} numberOfLines={1}>
+          {item.name}
+          {isStudent && item.subject ? (
+            <Text style={s.subject}>{`  ${item.subject}`}</Text>
+          ) : null}
         </Text>
+        <Text style={[s.time, item.unread > 0 && s.timeUnread]}>{item.time}</Text>
       </View>
 
-      <View style={s.bottomRow}>
-        <Text
-          style={[s.lastMsg, item.unread > 0 && s.lastMsgBold]}
-          numberOfLines={1}
-        >
+      <View style={s.rowLine}>
+        <Text style={[s.last, item.unread > 0 && s.lastUnread]} numberOfLines={1}>
           {item.lastMessage}
         </Text>
         {item.unread > 0 && (
-          <View style={s.unreadBadge}>
+          <View style={s.unread}>
             <Text style={s.unreadText}>{item.unread}</Text>
           </View>
         )}
@@ -225,8 +227,7 @@ const ChatRow = ({
 );
 
 const ChatsListScreen = ({ navigation, route }: any) => {
-  const userRole: DrawerRole =
-    route?.params?.userRole === 'teacher' ? 'teacher' : 'student';
+  const userRole: DrawerRole = route?.params?.userRole === 'teacher' ? 'teacher' : 'student';
 
   const [chats, setChats] = useState<ChatItem[]>(
     userRole === 'student' ? STUDENT_CHATS : TEACHER_CHATS,
@@ -241,20 +242,15 @@ const ChatsListScreen = ({ navigation, route }: any) => {
 
   const selectionMode = selectedIds.length > 0;
 
-  const filteredChats = searchText.trim()
+  const q = searchText.trim().toLowerCase();
+  const filteredChats = q
     ? chats.filter(
-        c =>
-          c.name.toLowerCase().includes(searchText.trim().toLowerCase()) ||
-          (c.subject ?? '')
-            .toLowerCase()
-            .includes(searchText.trim().toLowerCase()),
+        c => c.name.toLowerCase().includes(q) || (c.subject ?? '').toLowerCase().includes(q),
       )
     : chats;
 
   const toggleSelect = (id: string) =>
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
-    );
+    setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
 
   const deleteSelected = () => {
     setChats(prev => prev.filter(c => !selectedIds.includes(c.id)));
@@ -262,146 +258,93 @@ const ChatsListScreen = ({ navigation, route }: any) => {
     setConfirmDelete(false);
   };
 
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchText('');
+  };
+
   return (
     <View style={s.root}>
-      {/* ── Top bar ── */}
-      <View style={s.topBar}>
-        {selectionMode ? (
-          <>
-            <TouchableOpacity
-              onPress={() => setSelectedIds([])}
-              style={s.topIconBtn}
-              activeOpacity={0.7}
-            >
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="close"
-                size={22}
-                color="#fff"
-              />
-            </TouchableOpacity>
-            <Text style={s.topTitle}>{selectedIds.length} selected</Text>
-            <TouchableOpacity
-              onPress={() => setConfirmDelete(true)}
-              style={s.topIconBtn}
-              activeOpacity={0.7}
-            >
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="trash-outline"
-                size={20}
-                color="#fff"
-              />
-            </TouchableOpacity>
-          </>
-        ) : searchOpen ? (
-          <>
-            <TouchableOpacity
-              onPress={() => {
-                setSearchOpen(false);
-                setSearchText('');
-              }}
-              style={s.topIconBtn}
-              activeOpacity={0.7}
-            >
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="arrow-back"
-                size={22}
-                color="#fff"
-              />
-            </TouchableOpacity>
+      <Header
+        title={selectionMode ? `${selectedIds.length} selected` : 'Chats'}
+        divider
+        height={50}
+        onBackPress={() => (selectionMode ? setSelectedIds([]) : navigation.goBack())}
+        rightSlot={
+          <TouchableOpacity
+            style={s.headBtn}
+            activeOpacity={0.6}
+            hitSlop={8}
+            onPress={() =>
+              selectionMode
+                ? setConfirmDelete(true)
+                : searchOpen
+                ? closeSearch()
+                : setSearchOpen(true)
+            }
+          >
+            <VectorIcon
+              iconSet="Ionicons"
+              iconName={selectionMode ? 'trash-outline' : searchOpen ? 'close' : 'search'}
+              size={19}
+              color={selectionMode ? theme.colors.danger : theme.colors.primary}
+            />
+          </TouchableOpacity>
+        }
+      />
+
+      {/* Search, only while it is asked for */}
+      {searchOpen && !selectionMode && (
+        <View style={s.searchWrap}>
+          <View style={s.searchRow}>
+            <VectorIcon iconSet="Ionicons" iconName="search" size={16} color={theme.colors.textMuted} />
             <TextInput
               style={s.searchInput}
-              placeholder="Search chats..."
-              placeholderTextColor="rgba(255,255,255,0.6)"
+              placeholder="Search chats"
+              placeholderTextColor={theme.colors.textMuted}
               value={searchText}
               onChangeText={setSearchText}
               autoFocus
+              returnKeyType="search"
             />
-            {searchText.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setSearchText('')}
-                style={s.topIconBtn}
-                activeOpacity={0.7}
-              >
-                <VectorIcon
-                  iconSet="Ionicons"
-                  iconName="close-circle"
-                  size={18}
-                  color="rgba(255,255,255,0.8)"
-                />
+            {!!searchText && (
+              <TouchableOpacity onPress={() => setSearchText('')} hitSlop={8}>
+                <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={theme.colors.textMuted} />
               </TouchableOpacity>
             )}
-          </>
-        ) : (
-          <>
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              style={s.topIconBtn}
-              activeOpacity={0.7}
-            >
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="arrow-back"
-                size={22}
-                color="#fff"
-              />
-            </TouchableOpacity>
-            <Text style={s.topTitle}>Chats</Text>
-            <TouchableOpacity
-              onPress={() => setSearchOpen(true)}
-              style={s.topIconBtn}
-              activeOpacity={0.7}
-            >
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="search"
-                size={20}
-                color="#fff"
-              />
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
+          </View>
+        </View>
+      )}
 
       <FlatList
         data={filteredChats}
         keyExtractor={i => i.id}
-        contentContainerStyle={s.list}
-        refreshControl={
-          <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        ItemSeparatorComponent={() => <View style={s.separator} />}
+        contentContainerStyle={[s.list, filteredChats.length === 0 && s.listEmpty]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
-          <View style={s.emptyBox}>
-            <VectorIcon
-              iconSet="Ionicons"
-              iconName="chatbubbles-outline"
-              size={44}
-              color={theme.colors.textMuted}
-            />
-            <Text style={s.emptyText}>No chats found</Text>
-          </View>
+          <DocNoData
+            icon="chatbubbles-outline"
+            title="No chats found"
+            subtitle={q ? 'Nothing matches that search.' : 'Your conversations will appear here.'}
+          />
         }
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <ChatRow
             item={item}
             isStudent={userRole === 'student'}
             selected={selectedIds.includes(item.id)}
+            isLast={index === filteredChats.length - 1}
             onPress={() => {
-              if (selectionMode) {
-                toggleSelect(item.id);
-              } else {
-                navigation.navigate('UserChats', { chat: item, userRole });
-              }
+              if (selectionMode) toggleSelect(item.id);
+              else navigation.navigate('UserChats', { chat: item, userRole });
             }}
             onLongPress={() => toggleSelect(item.id)}
           />
         )}
       />
 
-      {/* ── Delete confirmation (logout style) ── */}
+      {/* Delete confirmation */}
       <Modal
         transparent
         visible={confirmDelete}
@@ -410,40 +353,26 @@ const ChatsListScreen = ({ navigation, route }: any) => {
       >
         <View style={s.modalOverlay}>
           <View style={s.modalCard}>
-            <View style={s.modalIconWrap}>
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="trash-outline"
-                size={28}
-                color={theme.colors.danger}
-              />
-            </View>
-
-            <Text style={s.modalTitle}>Delete Chat{selectedIds.length > 1 ? 's' : ''}?</Text>
-            <Text style={s.modalDesc}>
-              {selectedIds.length} chat{selectedIds.length > 1 ? 's' : ''} will
-              be deleted. This cannot be undone.
+            <Text style={s.modalTitle}>
+              Delete {selectedIds.length === 1 ? 'chat' : `${selectedIds.length} chats`}?
             </Text>
-
+            <Text style={s.modalDesc}>
+              The conversation and its messages will be removed. This cannot be undone.
+            </Text>
             <View style={s.modalActions}>
               <TouchableOpacity
                 style={[s.modalBtn, s.modalBtnGhost]}
-                activeOpacity={0.85}
+                activeOpacity={0.7}
                 onPress={() => setConfirmDelete(false)}
               >
-                <Text style={[s.modalBtnText, s.modalBtnGhostText]}>
-                  Cancel
-                </Text>
+                <Text style={s.modalBtnGhostText}>Cancel</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={[s.modalBtn, s.modalBtnDanger]}
-                activeOpacity={0.9}
+                activeOpacity={0.85}
                 onPress={deleteSelected}
               >
-                <Text style={[s.modalBtnText, s.modalBtnDangerText]}>
-                  Delete
-                </Text>
+                <Text style={s.modalBtnDangerText}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -458,214 +387,118 @@ export default ChatsListScreen;
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
 
-  // Top bar
-  topBar: {
+  headBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+
+  // Search
+  searchWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.colors.primary,
-    paddingHorizontal: 8,
-    paddingTop: Platform.OS === 'ios' ? 52 : 14,
-    paddingBottom: 12,
-    gap: 4,
-    elevation: 4,
-  },
-  topIconBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  topTitle: {
-    flex: 1,
-    fontSize: 19,
-    fontWeight: '700',
-    color: '#fff',
-    marginLeft: 4,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#fff',
-    paddingVertical: 6,
-    marginLeft: 4,
-  },
-
-  list: { paddingVertical: 6, paddingBottom: 30, flexGrow: 1 },
-
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    gap: 10,
+    height: 44,
     paddingHorizontal: 14,
-    paddingVertical: 11,
-    backgroundColor: theme.colors.card,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
   },
+  searchInput: { flex: 1, fontSize: 15, color: theme.colors.textPrimary, padding: 0 },
+
+  // List
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 30 },
+  listEmpty: { flexGrow: 1 },
+
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  // Full-bleed highlight: the row's own padding stops at the page margin.
   rowSelected: {
-    backgroundColor: theme.colors.primaryLight,
+    backgroundColor: theme.colors.background,
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
   },
 
-  avatarWrap: { position: 'relative', marginRight: 13 },
-  avatar: { width: 52, height: 52, borderRadius: 26 },
+  avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: theme.colors.background },
+  avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+  avatarInitials: { fontSize: 15, fontWeight: '600', color: theme.colors.textSecondary },
   onlineDot: {
     position: 'absolute',
-    bottom: 1,
     right: 1,
-    width: 13,
-    height: 13,
-    borderRadius: 7,
+    bottom: 1,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
     backgroundColor: theme.colors.success,
     borderWidth: 2,
     borderColor: theme.colors.card,
   },
-  selectedDot: {
+  tick: {
     position: 'absolute',
-    bottom: 0,
     right: 0,
-    width: 18,
-    height: 18,
+    bottom: 0,
+    width: 17,
+    height: 17,
     borderRadius: 9,
     backgroundColor: theme.colors.primary,
-    borderWidth: 2,
-    borderColor: theme.colors.card,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: theme.colors.card,
   },
 
-  body: { flex: 1 },
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 3,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    marginRight: 8,
-  },
-  name: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: theme.colors.textPrimary,
-    flexShrink: 1,
-  },
-  subjectBadge: {
-    backgroundColor: theme.colors.primaryLight,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  subjectText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: theme.colors.primary,
-  },
-  time: { fontSize: 12, color: theme.colors.textMuted, fontWeight: '500' },
-
-  bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  lastMsg: {
-    fontSize: 14,
-    color: theme.colors.textMuted,
-    flex: 1,
-    marginRight: 8,
-  },
-  lastMsgBold: { color: theme.colors.textSecondary, fontWeight: '600' },
-
-  unreadBadge: {
-    minWidth: 21,
-    height: 21,
-    borderRadius: 11,
+  rowText: { flex: 1, gap: 3 },
+  rowLine: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  name: { flex: 1, fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  subject: { fontSize: 13, fontWeight: '400', color: theme.colors.textMuted },
+  time: { fontSize: 12, color: theme.colors.textMuted },
+  timeUnread: { color: theme.colors.primary, fontWeight: '500' },
+  last: { flex: 1, fontSize: 13, color: theme.colors.textSecondary },
+  lastUnread: { color: theme.colors.textPrimary, fontWeight: '500' },
+  unread: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
     backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
   },
-  unreadText: { fontSize: 11, fontWeight: '800', color: '#fff' },
+  unreadText: { fontSize: 11, fontWeight: '600', color: theme.colors.white },
 
-  separator: {
-    height: 1,
-    backgroundColor: theme.colors.border,
-    marginLeft: 79,
-  },
-
-  // Empty
-  emptyBox: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingTop: 60,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: theme.colors.textMuted,
-    fontWeight: '600',
-  },
-
-  // Delete confirmation modal (logout style)
+  // Confirm modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.lg,
+    padding: 24,
   },
   modalCard: {
     width: '100%',
     maxWidth: 420,
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.lg,
-    padding: theme.spacing.xl,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    padding: 24,
   },
-  modalIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: theme.radius.full,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: theme.spacing.md,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: theme.colors.textPrimary,
-    textAlign: 'center',
-  },
-  modalDesc: {
-    marginTop: theme.spacing.sm,
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-    marginTop: theme.spacing.xl,
-  },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
+  modalDesc: { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
   modalBtn: {
     flex: 1,
-    height: 48,
+    height: 46,
     borderRadius: theme.radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalBtnText: { fontSize: 15, fontWeight: '700' },
-  modalBtnGhost: { backgroundColor: theme.colors.border },
-  modalBtnGhostText: { color: theme.colors.textPrimary },
+  modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
+  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   modalBtnDanger: { backgroundColor: theme.colors.danger },
-  modalBtnDangerText: { color: theme.colors.white },
+  modalBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let s = __mk_s();
