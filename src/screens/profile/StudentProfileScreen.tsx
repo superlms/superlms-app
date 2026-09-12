@@ -169,8 +169,9 @@ const __mk_s = () => StyleSheet.create({
   },
   admission: { fontSize: 13, color: theme.colors.textMuted, marginTop: 4 },
 
-  // Full-width thin line between the head and the details
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.divider },
+  // Full-width line between the head and the details — 1px, a touch stronger
+  // than the hairline under the header.
+  divider: { height: 1, backgroundColor: theme.colors.divider },
 
   body: { paddingHorizontal: 20, paddingTop: 4 },
 
