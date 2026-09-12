@@ -621,7 +621,10 @@ const __mk_styles = () => StyleSheet.create({
     fontWeight: '700',
   },
   modalBtnGhost: {
-    backgroundColor: theme.colors.border,
+    // Outline-only Cancel: no fill, border in the colour the fill used to be
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
   },
   modalBtnGhostText: {
     color: theme.colors.textPrimary,
