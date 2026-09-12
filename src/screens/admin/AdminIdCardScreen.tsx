@@ -1,21 +1,70 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import Header from '../../components/Header';
-import ListRow from '../../components/ListRow';
+import { Skeleton } from '../../components/Skeleton';
 import FilterSheet from '../../components/FilterSheet';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
-import { theme } from '../../utils/theme';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { CardType, IdCardRow, IdCardAnalytics, getIdCards } from '../../api/adminIdCardApi';
+import { DocNoData } from '../more/docUi';
 
-const TYPES: { key: CardType; label: string; icon: string }[] = [
-  { key: 'student', label: 'Students', icon: 'people' },
-  { key: 'teacher', label: 'Teachers', icon: 'person' },
-  { key: 'employee', label: 'Employees', icon: 'briefcase' },
+const TITLE = 'ID Cards';
+
+const TYPES: { key: CardType; label: string }[] = [
+  { key: 'student', label: 'Students' },
+  { key: 'teacher', label: 'Teachers' },
+  { key: 'employee', label: 'Employees' },
 ];
+
+// ── One card as a plain three-line row ───────────────────────────────────────
+const CardRow = ({
+  row,
+  isLast,
+  onPress,
+}: {
+  row: IdCardRow;
+  isLast: boolean;
+  onPress: () => void;
+}) => {
+  const meta = [
+    row.card_number,
+    row.expiry_date ? `Exp ${row.expiry_date}` : null,
+    row.status ? row.status.charAt(0).toUpperCase() + row.status.slice(1) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <TouchableOpacity
+      style={[s.row, !isLast && s.rowDivider]}
+      activeOpacity={0.6}
+      onPress={onPress}
+    >
+      <Text style={s.rowTitle} numberOfLines={1}>
+        {row.name ?? '—'}
+      </Text>
+      {!!row.subtitle && (
+        <Text style={s.rowSub} numberOfLines={1}>
+          {row.subtitle}
+        </Text>
+      )}
+      <Text style={s.rowMeta} numberOfLines={1}>
+        {meta}
+      </Text>
+    </TouchableOpacity>
+  );
+};
 
 const AdminIdCardScreen = ({ navigation }: any) => {
   const [type, setType] = useState<CardType>('student');
@@ -24,6 +73,7 @@ const AdminIdCardScreen = ({ navigation }: any) => {
   const [standards, setStandards] = useState<{ id: number; name: string }[]>([]);
   const [sections, setSections] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -33,9 +83,11 @@ const AdminIdCardScreen = ({ navigation }: any) => {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await getIdCards({
-        type, search: search.trim() || undefined,
+        type,
+        search: search.trim() || undefined,
         standard: type === 'student' && fStd ? fStd : undefined,
         section: type === 'student' && fSec ? fSec : undefined,
         status: fStatus || undefined,
@@ -45,100 +97,167 @@ const AdminIdCardScreen = ({ navigation }: any) => {
       setStandards(res.standards);
       setSections(res.sections);
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load ID cards.'));
+      setError(apiErr(e, 'Could not load ID cards.'));
     } finally {
       setLoading(false);
     }
   }, [type, search, fStd, fSec, fStatus]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
   const { refreshing, onRefresh } = useRefresh(load);
 
   const activeFilters = (fStd ? 1 : 0) + (fSec ? 1 : 0) + (fStatus ? 1 : 0);
-  const opt = (arr: { id: number; name: string }[]) => [{ label: 'All', value: 0 }, ...arr.map(x => ({ label: x.name, value: x.id }))];
+  const opt = (arr: { id: number; name: string }[]) => [
+    { label: 'All', value: 0 },
+    ...arr.map(x => ({ label: x.name, value: x.id })),
+  ];
 
   const filterSections = [
-    ...(type === 'student' ? [
-      { key: 'std', title: 'Class', options: opt(standards), value: fStd, onChange: (v: any) => setFStd(v) },
-      { key: 'sec', title: 'Section', options: opt(sections), value: fSec, onChange: (v: any) => setFSec(v) },
-    ] : []),
-    { key: 'status', title: 'Status', options: [{ label: 'All', value: '' }, { label: 'Active', value: 'active' }, { label: 'Inactive', value: 'inactive' }], value: fStatus, onChange: (v: any) => setFStatus(v) },
+    ...(type === 'student'
+      ? [
+          { key: 'std', title: 'Class', options: opt(standards), value: fStd, onChange: (v: any) => setFStd(v) },
+          { key: 'sec', title: 'Section', options: opt(sections), value: fSec, onChange: (v: any) => setFSec(v) },
+        ]
+      : []),
+    {
+      key: 'status',
+      title: 'Status',
+      options: [
+        { label: 'All', value: '' },
+        { label: 'Active', value: 'active' },
+        { label: 'Inactive', value: 'inactive' },
+      ],
+      value: fStatus,
+      onChange: (v: any) => setFStatus(v),
+    },
   ];
+
+  const summary = analytics
+    ? `${analytics.total} total · ${analytics.issued} issued · ${analytics.remaining} remaining`
+    : '';
 
   return (
     <View style={s.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.card} />
       <Header
-        title="ID Cards"
-        onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
+        title={TITLE}
+        divider
+        height={50}
+        onBackPress={() =>
+          navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome')
+        }
         rightSlot={
-          <TouchableOpacity style={s.headBtn} onPress={() => setFilterOpen(true)} activeOpacity={0.8}>
-            <VectorIcon iconSet="Ionicons" iconName="filter" size={18} color={theme.colors.primary} />
-            {activeFilters > 0 && <View style={s.headDot}><Text style={s.headDotText}>{activeFilters}</Text></View>}
-          </TouchableOpacity>
+          <View style={s.headActions}>
+            <TouchableOpacity
+              style={s.headBtn}
+              activeOpacity={0.6}
+              hitSlop={6}
+              onPress={() => setFilterOpen(true)}
+            >
+              <VectorIcon iconSet="Ionicons" iconName="filter" size={18} color={theme.colors.primary} />
+              {activeFilters > 0 && <View style={s.headDot} />}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.headBtn}
+              activeOpacity={0.6}
+              hitSlop={6}
+              onPress={() => navigation.navigate('AdminIdCardGenerate', { type, standards })}
+            >
+              <VectorIcon iconSet="Ionicons" iconName="add" size={22} color={theme.colors.primary} />
+            </TouchableOpacity>
+          </View>
         }
       />
 
-      <View style={s.tabRow}>
+      {/* Who the cards are for — the web page's tab strip */}
+      <View style={s.tabs}>
         {TYPES.map(t => {
           const active = type === t.key;
           return (
-            <TouchableOpacity key={t.key} style={[s.tab, active && s.tabActive]}
-              onPress={() => { setType(t.key); setSearch(''); setFStd(0); setFSec(0); setFStatus(''); }} activeOpacity={0.8}>
-              <VectorIcon iconSet="Ionicons" iconName={t.icon} size={15} color={active ? theme.colors.primary : theme.colors.textSecondary} />
+            <TouchableOpacity
+              key={t.key}
+              style={[s.tab, active && s.tabActive]}
+              activeOpacity={0.6}
+              onPress={() => {
+                setType(t.key);
+                setSearch('');
+                setFStd(0);
+                setFSec(0);
+                setFStatus('');
+              }}
+            >
               <Text style={[s.tabText, active && s.tabTextActive]}>{t.label}</Text>
             </TouchableOpacity>
           );
         })}
       </View>
+      <View style={s.fullDivider} />
 
-      <View style={s.statRow}>
-        {[
-          { label: 'Total', value: analytics?.total, color: '#6366F1' },
-          { label: 'Issued', value: analytics?.issued, color: '#22C55E' },
-          { label: 'Remaining', value: analytics?.remaining, color: '#F59E0B' },
-        ].map(c => (
-          <View key={c.label} style={[s.statCard, { backgroundColor: c.color + '14' }]}>
-            <Text style={[s.statVal, { color: c.color }]}>{c.value ?? '—'}</Text>
-            <Text style={s.statLbl}>{c.label}</Text>
-          </View>
-        ))}
+      {/* Search and the running totals */}
+      <View style={s.searchWrap}>
+        <View style={s.searchRow}>
+          <VectorIcon iconSet="Ionicons" iconName="search" size={16} color={theme.colors.textMuted} />
+          <TextInput
+            style={s.searchInput}
+            placeholder="Search name or card number"
+            placeholderTextColor={theme.colors.textMuted}
+            value={search}
+            onChangeText={setSearch}
+            onSubmitEditing={load}
+            returnKeyType="search"
+          />
+          {!!search && (
+            <TouchableOpacity onPress={() => { setSearch(''); }} hitSlop={8}>
+              <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+        {!!summary && <Text style={s.summary}>{summary}</Text>}
       </View>
-
-      <View style={s.searchRow}>
-        <VectorIcon iconSet="Ionicons" iconName="search" size={16} color={theme.colors.textMuted} />
-        <TextInput style={s.searchInput} placeholder="Search name or card number"
-          placeholderTextColor={theme.colors.textMuted} value={search} onChangeText={setSearch} onSubmitEditing={load} returnKeyType="search" />
-        {!!search && <TouchableOpacity onPress={() => setSearch('')}><VectorIcon iconSet="Ionicons" iconName="close-circle" size={16} color={theme.colors.textMuted} /></TouchableOpacity>}
-      </View>
+      <View style={s.fullDivider} />
 
       {loading && !refreshing ? (
-        <View style={s.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>
-      ) : (
-        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-          {rows.length === 0 && <Text style={s.empty}>No ID cards yet. Tap Generate to issue cards.</Text>}
-          {rows.map(r => (
-            <ListRow
-              key={r.id}
-              color={r.status === 'active' ? '#6366F1' : '#EF4444'}
-              title={r.name ?? '—'}
-              subtitle={r.subtitle ?? ''}
-              metaIcon="card-outline"
-              meta={`${r.card_number}${r.expiry_date ? ` · exp ${r.expiry_date}` : ''}`}
-              tag={r.status}
-              tagColor={r.status === 'active' ? '#22C55E' : '#EF4444'}
-              onPress={() => navigation.navigate('AdminIdCardView', { type, card: r })}
-            />
+        <View style={s.list}>
+          {[0, 1, 2, 3, 4].map(i => (
+            <View key={i} style={[s.skeletonRow, i < 4 && s.rowDivider]}>
+              <Skeleton width="55%" height={14} />
+              <Skeleton width="35%" height={12} />
+              <Skeleton width="70%" height={10} />
+            </View>
           ))}
-          <View style={{ height: 90 }} />
+        </View>
+      ) : error ? (
+        <View style={s.centeredBox}>
+          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
+          <Text style={s.errorText}>{error}</Text>
+          <TouchableOpacity onPress={load} hitSlop={10}>
+            <Text style={s.linkText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.list}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {rows.length === 0 ? (
+            <DocNoData
+              icon="card-outline"
+              title="No ID cards found"
+              subtitle="Use the plus at the top to issue a batch."
+            />
+          ) : (
+            rows.map((r, i) => (
+              <CardRow
+                key={r.id}
+                row={r}
+                isLast={i === rows.length - 1}
+                onPress={() => navigation.navigate('AdminIdCardView', { type, card: r })}
+              />
+            ))
+          )}
         </ScrollView>
       )}
-
-      <TouchableOpacity style={s.fab} onPress={() => navigation.navigate('AdminIdCardGenerate', { type, standards })} activeOpacity={0.9}>
-        <VectorIcon iconSet="Ionicons" iconName="add" size={26} color="#fff" />
-        <Text style={s.fabText}>Generate</Text>
-      </TouchableOpacity>
 
       <FilterSheet
         visible={filterOpen}
@@ -152,25 +271,62 @@ const AdminIdCardScreen = ({ navigation }: any) => {
 
 export default AdminIdCardScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  loader: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 40 },
-  headBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
-  headDot: { position: 'absolute', top: -2, right: -2, minWidth: 15, height: 15, paddingHorizontal: 3, borderRadius: 8, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
-  headDotText: { fontSize: 9, fontWeight: '800', color: '#fff' },
-  tabRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 12 },
-  tab: { flex: 1, flexDirection: 'row', gap: 5, paddingVertical: 9, borderRadius: theme.radius.full, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
-  tabActive: { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primary },
-  tabText: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
-  tabTextActive: { color: theme.colors.primary },
-  statRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12 },
-  statCard: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
-  statVal: { fontSize: 20, fontWeight: '900' },
-  statLbl: { fontSize: 11, color: theme.colors.textSecondary, fontWeight: '600', marginTop: 2 },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 12, paddingHorizontal: 12, height: 42, borderRadius: 12, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
-  searchInput: { flex: 1, fontSize: 14, color: theme.colors.textPrimary, paddingVertical: 0 },
-  scroll: { paddingHorizontal: 16, paddingTop: 10 },
-  empty: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', marginTop: 40 },
-  fab: { position: 'absolute', right: 18, bottom: 24, height: 52, borderRadius: 26, paddingHorizontal: 18, flexDirection: 'row', gap: 6, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
-  fabText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
+
+  headActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  headDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: theme.colors.primary,
+  },
+
+  // Tabs
+  tabs: { flexDirection: 'row', gap: 22, paddingHorizontal: 20 },
+  tab: { paddingTop: 14, paddingBottom: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabActive: { borderBottomColor: theme.colors.primary },
+  tabText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
+  tabTextActive: { color: theme.colors.primary, fontWeight: '600' },
+
+  fullDivider: { height: 1, backgroundColor: theme.colors.border },
+
+  // Search
+  searchWrap: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10, gap: 8 },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: 44,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+  },
+  searchInput: { flex: 1, fontSize: 15, color: theme.colors.textPrimary, padding: 0 },
+  summary: { fontSize: 12, color: theme.colors.textMuted },
+
+  // List
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
+  row: { paddingVertical: 14, gap: 3 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  rowTitle: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  rowSub: { fontSize: 13, color: theme.colors.textSecondary },
+  rowMeta: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
+
+  // Loading skeleton
+  skeletonRow: { paddingVertical: 14, gap: 8 },
+
+  // Error
+  centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
+  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  linkText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });
