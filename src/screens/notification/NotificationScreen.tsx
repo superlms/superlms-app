@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
@@ -19,6 +18,9 @@ import {
   type NotificationItem,
 } from '../../notifications';
 import { navigateToScreen } from '../../navigation/navigationRef';
+import { DocHeader, DocNoData } from '../more/docUi';
+
+const TITLE = 'Notifications';
 
 // "3 mins ago" / "2 hrs ago" / "Yesterday" from an epoch-ms timestamp.
 const relativeTime = (ts: number): string => {
@@ -34,13 +36,70 @@ const relativeTime = (ts: number): string => {
   return new Date(ts).toLocaleDateString();
 };
 
-const FILTERS: (NotifCategory | 'All')[] = ['All'];
+// ── One notification as a plain row, separated by a divider ──────────────────
+// The category's own icon leads the row; an unread one carries that icon and
+// its title in the accent colour, which is what a loose dot used to say.
+//   📄  Exam Schedule Released                        ✕
+//       The mid-term timetable has been published.
+//       Exam · 2 hrs ago
+const NotificationRow = ({
+  item,
+  isLast,
+  onPress,
+  onDismiss,
+}: {
+  item: NotificationItem;
+  isLast: boolean;
+  onPress: () => void;
+  onDismiss: () => void;
+}) => {
+  const cfg = CATEGORY_CONFIG[item.category] ?? CATEGORY_CONFIG.General;
+  const unread = !item.read;
+
+  return (
+    <TouchableOpacity
+      style={[s.row, !isLast && s.rowDivider]}
+      activeOpacity={0.6}
+      onPress={onPress}
+    >
+      <View style={s.iconSlot}>
+        <VectorIcon
+          iconSet="Ionicons"
+          iconName={cfg.icon}
+          size={18}
+          color={unread ? theme.colors.primary : theme.colors.textSecondary}
+        />
+      </View>
+
+      <View style={s.body}>
+        <View style={s.line}>
+          <Text style={[s.title, unread && s.titleUnread]} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <TouchableOpacity onPress={onDismiss} hitSlop={10} activeOpacity={0.6}>
+            <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={theme.colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+
+        {!!item.body && (
+          <Text style={s.preview} numberOfLines={2}>
+            {item.body}
+          </Text>
+        )}
+
+        <Text style={s.meta} numberOfLines={1}>
+          {item.category} · {relativeTime(item.createdAt)}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 const NotificationScreen = () => {
   const { items, unreadCount, markRead, markAllRead, remove } = useNotifications();
   const [activeFilter, setActiveFilter] = useState<NotifCategory | 'All'>('All');
 
-  // Filter chips are built from whatever categories actually exist in the inbox.
+  // The tabs are built from whatever categories actually turned up in the inbox.
   const categories = useMemo(() => {
     const set = new Set<NotifCategory>();
     items.forEach(i => set.add(i.category));
@@ -56,131 +115,73 @@ const NotificationScreen = () => {
   // so push-synced inboxes (Phase 2) can hook a real loader here.
   const { refreshing, onRefresh } = useRefresh(async () => {});
 
-  const renderItem = ({ item }: { item: NotificationItem }) => {
-    const cfg = CATEGORY_CONFIG[item.category] ?? CATEGORY_CONFIG.General;
-    return (
-      <TouchableOpacity
-        style={[styles.card, !item.read && styles.cardUnread]}
-        onPress={() => {
-          markRead(item.id);
-          const data = item.data as
-            | { screen?: string; params?: Record<string, any> }
-            | undefined;
-          if (data?.screen) navigateToScreen(data.screen, data.params);
-        }}
-        activeOpacity={0.8}
-      >
-        {!item.read && <View style={styles.unreadDot} />}
-
-        <View style={[styles.iconWrap, { backgroundColor: cfg.bg }]}>
-          <VectorIcon iconSet="Ionicons" iconName={cfg.icon} size={20} color={cfg.color} />
-        </View>
-
-        <View style={styles.cardContent}>
-          <View style={styles.cardTop}>
-            <View style={[styles.categoryChip, { backgroundColor: cfg.bg }]}>
-              <Text style={[styles.categoryText, { color: cfg.color }]}>{item.category}</Text>
-            </View>
-            <Text style={styles.timeText}>{relativeTime(item.createdAt)}</Text>
-          </View>
-          <Text style={styles.cardTitle} numberOfLines={1}>
-            {item.title}
-          </Text>
-          {!!item.body && (
-            <Text style={styles.cardBody} numberOfLines={2}>
-              {item.body}
-            </Text>
-          )}
-        </View>
-
-        <TouchableOpacity
-          onPress={() => remove(item.id)}
-          style={styles.dismissBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={theme.colors.textMuted} />
-        </TouchableOpacity>
-      </TouchableOpacity>
-    );
+  const open = (item: NotificationItem) => {
+    markRead(item.id);
+    const data = item.data as { screen?: string; params?: Record<string, any> } | undefined;
+    if (data?.screen) navigateToScreen(data.screen, data.params);
   };
 
   return (
-    <View style={styles.safeArea}>
-      <Header title="Notifications" />
+    <View style={s.root}>
+      <DocHeader title={TITLE} />
 
-      {/* Top bar */}
-      <View style={styles.topBar}>
-        <View style={styles.topBarLeft}>
-          <Text style={styles.topBarTitle}>
-            {unreadCount > 0 ? `${unreadCount} Unread` : 'All caught up!'}
-          </Text>
-          {unreadCount > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
-            </View>
-          )}
-        </View>
+      {/* How many are waiting, and a way to clear them all at once */}
+      <View style={s.metaBar}>
+        <Text style={s.metaBarText}>
+          {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+        </Text>
         {unreadCount > 0 && (
-          <TouchableOpacity onPress={markAllRead} activeOpacity={0.7}>
-            <Text style={styles.markAllText}>Mark all read</Text>
+          <TouchableOpacity onPress={markAllRead} activeOpacity={0.6} hitSlop={8}>
+            <Text style={s.linkText}>Mark all read</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Filter chips (only when there is more than one category) */}
+      {/* Category tabs, only once there is more than one kind to choose from */}
       {categories.length > 2 && (
-        <View style={styles.filterWrapper}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterRow}
-          >
-            {categories.map(f => (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.tabs}
+        >
+          {categories.map(f => {
+            const active = activeFilter === f;
+            return (
               <TouchableOpacity
                 key={f}
-                style={[styles.filterBtn, activeFilter === f && styles.filterBtnActive]}
+                activeOpacity={0.6}
                 onPress={() => setActiveFilter(f)}
-                activeOpacity={0.8}
+                style={[s.tab, active && s.tabActive]}
               >
-                {f !== 'All' && (
-                  <VectorIcon
-                    iconSet="Ionicons"
-                    iconName={CATEGORY_CONFIG[f as NotifCategory].icon}
-                    size={13}
-                    color={activeFilter === f ? '#fff' : theme.colors.textSecondary}
-                  />
-                )}
-                <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>
-                  {f}
-                </Text>
+                <Text style={[s.tabText, active && s.tabTextActive]}>{f}</Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+            );
+          })}
+        </ScrollView>
       )}
+      <View style={s.fullDivider} />
 
-      {/* List */}
       <FlatList
         data={filtered}
         keyExtractor={i => i.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[s.list, filtered.length === 0 && s.listEmpty]}
         showsVerticalScrollIndicator={false}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
-          <View style={styles.emptyBox}>
-            <View style={styles.emptyIconRing}>
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="notifications-off-outline"
-                size={36}
-                color={theme.colors.primary}
-              />
-            </View>
-            <Text style={styles.emptyTitle}>No notifications</Text>
-            <Text style={styles.emptySubtitle}>You're all caught up</Text>
-          </View>
+          <DocNoData
+            icon="notifications-off-outline"
+            title="No notifications"
+            subtitle="Anything the school sends you will appear here."
+          />
         }
+        renderItem={({ item, index }) => (
+          <NotificationRow
+            item={item}
+            isLast={index === filtered.length - 1}
+            onPress={() => open(item)}
+            onDismiss={() => remove(item.id)}
+          />
+        )}
       />
     </View>
   );
@@ -188,117 +189,46 @@ const NotificationScreen = () => {
 
 export default NotificationScreen;
 
-const __mk_styles = () => StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: theme.colors.card },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
 
-  topBar: {
+  // Count and "mark all read"
+  metaBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    backgroundColor: theme.colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  topBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  topBarTitle: { fontSize: 13, fontWeight: '700', color: theme.colors.textPrimary },
-  unreadBadge: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.full,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  unreadBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
-  markAllText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
-
-  filterWrapper: {
-    backgroundColor: theme.colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  filterRow: {
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.sm,
-    gap: 8,
-    alignItems: 'center',
-  },
-  filterBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.card,
-  },
-  filterBtnActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-  filterText: { fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary },
-  filterTextActive: { color: '#fff' },
-
-  list: { padding: theme.spacing.lg, gap: 10, paddingBottom: 30 },
-
-  card: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     gap: 12,
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    padding: theme.spacing.md,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
-  cardUnread: {
-    borderColor: theme.colors.primary + '40',
-    backgroundColor: theme.colors.primaryLight + '60',
-  },
-  unreadDot: {
-    position: 'absolute',
-    top: 14,
-    left: 10,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: theme.colors.primary,
-  },
-  iconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: theme.radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  cardContent: { flex: 1, gap: 4 },
-  cardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  categoryChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: theme.radius.full },
-  categoryText: { fontSize: 10, fontWeight: '700' },
-  timeText: { fontSize: 11, color: theme.colors.textMuted },
-  cardTitle: { fontSize: 13, fontWeight: '700', color: theme.colors.textPrimary },
-  cardBody: { fontSize: 12, color: theme.colors.textSecondary, lineHeight: 17 },
-  dismissBtn: { paddingTop: 2 },
+  metaBarText: { fontSize: 12, color: theme.colors.textMuted },
+  linkText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
 
-  emptyBox: { alignItems: 'center', paddingTop: 60 },
-  emptyIconRing: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 4 },
-  emptySubtitle: { fontSize: 13, color: theme.colors.textMuted },
+  // Category tabs
+  tabs: { paddingHorizontal: 20, gap: 18 },
+  tab: { paddingBottom: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabActive: { borderBottomColor: theme.colors.primary },
+  tabText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
+  tabTextActive: { color: theme.colors.primary, fontWeight: '600' },
+
+  fullDivider: { height: 1, backgroundColor: theme.colors.border },
+
+  // List
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 30 },
+  listEmpty: { flexGrow: 1 },
+
+  row: { flexDirection: 'row', gap: 12, paddingVertical: 13 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  iconSlot: { width: 22, alignItems: 'center', paddingTop: 1 },
+  body: { flex: 1, gap: 4 },
+  line: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  title: { flex: 1, fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  titleUnread: { fontWeight: '600', color: theme.colors.primary },
+  preview: { fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19 },
+  meta: { fontSize: 12, color: theme.colors.textMuted },
 });
 
-
 // Themed stylesheets — rebuilt on light/dark toggle.
-let styles = __mk_styles();
-onThemeChange(() => { styles = __mk_styles(); });
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });
