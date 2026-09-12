@@ -12,13 +12,16 @@ import {
   View,
 } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
-import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
+import { Skeleton } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
-import AppRefreshControl from '../../components/AppRefreshControl';
-import { useRefresh } from '../../hooks/useRefresh';
+import { quietCaps } from '../../utils/quietCaps';
+import { DocHeader, DocNoData } from '../more/docUi';
 import { getTeacherClassesSubjects, marksErrorMessage, type ClassSubject } from '../../api/marksApi';
 import { createHomework, homeworkErrorMessage } from '../../api/homeworkApi';
+import { ErrorBox } from './homeworkUi';
+
+const TITLE = 'New Homework';
 
 interface PickedFile {
   uri: string;
@@ -26,13 +29,22 @@ interface PickedFile {
   type?: string;
 }
 
+// "Mathematics · 10th A"
+const tripleLabel = (t: ClassSubject) => {
+  const cls = [t.standard_name, t.section_name].filter(Boolean).join(' ');
+  return t.subject_name ? [quietCaps(t.subject_name), cls].filter(Boolean).join(' · ') : t.label;
+};
+
+const sameTriple = (a: ClassSubject | null, b: ClassSubject) =>
+  !!a && a.standard_id === b.standard_id && a.section_id === b.section_id && a.subject_id === b.subject_id;
+
 const AddHomeworkScreen = ({ navigation }: any) => {
   const [triples, setTriples] = useState<ClassSubject[]>([]);
   const [loadingTriples, setLoadingTriples] = useState(true);
   const [triplesError, setTriplesError] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<ClassSubject | null>(null);
-  const [dropOpen, setDropOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
   const [file, setFile] = useState<PickedFile | null>(null);
@@ -53,8 +65,6 @@ const AddHomeworkScreen = ({ navigation }: any) => {
   useEffect(() => {
     loadTriples();
   }, [loadTriples]);
-
-  const { refreshing, onRefresh } = useRefresh(loadTriples);
 
   const pickFile = () => {
     launchImageLibrary({ mediaType: 'mixed', quality: 0.8 }, res => {
@@ -95,147 +105,149 @@ const AddHomeworkScreen = ({ navigation }: any) => {
     }
   };
 
-  return (
-    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Header title="Add Homework" onBackPress={() => navigation.goBack()} />
-
-      <ScrollView
-        contentContainerStyle={s.scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <View style={s.card}>
-          <View style={[s.accentBar, { backgroundColor: theme.colors.primary }]} />
-          <View style={s.cardInner}>
-            <View style={s.cardTop}>
-              <View style={s.iconWrap}>
-                <VectorIcon iconSet="Ionicons" iconName="create-outline" size={20} color={theme.colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.cardTitle}>New Homework</Text>
-                <Text style={s.cardSubtitle}>Assign to one of your classes</Text>
-              </View>
+  const renderBody = () => {
+    if (loadingTriples) {
+      return (
+        <View style={s.loading}>
+          {[0, 1, 2].map(i => (
+            <View key={i} style={s.loadingField}>
+              <Skeleton width="30%" height={12} />
+              <Skeleton width="100%" height={46} radius={theme.radius.md} />
             </View>
+          ))}
+        </View>
+      );
+    }
+    if (triplesError) return <ErrorBox message={triplesError} onRetry={loadTriples} />;
+    if (triples.length === 0) {
+      return (
+        <DocNoData
+          icon="book-outline"
+          title="No subject assigned"
+          subtitle="No classes or subjects are assigned to you in the timetable yet."
+        />
+      );
+    }
 
-            {/* Class & Subject picker */}
-            <Text style={s.label}>Class & Subject</Text>
-            {loadingTriples ? (
-              <View style={s.inlineLoad}>
-                <ActivityIndicator color={theme.colors.primary} />
-              </View>
-            ) : triplesError ? (
-              <View style={s.inlineError}>
-                <Text style={s.inlineErrorText}>{triplesError}</Text>
-                <TouchableOpacity onPress={loadTriples} style={s.retryBtn} activeOpacity={0.85}>
-                  <Text style={s.retryText}>Retry</Text>
-                </TouchableOpacity>
-              </View>
-            ) : triples.length === 0 ? (
-              <View style={s.emptyBox}>
-                <View style={s.emptyIconRing}>
-                  <VectorIcon iconSet="Ionicons" iconName="book-outline" size={34} color={theme.colors.primary} />
-                </View>
-                <Text style={s.emptyTitle}>No subject assigned</Text>
-                <Text style={s.emptySubtitle}>
-                  No classes or subjects are assigned to you in the timetable yet.
-                </Text>
-              </View>
-            ) : (
-              <View style={dropOpen ? { zIndex: 30 } : undefined}>
-                <TouchableOpacity style={s.dropBtn} activeOpacity={0.8} onPress={() => setDropOpen(o => !o)}>
-                  <Text style={[s.dropValue, !selected && { color: theme.colors.textMuted }]} numberOfLines={1}>
-                    {selected ? selected.label : 'Choose class · section · subject'}
-                  </Text>
-                  <VectorIcon iconSet="Ionicons" iconName={dropOpen ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.primary} />
-                </TouchableOpacity>
-                {dropOpen && (
-                  <View style={s.dropList}>
-                    {triples.map((t, i) => {
-                      const active =
-                        selected?.standard_id === t.standard_id &&
-                        selected?.section_id === t.section_id &&
-                        selected?.subject_id === t.subject_id;
-                      return (
-                        <TouchableOpacity
-                          key={`${t.standard_id}:${t.section_id}:${t.subject_id}`}
-                          style={[s.dropItem, i === triples.length - 1 && { borderBottomWidth: 0 }, active && s.dropItemActive]}
-                          activeOpacity={0.7}
-                          onPress={() => {
-                            setSelected(t);
-                            setDropOpen(false);
-                          }}
-                        >
-                          <Text style={[s.dropItemText, active && s.dropItemTextActive]}>{t.label}</Text>
-                          {active && <VectorIcon iconSet="Ionicons" iconName="checkmark" size={16} color={theme.colors.primary} />}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
+    return (
+      <>
+        <ScrollView
+          style={s.fill}
+          contentContainerStyle={s.form}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Class and subject */}
+          <View>
+            <Text style={s.label}>Class and subject</Text>
+            <TouchableOpacity style={[s.field, s.picker]} activeOpacity={0.7} onPress={() => setPickerOpen(o => !o)}>
+              <Text style={[s.pickerText, !selected && s.placeholder]} numberOfLines={1}>
+                {selected ? tripleLabel(selected) : 'Choose a class and subject'}
+              </Text>
+              <VectorIcon
+                iconSet="Ionicons"
+                iconName={pickerOpen ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={theme.colors.textMuted}
+              />
+            </TouchableOpacity>
+
+            {pickerOpen && (
+              <View style={s.options}>
+                {triples.map((t, i) => {
+                  const active = sameTriple(selected, t);
+                  return (
+                    <TouchableOpacity
+                      key={`${t.standard_id}:${t.section_id}:${t.subject_id}`}
+                      style={[s.option, i < triples.length - 1 && s.optionDivider]}
+                      activeOpacity={0.6}
+                      onPress={() => {
+                        setSelected(t);
+                        setPickerOpen(false);
+                      }}
+                    >
+                      <Text style={[s.optionText, active && s.optionTextActive]}>{tripleLabel(t)}</Text>
+                      {active && (
+                        <VectorIcon iconSet="Ionicons" iconName="checkmark" size={16} color={theme.colors.primary} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             )}
+          </View>
 
-            {triples.length > 0 && (
-            <>
+          {/* Title */}
+          <View>
             <Text style={s.label}>Title</Text>
             <TextInput
-              style={s.input}
+              style={s.field}
               value={title}
               onChangeText={setTitle}
               placeholder="e.g. Chapter 3 Exercise"
               placeholderTextColor={theme.colors.textMuted}
             />
+          </View>
 
+          {/* Description */}
+          <View>
             <Text style={s.label}>Description</Text>
             <TextInput
-              style={[s.input, s.inputMulti]}
+              style={[s.field, s.fieldMulti]}
               value={desc}
               onChangeText={setDesc}
-              placeholder="Describe the homework task..."
+              placeholder="What should the class do?"
               placeholderTextColor={theme.colors.textMuted}
               multiline
               textAlignVertical="top"
             />
+          </View>
 
-            <Text style={s.label}>Attachment (optional)</Text>
+          {/* Attachment */}
+          <View>
+            <Text style={s.label}>Attachment</Text>
             {file ? (
-              <View style={s.filePreview}>
-                <View style={s.fileIconBox}>
-                  <VectorIcon iconSet="Feather" iconName="paperclip" size={14} color={theme.colors.primary} />
-                </View>
-                <Text style={s.fileName} numberOfLines={1}>{file.name}</Text>
-                <TouchableOpacity onPress={() => setFile(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <VectorIcon iconSet="Ionicons" iconName="close-circle" size={20} color={theme.colors.danger} />
+              <View style={[s.field, s.fileRow]}>
+                <VectorIcon iconSet="Ionicons" iconName="document-attach-outline" size={18} color={theme.colors.textSecondary} />
+                <Text style={s.fileName} numberOfLines={1}>
+                  {file.name}
+                </Text>
+                <TouchableOpacity onPress={() => setFile(null)} hitSlop={8} activeOpacity={0.6}>
+                  <Text style={s.removeText}>Remove</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity style={s.attachBtn} onPress={pickFile} activeOpacity={0.8}>
-                <VectorIcon iconSet="Ionicons" iconName="attach" size={16} color={theme.colors.primary} />
-                <Text style={s.attachBtnText}>Attach a document</Text>
+              <TouchableOpacity style={[s.field, s.fileRow]} onPress={pickFile} activeOpacity={0.7}>
+                <VectorIcon iconSet="Ionicons" iconName="attach-outline" size={18} color={theme.colors.textSecondary} />
+                <Text style={s.pickText}>Attach a photo or video</Text>
               </TouchableOpacity>
             )}
-
-            <TouchableOpacity
-              style={[s.submitBtn, submitting && { opacity: 0.6 }]}
-              activeOpacity={0.85}
-              onPress={handleSubmit}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <VectorIcon iconSet="Ionicons" iconName="send" size={15} color="#fff" />
-              )}
-              <Text style={s.submitText}>{submitting ? 'Posting…' : 'Post Homework'}</Text>
-            </TouchableOpacity>
-            </>
-            )}
           </View>
+        </ScrollView>
+
+        {/* Post */}
+        <View style={s.bar}>
+          <TouchableOpacity
+            style={[s.postBtn, submitting && s.postBtnBusy]}
+            activeOpacity={0.85}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color={theme.colors.white} />
+            ) : (
+              <Text style={s.postText}>Post homework</Text>
+            )}
+          </TouchableOpacity>
         </View>
-      </ScrollView>
+      </>
+    );
+  };
+
+  return (
+    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+      {renderBody()}
     </KeyboardAvoidingView>
   );
 };
@@ -243,152 +255,66 @@ const AddHomeworkScreen = ({ navigation }: any) => {
 export default AddHomeworkScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: theme.spacing.lg, paddingBottom: 40 },
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  fill: { flex: 1 },
 
-  card: {
-    backgroundColor: theme.colors.card,
+  // Form
+  form: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 28, gap: 22 },
+  label: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 8 },
+  field: {
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: theme.colors.textPrimary,
+  },
+  fieldMulti: { minHeight: 120, lineHeight: 22 },
+
+  // Class picker
+  picker: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14 },
+  pickerText: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
+  placeholder: { color: theme.colors.textMuted },
+  options: {
+    marginTop: 6,
     borderRadius: theme.radius.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    overflow: 'hidden',
-    elevation: 2,
-  },
-  accentBar: { height: 4, width: '100%' },
-  cardInner: { padding: theme.spacing.md },
-  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary },
-  cardSubtitle: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
-
-  label: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary, marginBottom: 6, marginTop: 8 },
-  input: {
-    backgroundColor: theme.colors.background,
-    borderRadius: theme.radius.sm,
     paddingHorizontal: 14,
+  },
+  option: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13 },
+  optionDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
+  optionText: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
+  optionTextActive: { color: theme.colors.primary, fontWeight: '500' },
+
+  // Attachment
+  fileRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14 },
+  fileName: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
+  removeText: { fontSize: 14, fontWeight: '500', color: theme.colors.danger },
+  pickText: { fontSize: 15, color: theme.colors.textSecondary },
+
+  // Post
+  bar: {
+    paddingHorizontal: 20,
     paddingVertical: 12,
-    fontSize: 14,
-    color: theme.colors.textPrimary,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  inputMulti: { minHeight: 100 },
-  helpText: { fontSize: 13, color: theme.colors.textMuted, paddingVertical: 8 },
-
-  // Books-style empty state (no assigned subjects)
-  emptyBox: { alignItems: 'center', paddingTop: 24, paddingBottom: 12, paddingHorizontal: 12 },
-  emptyIconRing: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 4 },
-  emptySubtitle: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', lineHeight: 19 },
-
-  inlineLoad: { paddingVertical: 16, alignItems: 'center' },
-  inlineError: { gap: 8, paddingVertical: 10, alignItems: 'flex-start' },
-  inlineErrorText: { fontSize: 13, color: theme.colors.textSecondary },
-  retryBtn: {
-    borderWidth: 1.5,
-    borderColor: theme.colors.primary,
-    borderRadius: theme.radius.full,
-    paddingHorizontal: 18,
-    paddingVertical: 6,
-  },
-  retryText: { fontSize: 13, fontWeight: '700', color: theme.colors.primary },
-
-  dropBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: theme.colors.background,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  dropValue: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary, paddingRight: 8 },
-  dropList: {
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    marginTop: 6,
-    overflow: 'hidden',
-    elevation: 4,
   },
-  dropItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  dropItemActive: { backgroundColor: theme.colors.primaryLight },
-  dropItemText: { fontSize: 14, color: theme.colors.textSecondary, fontWeight: '600', flex: 1, paddingRight: 8 },
-  dropItemTextActive: { color: theme.colors.primary, fontWeight: '700' },
-
-  attachBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: theme.colors.background,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderStyle: 'dashed',
-    borderRadius: theme.radius.sm,
-    paddingVertical: 12,
-  },
-  attachBtnText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
-  filePreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: theme.colors.primaryLight,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: `${theme.colors.primary}30`,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  fileIconBox: {
-    width: 30,
-    height: 30,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fileName: { flex: 1, fontSize: 13, fontWeight: '600', color: theme.colors.textPrimary },
-
-  submitBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+  postBtn: {
+    height: 48,
+    borderRadius: theme.radius.md,
     backgroundColor: theme.colors.primary,
-    borderRadius: theme.radius.sm,
-    paddingVertical: 14,
-    marginTop: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  submitText: { fontSize: 14, fontWeight: '800', color: '#fff' },
-});
+  postBtnBusy: { opacity: 0.7 },
+  postText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 
+  // Loading
+  loading: { paddingHorizontal: 20, paddingTop: 20, gap: 22 },
+  loadingField: { gap: 8 },
+});
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let s = __mk_s();

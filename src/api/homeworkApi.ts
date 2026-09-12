@@ -89,36 +89,6 @@ export const deleteHomework = async (id: number): Promise<void> => {
   await apiClient.delete(`/homework/delete/${id}`);
 };
 
-// ─── Subject visuals (server has no styling fields) ───────────────────────────
-const PALETTE = [
-  { color: '#6366F1', bg: '#EEF2FF' },
-  { color: '#0EA5E9', bg: '#E0F2FE' },
-  { color: '#10B981', bg: '#D1FAE5' },
-  { color: '#F59E0B', bg: '#FEF3C7' },
-  { color: '#EF4444', bg: '#FEE2E2' },
-  { color: '#8B5CF6', bg: '#EDE9FE' },
-  { color: '#EC4899', bg: '#FCE7F3' },
-];
-const EMOJI: { match: string; icon: string }[] = [
-  { match: 'math', icon: '📐' },
-  { match: 'eng', icon: '📖' },
-  { match: 'phys', icon: '⚛️' },
-  { match: 'chem', icon: '🧪' },
-  { match: 'bio', icon: '🌿' },
-  { match: 'sci', icon: '🔬' },
-  { match: 'hist', icon: '🏛️' },
-  { match: 'geo', icon: '🌍' },
-  { match: 'comp', icon: '💻' },
-  { match: 'hindi', icon: '🕉️' },
-];
-export const homeworkSubjectVisual = (name: string): { icon: string; color: string; bg: string } => {
-  const n = (name || '').toLowerCase();
-  const icon = EMOJI.find(e => n.includes(e.match))?.icon ?? '📚';
-  let h = 0;
-  for (let i = 0; i < n.length; i++) h = (h + n.charCodeAt(i)) % PALETTE.length;
-  return { icon, ...PALETTE[h] };
-};
-
 export const homeworkErrorMessage = (e: any): string => {
   const status = e?.response?.status;
   const serverMsg = e?.response?.data?.message;
