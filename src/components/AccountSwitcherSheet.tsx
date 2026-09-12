@@ -5,7 +5,6 @@ import {
   Image,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -40,6 +39,13 @@ interface Props {
   onClose: () => void;
 }
 
+/**
+ * The account switcher: every account signed in on this device as a plain row
+ * — photo, name, and who they are where — with a line between them. Tap one to
+ * switch to it; the one in use carries a tick. Adding an account is a short
+ * form in the same sheet.
+ */
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const initialsOf = (name: string) =>
   name.trim().split(/\s+/).slice(0, 2).map(p => p[0]?.toUpperCase() ?? '').join('') || '?';
@@ -56,7 +62,7 @@ const routeForType = (type: AccountType) => {
   }
 };
 
-// Human label for the account-type badge.
+// Human label for the account type.
 const labelForType = (type: AccountType) => {
   switch (type) {
     case 'teacher':
@@ -71,20 +77,14 @@ const labelForType = (type: AccountType) => {
 };
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
-const Avatar = ({ uri, name, size = 44 }: { uri?: string | null; name: string; size?: number }) => {
+const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
   const [broken, setBroken] = useState(false);
   if (uri && !broken) {
-    return (
-      <Image
-        source={{ uri }}
-        onError={() => setBroken(true)}
-        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: theme.colors.surface }}
-      />
-    );
+    return <Image source={{ uri }} onError={() => setBroken(true)} style={s.avatar} />;
   }
   return (
-    <View style={[av.fallback, { width: size, height: size, borderRadius: size / 2 }]}>
-      <Text style={[av.fallbackText, { fontSize: size * 0.36 }]}>{initialsOf(name)}</Text>
+    <View style={[s.avatar, s.avatarFallback]}>
+      <Text style={s.avatarInitials}>{initialsOf(name)}</Text>
     </View>
   );
 };
@@ -93,19 +93,19 @@ const Avatar = ({ uri, name, size = 44 }: { uri?: string | null; name: string; s
 const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
   const navigation = useNavigation<any>();
 
-  const [mode, setMode]           = useState<Mode>('list');
-  const [accounts, setAccounts]   = useState<StoredAccount[]>([]);
-  const [activeId, setActiveId]   = useState<number | null>(null);
-  const [busyId, setBusyId]       = useState<number | null>(null);
-  const [bootstrapping, setBoot]  = useState(false);
+  const [mode, setMode] = useState<Mode>('list');
+  const [accounts, setAccounts] = useState<StoredAccount[]>([]);
+  const [activeId, setActiveId] = useState<number | null>(null);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [bootstrapping, setBoot] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<StoredAccount | null>(null);
 
   // Add-account form state (role is auto-detected from the identifier)
-  const [identifier, setIdent]    = useState('');
-  const [password, setPassword]   = useState('');
-  const [showPass, setShowPass]   = useState(false);
-  const [adding, setAdding]       = useState(false);
-  const [addError, setAddError]   = useState('');
+  const [identifier, setIdent] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState('');
 
   const refresh = useCallback(async () => {
     const [list, id] = await Promise.all([listAccounts(), getActiveAccountId()]);
@@ -124,13 +124,13 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
       const snap = await fetchCurrentSnapshot();
       if (snap) {
         await bootstrapCurrent({
-          user_id:     snap.user_id,
-          user_type:   snap.user_type,
-          name:        snap.name,
-          email:       snap.email,
-          image:       snap.image,
+          user_id: snap.user_id,
+          user_type: snap.user_type,
+          name: snap.name,
+          email: snap.email,
+          image: snap.image,
           organization: snap.organization,
-          class_info:  snap.class_info,
+          class_info: snap.class_info,
         });
         await refresh();
       }
@@ -246,15 +246,15 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
 
       // Don't allow adding the same account twice — just refresh its token.
       await upsertAccount({
-        user_id:      account.user_id,
-        user_type:    account.user_type,
-        name:         account.name,
-        email:        account.email,
-        image:        account.image,
+        user_id: account.user_id,
+        user_type: account.user_type,
+        name: account.name,
+        email: account.email,
+        image: account.image,
         organization: account.organization,
-        class_info:   account.class_info,
+        class_info: account.class_info,
         token,
-        added_at:     Date.now(),
+        added_at: Date.now(),
       });
 
       resetAddForm();
@@ -274,12 +274,7 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={s.backdrop}>
         {/* Tap outside to close */}
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
@@ -287,47 +282,64 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
           <View style={s.sheet}>
             <View style={s.handle} />
 
-              {/* Header */}
-              <View style={s.header}>
-                {mode === 'add' ? (
-                  <TouchableOpacity onPress={() => { resetAddForm(); setMode('list'); }} hitSlop={10}>
-                    <VectorIcon iconSet="Ionicons" iconName="chevron-back" size={22} color={theme.colors.textPrimary} />
-                  </TouchableOpacity>
-                ) : <View style={{ width: 22 }} />}
-                <Text style={s.title}>{mode === 'add' ? 'Add account' : 'Switch accounts'}</Text>
-                <TouchableOpacity onPress={onClose} hitSlop={10}>
-                  <VectorIcon iconSet="Ionicons" iconName="close" size={22} color={theme.colors.textPrimary} />
+            {/* Header */}
+            <View style={s.header}>
+              {mode === 'add' && (
+                <TouchableOpacity
+                  onPress={() => {
+                    resetAddForm();
+                    setMode('list');
+                  }}
+                  hitSlop={10}
+                  activeOpacity={0.6}
+                  style={s.back}
+                >
+                  <VectorIcon iconSet="Ionicons" iconName="chevron-back" size={22} color={theme.colors.textPrimary} />
                 </TouchableOpacity>
-              </View>
-
-              {mode === 'list' ? (
-                <ListBody
-                  bootstrapping={bootstrapping}
-                  accounts={sorted}
-                  activeId={activeId}
-                  busyId={busyId}
-                  onSwitch={onSwitch}
-                  onRemove={onRemove}
-                  onAdd={() => { resetAddForm(); setMode('add'); }}
-                />
-              ) : (
-                <AddBody
-                  identifier={identifier}
-                  setIdentifier={t => { setIdent(t); setAddError(''); }}
-                  password={password}
-                  setPassword={t => { setPassword(t); setAddError(''); }}
-                  showPass={showPass}
-                  toggleShowPass={() => setShowPass(v => !v)}
-                  error={addError}
-                  loading={adding}
-                  onSubmit={onSubmitAdd}
-                />
               )}
+              <Text style={s.title}>{mode === 'add' ? 'Add account' : 'Switch account'}</Text>
+              <TouchableOpacity onPress={onClose} hitSlop={10} activeOpacity={0.6}>
+                <VectorIcon iconSet="Ionicons" iconName="close" size={22} color={theme.colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {mode === 'list' ? (
+              <ListBody
+                bootstrapping={bootstrapping}
+                accounts={sorted}
+                activeId={activeId}
+                busyId={busyId}
+                onSwitch={onSwitch}
+                onRemove={onRemove}
+                onAdd={() => {
+                  resetAddForm();
+                  setMode('add');
+                }}
+              />
+            ) : (
+              <AddBody
+                identifier={identifier}
+                setIdentifier={t => {
+                  setIdent(t);
+                  setAddError('');
+                }}
+                password={password}
+                setPassword={t => {
+                  setPassword(t);
+                  setAddError('');
+                }}
+                showPass={showPass}
+                toggleShowPass={() => setShowPass(v => !v)}
+                error={addError}
+                loading={adding}
+                onSubmit={onSubmitAdd}
+              />
+            )}
           </View>
         </KeyboardAvoidingView>
       </View>
 
-      {/* Remove confirmation, styled like the drawer's logout modal */}
+      {/* Remove confirmation, the same plain dialog as everywhere else */}
       <Modal
         transparent
         visible={!!removeTarget}
@@ -336,39 +348,23 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
       >
         <View style={s.confirmOverlay}>
           <View style={s.confirmCard}>
-            <View style={s.confirmIconWrap}>
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="person-remove-outline"
-                size={28}
-                color={theme.colors.danger}
-              />
-            </View>
-
-            <Text style={s.confirmTitle}>Remove account</Text>
+            <Text style={s.confirmTitle}>Remove account?</Text>
             <Text style={s.confirmDesc}>
-              {removeTarget?.name} will be signed out on this device.
+              {removeTarget?.name} will be signed out on this device. You can add the account again
+              any time.
             </Text>
 
             <View style={s.confirmActions}>
               <TouchableOpacity
                 style={[s.confirmBtn, s.confirmBtnGhost]}
-                activeOpacity={0.85}
+                activeOpacity={0.7}
                 onPress={() => setRemoveTarget(null)}
               >
-                <Text style={[s.confirmBtnText, s.confirmBtnGhostText]}>
-                  Cancel
-                </Text>
+                <Text style={s.confirmBtnGhostText}>Cancel</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[s.confirmBtn, s.confirmBtnDanger]}
-                activeOpacity={0.9}
-                onPress={doRemove}
-              >
-                <Text style={[s.confirmBtnText, s.confirmBtnDangerText]}>
-                  Remove
-                </Text>
+              <TouchableOpacity style={[s.confirmBtn, s.confirmBtnDanger]} activeOpacity={0.85} onPress={doRemove}>
+                <Text style={s.confirmBtnDangerText}>Remove</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -383,14 +379,16 @@ export default AccountSwitcherSheet;
 // ─── List body ────────────────────────────────────────────────────────────────
 interface ListBodyProps {
   bootstrapping: boolean;
-  accounts:      StoredAccount[];
-  activeId:      number | null;
-  busyId:        number | null;
-  onSwitch:      (a: StoredAccount) => void;
-  onRemove:      (a: StoredAccount) => void;
-  onAdd:         () => void;
+  accounts: StoredAccount[];
+  activeId: number | null;
+  busyId: number | null;
+  onSwitch: (a: StoredAccount) => void;
+  onRemove: (a: StoredAccount) => void;
+  onAdd: () => void;
 }
 
+//   (photo)  Amit Dagur                                   ✓
+//            Student · Delhi Model School
 const ListBody = ({ bootstrapping, accounts, activeId, busyId, onSwitch, onRemove, onAdd }: ListBodyProps) => {
   if (bootstrapping && accounts.length === 0) {
     return (
@@ -404,51 +402,52 @@ const ListBody = ({ bootstrapping, accounts, activeId, busyId, onSwitch, onRemov
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.listContent}>
       {accounts.map(acct => {
         const isActive = acct.user_id === activeId;
-        const isBusy   = acct.user_id === busyId;
-        return (
-          <TouchableOpacity
-            key={acct.user_id}
-            activeOpacity={0.85}
-            onPress={() => onSwitch(acct)}
-            disabled={isActive || isBusy}
-            style={[s.row, isActive && s.rowActive]}
-          >
-            <Avatar uri={acct.image} name={acct.name} />
-            <View style={s.rowMain}>
-              <View style={s.rowNameLine}>
-                <Text style={s.rowName} numberOfLines={1}>{acct.name}</Text>
-                <View style={s.typeBadge}>
-                  <Text style={s.typeBadgeText}>
-                    {labelForType(acct.user_type)}
-                  </Text>
-                </View>
-              </View>
-            </View>
+        const isBusy = acct.user_id === busyId;
+        const meta = [labelForType(acct.user_type), acct.organization?.name || acct.email]
+          .filter(Boolean)
+          .join(' · ');
 
-            {isBusy ? (
-              <ActivityIndicator color={theme.colors.primary} />
-            ) : isActive ? (
-              <View style={s.checkBadge}>
-                <VectorIcon iconSet="Ionicons" iconName="checkmark" size={14} color="#fff" />
+        return (
+          <View key={acct.user_id}>
+            <TouchableOpacity
+              activeOpacity={0.6}
+              onPress={() => onSwitch(acct)}
+              disabled={isActive || isBusy}
+              style={s.row}
+            >
+              <Avatar uri={acct.image} name={acct.name} />
+              <View style={s.rowMain}>
+                <Text style={[s.rowName, isActive && s.rowNameActive]} numberOfLines={1}>
+                  {acct.name}
+                </Text>
+                <Text style={s.rowMeta} numberOfLines={1}>
+                  {isActive ? `${meta} · In use` : meta}
+                </Text>
               </View>
-            ) : (
-              <TouchableOpacity
-                onPress={() => onRemove(acct)}
-                hitSlop={10}
-                style={s.removeBtn}
-              >
-                <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={theme.colors.textMuted} />
-              </TouchableOpacity>
-            )}
-          </TouchableOpacity>
+
+              {isBusy ? (
+                <ActivityIndicator color={theme.colors.primary} />
+              ) : isActive ? (
+                <VectorIcon iconSet="Ionicons" iconName="checkmark-circle" size={22} color={theme.colors.primary} />
+              ) : (
+                <TouchableOpacity onPress={() => onRemove(acct)} hitSlop={10} activeOpacity={0.6}>
+                  <Text style={s.removeText}>Remove</Text>
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
+            <View style={s.rowDivider} />
+          </View>
         );
       })}
 
-      <TouchableOpacity activeOpacity={0.85} onPress={onAdd} style={s.addRow}>
-        <View style={s.addPlus}>
+      <TouchableOpacity activeOpacity={0.6} onPress={onAdd} style={s.row}>
+        <View style={[s.avatar, s.addIcon]}>
           <VectorIcon iconSet="Ionicons" iconName="add" size={22} color={theme.colors.primary} />
         </View>
-        <Text style={s.addText}>Add account</Text>
+        <View style={s.rowMain}>
+          <Text style={s.addText}>Add account</Text>
+          <Text style={s.rowMeta}>Stay signed in to more than one account</Text>
+        </View>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -456,34 +455,33 @@ const ListBody = ({ bootstrapping, accounts, activeId, busyId, onSwitch, onRemov
 
 // ─── Add body ─────────────────────────────────────────────────────────────────
 interface AddBodyProps {
-  identifier:     string;
-  setIdentifier:  (t: string) => void;
-  password:       string;
-  setPassword:    (t: string) => void;
-  showPass:       boolean;
+  identifier: string;
+  setIdentifier: (t: string) => void;
+  password: string;
+  setPassword: (t: string) => void;
+  showPass: boolean;
   toggleShowPass: () => void;
-  error:          string;
-  loading:        boolean;
-  onSubmit:       () => void;
+  error: string;
+  loading: boolean;
+  onSubmit: () => void;
 }
 
 const AddBody = (p: AddBodyProps) => (
   <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.addContent} showsVerticalScrollIndicator={false}>
     {/* Identifier — role is auto-detected (admission number = student, email = staff) */}
-    <Text style={s.label}>Email or Admission Number</Text>
+    <Text style={s.label}>Email or admission number</Text>
     <TextInput
-      placeholder="you@school.com  or  2026DMO650015"
+      placeholder="you@school.com or 2026DMO650015"
       placeholderTextColor={theme.colors.textMuted}
       value={p.identifier}
       onChangeText={p.setIdentifier}
       autoCapitalize="none"
       autoCorrect={false}
-      style={s.input}
+      style={s.field}
     />
 
-    {/* Password */}
-    <Text style={s.label}>Password</Text>
-    <View style={s.passWrap}>
+    <Text style={[s.label, s.labelGap]}>Password</Text>
+    <View style={[s.field, s.passField]}>
       <TextInput
         placeholder="Enter password"
         placeholderTextColor={theme.colors.textMuted}
@@ -492,7 +490,7 @@ const AddBody = (p: AddBodyProps) => (
         onChangeText={p.setPassword}
         style={s.passInput}
       />
-      <TouchableOpacity onPress={p.toggleShowPass} hitSlop={10}>
+      <TouchableOpacity onPress={p.toggleShowPass} hitSlop={10} activeOpacity={0.6}>
         <VectorIcon
           iconSet="Ionicons"
           iconName={p.showPass ? 'eye-off-outline' : 'eye-outline'}
@@ -502,237 +500,151 @@ const AddBody = (p: AddBodyProps) => (
       </TouchableOpacity>
     </View>
 
-    {/* Error */}
-    {!!p.error && (
-      <View style={s.errorBox}>
-        <VectorIcon iconSet="Ionicons" iconName="alert-circle-outline" size={14} color={theme.colors.danger} />
-        <Text style={s.errorText}>{p.error}</Text>
-      </View>
-    )}
+    {!!p.error && <Text style={s.errorText}>{p.error}</Text>}
 
     <TouchableOpacity
-      activeOpacity={0.9}
+      activeOpacity={0.85}
       onPress={p.onSubmit}
       disabled={p.loading}
-      style={[s.saveBtn, p.loading && { opacity: 0.6 }]}
+      style={[s.saveBtn, p.loading && s.saveBtnBusy]}
     >
-      {p.loading
-        ? <ActivityIndicator color="#fff" />
-        : <Text style={s.saveBtnText}>Save account</Text>}
+      {p.loading ? (
+        <ActivityIndicator color={theme.colors.white} />
+      ) : (
+        <Text style={s.saveBtnText}>Add account</Text>
+      )}
     </TouchableOpacity>
 
-    <Text style={s.hint}>
-      Your current account stays signed in. You can switch any time from here.
-    </Text>
+    <Text style={s.hint}>Your current account stays signed in. You can switch any time from here.</Text>
   </ScrollView>
 );
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const __mk_av = () => StyleSheet.create({
-  fallback: {
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackText: { color: theme.colors.primary, fontWeight: '800' },
-});
-
 const __mk_s = () => StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
   },
   sheet: {
     backgroundColor: theme.colors.card,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 12,
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+    paddingBottom: 16,
     maxHeight: Dimensions.get('window').height * 0.85,
   },
   handle: {
     alignSelf: 'center',
-    width: 34, height: 4, borderRadius: 2,
-    backgroundColor: '#E2E8F0',
-    marginTop: 10, marginBottom: 4,
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.border,
+    marginTop: 10,
   },
 
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#F1F5F9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.divider,
   },
-  title: { fontSize: 15, fontWeight: '800', color: theme.colors.textPrimary },
+  back: { marginLeft: -4 },
+  title: { flex: 1, fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
 
   loadingBox: { paddingVertical: 48, alignItems: 'center' },
 
   // ─── List ──
-  listContent: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 4 },
+  listContent: { paddingTop: 4, paddingBottom: 4 },
   row: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 10, paddingVertical: 8,
-    borderRadius: 14,
-    marginBottom: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
-  rowActive: { backgroundColor: '#EEF2FF' },
-  rowMain: { flex: 1, marginLeft: 12 },
-  rowNameLine: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  rowName: {
-    fontSize: 13, fontWeight: '700', color: theme.colors.textPrimary,
-    flexShrink: 1,
+  rowDivider: { height: 1, backgroundColor: theme.colors.border, marginHorizontal: 20 },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.background,
   },
-  typeBadge: {
-    backgroundColor: '#EEF2FF',
-    borderRadius: 999,
-    paddingHorizontal: 7, paddingVertical: 2,
-  },
-  typeBadgeText: { fontSize: 10, fontWeight: '600', color: theme.colors.primary },
+  avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+  avatarInitials: { fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary },
+  rowMain: { flex: 1, gap: 2 },
+  rowName: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  rowNameActive: { fontWeight: '600' },
+  rowMeta: { fontSize: 12, color: theme.colors.textMuted },
+  removeText: { fontSize: 13, fontWeight: '500', color: theme.colors.textMuted },
 
-  checkBadge: {
-    width: 24, height: 24, borderRadius: 12,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  removeBtn: {
-    width: 28, height: 28, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: theme.colors.border,
-  },
+  addIcon: { alignItems: 'center', justifyContent: 'center' },
+  addText: { fontSize: 15, fontWeight: '600', color: theme.colors.primary },
 
-  // ─── Remove confirmation modal (mirrors the drawer logout modal) ──
+  // ─── Remove confirmation ──
   confirmOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.lg,
+    padding: 24,
   },
   confirmCard: {
     width: '100%',
-    maxWidth: 420,
+    maxWidth: 380,
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.lg,
-    padding: theme.spacing.xl,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    padding: 24,
   },
-  confirmIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: theme.radius.full,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginBottom: theme.spacing.md,
-  },
-  confirmTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: theme.colors.textPrimary,
-    textAlign: 'center',
-  },
-  confirmDesc: {
-    marginTop: theme.spacing.sm,
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  confirmActions: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-    marginTop: theme.spacing.xl,
-  },
+  confirmTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
+  confirmDesc: { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
+  confirmActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
   confirmBtn: {
     flex: 1,
-    height: 48,
+    height: 46,
     borderRadius: theme.radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  confirmBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  confirmBtnGhost: {
-    backgroundColor: theme.colors.border,
-  },
-  confirmBtnGhostText: {
-    color: theme.colors.textPrimary,
-  },
-  confirmBtnDanger: {
-    backgroundColor: theme.colors.danger,
-  },
-  confirmBtnDangerText: {
-    color: theme.colors.white,
-  },
-
-  addRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 12, paddingHorizontal: 10,
-    marginTop: 6,
-    borderTopWidth: 1, borderTopColor: '#F1F5F9',
-  },
-  addPlus: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  addText: { marginLeft: 12, fontSize: 13, fontWeight: '700', color: theme.colors.primary },
+  confirmBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
+  confirmBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  confirmBtnDanger: { backgroundColor: theme.colors.danger },
+  confirmBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 
   // ─── Add form ──
-  addContent: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 10 },
-  tabRow: {
-    flexDirection: 'row', backgroundColor: theme.colors.border,
-    borderRadius: 12, padding: 4, marginBottom: 18,
+  addContent: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 8 },
+  label: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 8 },
+  labelGap: { marginTop: 18 },
+  field: {
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: theme.colors.textPrimary,
   },
-  tab: {
-    flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: 8,
-  },
-  tabActive: { backgroundColor: theme.colors.card, shadowColor: '#000', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 1 }, shadowRadius: 2, elevation: 1 },
-  tabText: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary },
-  tabTextActive: { color: theme.colors.textPrimary },
+  passField: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 0 },
+  passInput: { flex: 1, paddingVertical: 12, fontSize: 15, color: theme.colors.textPrimary },
 
-  label: { fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 6 },
-  input: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1, borderColor: theme.colors.border,
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11,
-    fontSize: 14, color: theme.colors.textPrimary,
-    marginBottom: 14,
-  },
-  passWrap: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1, borderColor: theme.colors.border,
-    borderRadius: 10, paddingHorizontal: 12,
-    marginBottom: 12,
-  },
-  passInput: { flex: 1, paddingVertical: 11, fontSize: 14, color: theme.colors.textPrimary },
-
-  errorBox: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#FFF3F3', borderWidth: 1, borderColor: '#F6C7C7',
-    borderRadius: 8, padding: 9, marginBottom: 10,
-  },
-  errorText: { flex: 1, fontSize: 12, color: theme.colors.danger, fontWeight: '500' },
+  errorText: { fontSize: 13, color: theme.colors.danger, lineHeight: 19, marginTop: 12 },
 
   saveBtn: {
+    height: 48,
+    borderRadius: theme.radius.md,
     backgroundColor: theme.colors.primary,
-    borderRadius: 100,
-    paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 6,
+    justifyContent: 'center',
+    marginTop: 22,
   },
-  saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  saveBtnBusy: { opacity: 0.7 },
+  saveBtnText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 
-  hint: { fontSize: 11, color: theme.colors.textMuted, textAlign: 'center', marginTop: 14 },
+  hint: { fontSize: 12, color: theme.colors.textMuted, textAlign: 'center', lineHeight: 18, marginTop: 14 },
 });
 
-
 // Themed stylesheets — rebuilt on light/dark toggle.
-let av = __mk_av();
-onThemeChange(() => { av = __mk_av(); });
 let s = __mk_s();
 onThemeChange(() => { s = __mk_s(); });
