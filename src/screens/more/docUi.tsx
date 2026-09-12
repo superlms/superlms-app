@@ -30,10 +30,23 @@ export const lastUpdated = (date?: string | null) => {
 export const DocHeader = ({
   title,
   onBackPress,
+  rightIcon,
+  onRightPress,
 }: {
   title: string;
   onBackPress?: () => void;
-}) => <Header title={title} onBackPress={onBackPress} divider height={50} />;
+  rightIcon?: string;
+  onRightPress?: () => void;
+}) => (
+  <Header
+    title={title}
+    onBackPress={onBackPress}
+    rightIcon={rightIcon}
+    onRightPress={onRightPress}
+    divider
+    height={50}
+  />
+);
 
 // ── Page intro: optional logo, title, subtitle and a small meta line ──────────
 // Renders nothing when there's nothing to say (the header already names the
