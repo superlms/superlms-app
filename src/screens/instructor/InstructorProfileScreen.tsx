@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import {
   Image,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
-import Header from '../../components/Header';
-import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
@@ -16,16 +16,9 @@ import {
   InstructorProfile,
   getInstructorProfile,
 } from '../../api/instructorApi';
+import { DocHeader } from '../more/docUi';
 
-const ACCENTS = [
-  { color: '#4F46E5', bg: '#E0E7FF' },
-  { color: '#0EA5E9', bg: '#E0F2FE' },
-  { color: '#16A34A', bg: '#DCFCE7' },
-  { color: '#D97706', bg: '#FEF3C7' },
-  { color: '#DB2777', bg: '#FCE7F3' },
-  { color: '#7C3AED', bg: '#EDE9FE' },
-];
-const accentFor = (id: number) => ACCENTS[(id || 0) % ACCENTS.length];
+const TITLE = 'Instructor Profile';
 
 const initials = (name?: string | null) =>
   (name || 'NA')
@@ -35,37 +28,49 @@ const initials = (name?: string | null) =>
     .join('')
     .toUpperCase();
 
+// Label in the left half, value from the middle; tappable (brand colour) when
+// it has an action such as calling or emailing.
 const InfoRow = ({
-  icon,
   label,
   value,
-  accent,
+  onPress,
+  last,
 }: {
-  icon: string;
   label: string;
-  value?: string | null;
-  accent: { color: string; bg: string };
+  value: string;
+  onPress?: () => void;
+  last?: boolean;
 }) => {
-  if (!value) return null;
-  return (
-    <View style={s.infoRow}>
-      <View style={[s.infoIcon, { backgroundColor: accent.bg }]}>
-        <VectorIcon iconSet="Feather" iconName={icon} size={15} color={accent.color} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={s.infoLabel}>{label}</Text>
-        <Text style={s.infoValue}>{value}</Text>
-      </View>
-    </View>
+  const style = [s.infoRow, !last && s.infoRowBorder];
+  const content = (
+    <>
+      <Text style={s.infoLabel}>{label}</Text>
+      <Text style={[s.infoValue, !!onPress && s.infoValueLink]}>{value}</Text>
+    </>
+  );
+  return onPress ? (
+    <TouchableOpacity style={style} onPress={onPress} activeOpacity={0.6}>
+      {content}
+    </TouchableOpacity>
+  ) : (
+    <View style={style}>{content}</View>
   );
 };
+
+const Chips = ({ items }: { items: string[] }) => (
+  <View style={s.chipWrap}>
+    {items.map((label, i) => (
+      <View key={`${label}-${i}`} style={s.chip}>
+        <Text style={s.chipText}>{label}</Text>
+      </View>
+    ))}
+  </View>
+);
 
 const InstructorProfileScreen = ({ navigation, route }: any) => {
   const base: Instructor = route.params?.instructor;
   const [profile, setProfile] = useState<InstructorProfile>(base as InstructorProfile);
   const [loading, setLoading] = useState(false);
-
-  const accent = accentFor(base?.id ?? 0);
 
   const load = async () => {
     if (!base?.id) return;
@@ -90,105 +95,94 @@ const InstructorProfileScreen = ({ navigation, route }: any) => {
   if (!base) {
     return (
       <View style={s.root}>
-        <Header title="Instructor Profile" onBackPress={() => navigation.goBack()} />
+        <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
         <View style={s.centeredBox}>
-          <Text style={s.errorText}>Instructor not found</Text>
+          <Text style={s.muted}>Instructor not found</Text>
         </View>
       </View>
     );
   }
 
-  const subjects = profile.subjects ?? [];
-  const classes = (profile.classes?.length ? profile.classes : profile.assigned_classes) ?? [];
+  const subjects = (profile.subjects ?? []).map(sub => sub.name).filter(Boolean);
+  const classes = ((profile.classes?.length ? profile.classes : profile.assigned_classes) ?? [])
+    .map(c => [c.standard_name, c.section_name].filter(Boolean).join(' - '))
+    .filter(Boolean);
   const location = [profile.address, profile.city, profile.state].filter(Boolean).join(', ');
+
+  const details = [
+    {
+      label: 'Mobile',
+      value: profile.phone,
+      onPress: profile.phone ? () => Linking.openURL(`tel:${profile.phone}`) : undefined,
+    },
+    {
+      label: 'Email',
+      value: profile.email,
+      onPress: profile.email ? () => Linking.openURL(`mailto:${profile.email}`) : undefined,
+    },
+    { label: 'Address', value: location },
+    { label: 'Qualification', value: profile.qualification },
+  ].filter(d => !!d.value) as { label: string; value: string; onPress?: () => void }[];
 
   return (
     <View style={s.root}>
-      <Header title="Instructor Profile" onBackPress={() => navigation.goBack()} />
+      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.scroll}
         refreshControl={<AppRefreshControl refreshing={refreshing && loading} onRefresh={onRefresh} />}
       >
-        <View style={s.card}>
-          <View style={[s.accentStrip, { backgroundColor: accent.color }]} />
-
-          <View style={s.cardInner}>
-            {/* ── Profile header ── */}
-            <View style={s.headerRow}>
-              {profile.avatar ? (
-                <Image source={{ uri: profile.avatar }} style={s.avatar} />
-              ) : (
-                <View style={[s.avatarFallback, { backgroundColor: accent.bg }]}>
-                  <Text style={[s.avatarInitials, { color: accent.color }]}>
-                    {initials(profile.name)}
-                  </Text>
-                </View>
-              )}
-              <View style={s.headerMeta}>
-                <Text style={s.name}>{profile.name}</Text>
-                <View style={[s.rolePill, { backgroundColor: accent.bg }]}>
-                  <VectorIcon iconSet="Ionicons" iconName="school-outline" size={12} color={accent.color} />
-                  <Text style={[s.rolePillText, { color: accent.color }]}>Instructor</Text>
-                </View>
-              </View>
+        {/* Photo, name, role — centred */}
+        <View style={s.head}>
+          {profile.avatar ? (
+            <Image source={{ uri: profile.avatar }} style={s.avatar} />
+          ) : (
+            <View style={[s.avatar, s.avatarFallback]}>
+              <Text style={s.avatarInitials}>{initials(profile.name)}</Text>
             </View>
+          )}
+          <Text style={s.name}>{profile.name}</Text>
+          <Text style={s.role}>Instructor</Text>
+        </View>
 
-            {/* ── Contact ── */}
-            <View style={s.divider} />
-            <Text style={s.sectionLabel}>Contact</Text>
-            <InfoRow icon="phone" label="Mobile" value={profile.phone} accent={accent} />
-            <InfoRow icon="mail" label="Email" value={profile.email} accent={accent} />
-            <InfoRow icon="map-pin" label="Address" value={location || null} accent={accent} />
-            {!profile.phone && !profile.email && !location && (
-              <Text style={s.muted}>No contact details available.</Text>
-            )}
+        <View style={s.divider} />
 
-            {/* ── Subjects ── */}
-            <View style={s.divider} />
-            <Text style={s.sectionLabel}>Subjects</Text>
+        <View style={s.body}>
+          {/* Contact & details */}
+          {details.length > 0 ? (
+            <View>
+              {details.map((d, i) => (
+                <InfoRow
+                  key={d.label}
+                  label={d.label}
+                  value={d.value}
+                  onPress={d.onPress}
+                  last={i === details.length - 1}
+                />
+              ))}
+            </View>
+          ) : (
+            <Text style={s.muted}>No contact details available.</Text>
+          )}
+
+          {/* Subjects */}
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Subjects</Text>
             {subjects.length > 0 ? (
-              <View style={s.chipWrap}>
-                {subjects.map(sub => (
-                  <View key={sub.id} style={[s.chip, { backgroundColor: accent.bg }]}>
-                    <Text style={[s.chipText, { color: accent.color }]}>{sub.name}</Text>
-                  </View>
-                ))}
-              </View>
+              <Chips items={subjects} />
             ) : (
               <Text style={s.muted}>No subjects assigned.</Text>
             )}
-
-            {/* ── Classes ── */}
-            {classes.length > 0 && (
-              <>
-                <View style={s.divider} />
-                <Text style={s.sectionLabel}>Classes</Text>
-                <View style={s.chipWrap}>
-                  {classes.map((c, i) => {
-                    const lbl = [c.standard_name, c.section_name].filter(Boolean).join(' - ');
-                    if (!lbl) return null;
-                    return (
-                      <View key={`${c.standard_id}-${c.section_id}-${i}`} style={s.classChip}>
-                        <VectorIcon iconSet="Ionicons" iconName="people-outline" size={12} color={theme.colors.textSecondary} />
-                        <Text style={s.classChipText}>{lbl}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </>
-            )}
-
-            {/* ── About / Qualification ── */}
-            {!!profile.qualification && (
-              <>
-                <View style={s.divider} />
-                <Text style={s.sectionLabel}>Qualification</Text>
-                <Text style={s.bodyText}>{profile.qualification}</Text>
-              </>
-            )}
           </View>
+
+          {/* Classes */}
+          {classes.length > 0 && (
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>Classes</Text>
+              <Chips items={classes} />
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -198,59 +192,50 @@ const InstructorProfileScreen = ({ navigation, route }: any) => {
 export default InstructorProfileScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16, paddingBottom: 40 },
-  centeredBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center' },
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  scroll: { paddingBottom: 40 },
+  centeredBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  muted: { fontSize: 13, color: theme.colors.textMuted },
 
-  card: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    overflow: 'hidden',
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
-    elevation: 4,
+  // Head
+  head: { alignItems: 'center', paddingTop: 28, paddingBottom: 24, paddingHorizontal: 20 },
+  avatar: { width: 96, height: 96, borderRadius: 48, backgroundColor: theme.colors.background },
+  avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+  avatarInitials: { fontSize: 32, fontWeight: '600', color: theme.colors.textSecondary },
+  name: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    textAlign: 'center',
+    marginTop: 14,
   },
-  accentStrip: { height: 5 },
-  cardInner: { padding: 18 },
+  role: { fontSize: 13, color: theme.colors.textMuted, marginTop: 4 },
 
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  avatar: { width: 64, height: 64, borderRadius: 32 },
-  avatarFallback: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
-  avatarInitials: { fontSize: 22, fontWeight: '800' },
-  headerMeta: { flex: 1 },
-  name: { fontSize: 19, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 6 },
-  rolePill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
-    borderRadius: theme.radius.full, paddingHorizontal: 10, paddingVertical: 4,
-  },
-  rolePillText: { fontSize: 11, fontWeight: '700' },
+  // Full-width line between the head and the details
+  divider: { height: 1, backgroundColor: theme.colors.divider },
 
-  divider: { height: 1, backgroundColor: theme.colors.border, marginVertical: 16 },
-  sectionLabel: {
-    fontSize: 12, fontWeight: '800', color: theme.colors.textMuted,
-    letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 12,
-  },
-  muted: { fontSize: 13, color: theme.colors.textMuted, fontStyle: 'italic' },
+  body: { paddingHorizontal: 20, paddingTop: 4, gap: 24 },
 
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-  infoIcon: { width: 38, height: 38, borderRadius: theme.radius.sm, alignItems: 'center', justifyContent: 'center' },
-  infoLabel: { fontSize: 11, color: theme.colors.textMuted, fontWeight: '600', marginBottom: 1 },
-  infoValue: { fontSize: 14, color: theme.colors.textPrimary, fontWeight: '700' },
+  // Details
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 14 },
+  infoRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
+  infoLabel: { width: '50%', paddingRight: 12, fontSize: 14, color: theme.colors.textSecondary },
+  infoValue: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
+  infoValueLink: { color: theme.colors.primary },
 
+  // Subjects / classes
+  section: { gap: 10 },
+  sectionTitle: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderRadius: theme.radius.full, paddingHorizontal: 12, paddingVertical: 6 },
-  chipText: { fontSize: 12.5, fontWeight: '700' },
-  classChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     backgroundColor: theme.colors.background,
-    borderRadius: theme.radius.full, paddingHorizontal: 11, paddingVertical: 6,
   },
-  classChipText: { fontSize: 12.5, fontWeight: '700', color: theme.colors.textSecondary },
-
-  bodyText: { fontSize: 15, color: theme.colors.textPrimary, lineHeight: 24 },
+  chipText: { fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

@@ -8,24 +8,15 @@ import {
   View,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import ScreenSkeleton from '../../components/Skeleton';
-import Header from '../../components/Header';
+import { Skeleton } from '../../components/Skeleton';
 import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getInstructors, Instructor } from '../../api/instructorApi';
+import { DocHeader, DocNoData, DocError } from '../more/docUi';
 
-// A stable accent colour per instructor (announcement-card style).
-const ACCENTS = [
-  { color: '#4F46E5', bg: '#E0E7FF' },
-  { color: '#0EA5E9', bg: '#E0F2FE' },
-  { color: '#16A34A', bg: '#DCFCE7' },
-  { color: '#D97706', bg: '#FEF3C7' },
-  { color: '#DB2777', bg: '#FCE7F3' },
-  { color: '#7C3AED', bg: '#EDE9FE' },
-];
-const accentFor = (id: number) => ACCENTS[id % ACCENTS.length];
+const TITLE = 'Instructors';
 
 const initials = (name: string) =>
   name
@@ -35,69 +26,53 @@ const initials = (name: string) =>
     .join('')
     .toUpperCase();
 
-const InstructorCard = ({
+// One instructor as a plain row: avatar, name and subjects, with a small chat
+// button on the right. Tapping the row opens the profile.
+const InstructorRow = ({
   item,
   onProfile,
   onChat,
+  isLast,
 }: {
   item: Instructor;
   onProfile: () => void;
   onChat: () => void;
+  isLast: boolean;
 }) => {
-  const accent = accentFor(item.id);
   const subjectNames =
-    item.subjects?.map(s => s.name).filter(Boolean).join(', ') || 'No subjects assigned';
+    item.subjects?.map(sub => sub.name).filter(Boolean).join(', ') || 'No subjects assigned';
 
   return (
-    <TouchableOpacity activeOpacity={0.9} onPress={onProfile} style={s.card}>
-      <View style={[s.accent, { backgroundColor: accent.color }]} />
-
-      <View style={s.inner}>
-        {/* Top row: avatar + name + subjects */}
-        <View style={s.topRow}>
-          {item.avatar ? (
-            <Image source={{ uri: item.avatar }} style={s.avatar} />
-          ) : (
-            <View style={[s.avatarFallback, { backgroundColor: accent.bg }]}>
-              <Text style={[s.avatarInitials, { color: accent.color }]}>
-                {initials(item.name || 'NA')}
-              </Text>
-            </View>
-          )}
-
-          <View style={s.meta}>
-            <Text style={s.name} numberOfLines={1}>{item.name}</Text>
-            <View style={[s.subjectPill, { backgroundColor: accent.bg }]}>
-              <VectorIcon iconSet="Ionicons" iconName="book-outline" size={11} color={accent.color} />
-              <Text style={[s.subjectText, { color: accent.color }]} numberOfLines={1}>
-                {subjectNames}
-              </Text>
-            </View>
-          </View>
+    <TouchableOpacity
+      style={[s.row, !isLast && s.rowDivider]}
+      activeOpacity={0.6}
+      onPress={onProfile}
+    >
+      {item.avatar ? (
+        <Image source={{ uri: item.avatar }} style={s.avatar} />
+      ) : (
+        <View style={[s.avatar, s.avatarFallback]}>
+          <Text style={s.avatarInitials}>{initials(item.name || 'NA')}</Text>
         </View>
+      )}
 
-        {/* Mobile number (instead of ID) */}
-        <View style={s.infoRow}>
-          <View style={[s.infoIcon, { backgroundColor: accent.bg }]}>
-            <VectorIcon iconSet="Feather" iconName="phone" size={12} color={accent.color} />
-          </View>
-          <Text style={s.infoText} numberOfLines={1}>
-            {item.phone || 'Mobile not available'}
-          </Text>
-        </View>
-
-        {/* Actions: View Profile + Chat Now */}
-        <View style={s.btnRow}>
-          <TouchableOpacity style={s.ghostBtn} onPress={onProfile} activeOpacity={0.85}>
-            <VectorIcon iconSet="Feather" iconName="user" size={14} color={theme.colors.primary} />
-            <Text style={s.ghostBtnText}>View Profile</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.primaryBtn} onPress={onChat} activeOpacity={0.9}>
-            <VectorIcon iconSet="Ionicons" iconName="chatbubble-ellipses-outline" size={14} color="#fff" />
-            <Text style={s.primaryBtnText}>Chat Now</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={s.rowText}>
+        <Text style={s.name} numberOfLines={1}>
+          {item.name}
+        </Text>
+        <Text style={s.subjects} numberOfLines={1}>
+          {subjectNames}
+        </Text>
       </View>
+
+      <TouchableOpacity style={s.chatBtn} onPress={onChat} activeOpacity={0.7} hitSlop={6}>
+        <VectorIcon
+          iconSet="Ionicons"
+          iconName="chatbubble-ellipses-outline"
+          size={18}
+          color={theme.colors.primary}
+        />
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 };
@@ -133,39 +108,37 @@ const InstructorScreen = () => {
   if (loading) {
     return (
       <View style={s.screen}>
-        <Header title="Instructors" />
-        <View style={s.centeredBox}>
-          <ScreenSkeleton variant="list" />
+        <DocHeader title={TITLE} />
+        <View style={s.list}>
+          {[0, 1, 2, 3, 4].map(i => (
+            <View key={i} style={[s.skeletonRow, i < 4 && s.rowDivider]}>
+              <Skeleton width={44} height={44} radius={22} />
+              <View style={s.skeletonText}>
+                <Skeleton width="50%" height={14} />
+                <Skeleton width="70%" height={11} />
+              </View>
+            </View>
+          ))}
         </View>
       </View>
     );
   }
 
   if (error) {
-    return (
-      <View style={s.screen}>
-        <Header title="Instructors" />
-        <View style={s.centeredBox}>
-          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={36} color={theme.colors.textMuted} />
-          <Text style={s.errorText}>{error}</Text>
-          <TouchableOpacity style={s.retryBtn} onPress={fetchInstructors}>
-            <Text style={s.retryText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
+    return <DocError title={TITLE} message={error} onRetry={fetchInstructors} />;
   }
 
   return (
     <View style={s.screen}>
-      <Header title="Instructors" />
+      <DocHeader title={TITLE} />
       <FlatList
         data={instructors}
         keyExtractor={item => String(item.id)}
         contentContainerStyle={[s.list, instructors.length === 0 && s.listEmpty]}
-        renderItem={({ item }) => (
-          <InstructorCard
+        renderItem={({ item, index }) => (
+          <InstructorRow
             item={item}
+            isLast={index === instructors.length - 1}
             onProfile={() => openProfile(item)}
             onChat={() => openChat(item)}
           />
@@ -173,13 +146,11 @@ const InstructorScreen = () => {
         showsVerticalScrollIndicator={false}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
-          <View style={s.emptyBox}>
-            <View style={s.emptyIconRing}>
-              <VectorIcon iconSet="Ionicons" iconName="people-outline" size={36} color={theme.colors.primary} />
-            </View>
-            <Text style={s.emptyTitle}>No instructors found</Text>
-            <Text style={s.emptySubtitle}>No instructors have been added yet.</Text>
-          </View>
+          <DocNoData
+            icon="people-outline"
+            title="No instructors found"
+            subtitle="No instructors have been added yet."
+          />
         }
       />
     </View>
@@ -189,71 +160,32 @@ const InstructorScreen = () => {
 export default InstructorScreen;
 
 const __mk_s = () => StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.colors.background },
-  list: { padding: 16, paddingBottom: 30, gap: 12 },
+  screen: { flex: 1, backgroundColor: theme.colors.card },
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 30 },
   listEmpty: { flexGrow: 1 },
 
-  centeredBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 20 },
-  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center' },
-  retryBtn: {
-    marginTop: 4, paddingHorizontal: 24, paddingVertical: 10,
-    borderRadius: theme.radius.full, backgroundColor: theme.colors.primary,
+  // Row
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.colors.background },
+  avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+  avatarInitials: { fontSize: 15, fontWeight: '600', color: theme.colors.textSecondary },
+  rowText: { flex: 1 },
+  name: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  subjects: { fontSize: 13, color: theme.colors.textMuted, marginTop: 2 },
+  chatBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  retryText: { fontSize: 14, fontWeight: '700', color: theme.colors.white },
 
-  emptyBox: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingTop: 80 },
-  emptyIconRing: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 4 },
-  emptySubtitle: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center' },
-
-  // Card (announcement style)
-  card: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    flexDirection: 'row',
-    overflow: 'hidden',
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.07,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  accent: { width: 4, alignSelf: 'stretch' },
-  inner: { flex: 1, padding: 14 },
-
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { width: 50, height: 50, borderRadius: 25 },
-  avatarFallback: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
-  avatarInitials: { fontSize: 16, fontWeight: '800' },
-  meta: { flex: 1 },
-  name: { fontSize: 15, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 5 },
-  subjectPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    alignSelf: 'flex-start', maxWidth: '100%',
-    borderRadius: theme.radius.full, paddingHorizontal: 9, paddingVertical: 3,
-  },
-  subjectText: { fontSize: 10.5, fontWeight: '700', flexShrink: 1 },
-
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
-  infoIcon: { width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  infoText: { flex: 1, fontSize: 13, color: theme.colors.textSecondary, fontWeight: '600' },
-
-  btnRow: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  ghostBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    borderRadius: theme.radius.full, borderWidth: 1.5, borderColor: theme.colors.primary,
-    paddingVertical: 9, backgroundColor: theme.colors.card,
-  },
-  ghostBtnText: { fontSize: 12.5, fontWeight: '700', color: theme.colors.primary },
-  primaryBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    borderRadius: theme.radius.full, paddingVertical: 9, backgroundColor: theme.colors.primary,
-  },
-  primaryBtnText: { fontSize: 12.5, fontWeight: '700', color: '#fff' },
+  // Loading skeleton
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
+  skeletonText: { flex: 1, gap: 8 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.
