@@ -8,22 +8,37 @@ import { fmtTime, type TimetablePeriod } from '../../api/timetableApi';
 /**
  * The pieces the student and teacher timetables share.
  *
- * A day is a plain list anchored by its times: the clock runs down the left,
- * the subject and who (or which class) it is with sits beside it, and hairlines
- * separate one period from the next. No emoji tiles, no colour picked from a
- * hash of the subject name, no time badges — the times already carry the
- * structure a timetable needs.
+ * A day is a plain list: who is taking the period, what it is, and when —
+ * separated by hairlines. No emoji tiles, no colour picked from a hash of the
+ * subject name, no time badges.
  */
 
-// A repeating weekly timetable is easiest to read against this week's dates.
-export const dateForDay = (day: Day): moment.Moment =>
-  moment().startOf('isoWeek').add(DAYS.indexOf(day), 'days');
-
-// Today as one of the six school days, or Monday when it is Sunday.
-export const todayDay = (): Day => {
-  const name = new Date().toLocaleDateString('en-US', { weekday: 'long' }) as Day;
-  return DAYS.includes(name) ? name : 'Monday';
+/**
+ * The Monday of the school week being shown.
+ *
+ * Sunday belongs to the ISO week that has just finished, so asking moment for
+ * the start of "this" week on a Sunday hands back dates that are already in the
+ * past. School has moved on by then, so Sunday looks ahead to the week starting
+ * the next morning.
+ */
+const weekStart = (): moment.Moment => {
+  const now = moment();
+  const start = now.clone().startOf('isoWeek');
+  return now.day() === 0 ? start.add(1, 'week') : start;
 };
+
+// The date a given school day falls on in the week being shown.
+export const dateForDay = (day: Day): moment.Moment =>
+  weekStart().add(DAYS.indexOf(day), 'days');
+
+// Today, when it is a school day — null on a Sunday, where nothing is running.
+export const schoolToday = (): Day | null => {
+  const name = new Date().toLocaleDateString('en-US', { weekday: 'long' }) as Day;
+  return DAYS.includes(name) ? name : null;
+};
+
+// Which day a timetable should open on: today, or Monday when it is Sunday.
+export const defaultDay = (): Day => schoolToday() ?? 'Monday';
 
 const initialsOf = (name?: string | null) =>
   (name || '?')
@@ -61,9 +76,9 @@ export const currentPeriodId = (
 };
 
 // ── Day selector ─────────────────────────────────────────────────────────────
-// This week as six pills, each carrying the day and its date. The chosen day is
-// filled; today, when it is not the chosen one, is outlined and written in the
-// accent colour.
+// The school week as six pills, each carrying the day and its date. The chosen
+// day is filled; today, when it is not the chosen one, is outlined and written
+// in the accent colour.
 export const DaySelector = ({
   selected,
   onSelect,
@@ -71,7 +86,7 @@ export const DaySelector = ({
   selected: Day;
   onSelect: (d: Day) => void;
 }) => {
-  const today = todayDay();
+  const today = schoolToday();
 
   return (
     <View style={s.days}>
@@ -113,8 +128,8 @@ export const DaySelector = ({
 };
 
 // ── One period ───────────────────────────────────────────────────────────────
-//   08:00 AM   (photo)  English                     NOW
-//   09:00 AM            Deepak Singh · Substitute
+//   (photo)  English            NOW      08:00 AM
+//            Deepak Singh                09:00 AM
 export const PeriodRow = ({
   period,
   meta,
@@ -134,11 +149,6 @@ export const PeriodRow = ({
   isLast: boolean;
 }) => (
   <View style={[s.row, !isLast && s.rowDivider]}>
-    <View style={s.timeCol}>
-      <Text style={[s.timeFrom, isNow && s.timeNow]}>{fmtTime(period.start_time) || '—'}</Text>
-      {!!period.end_time && <Text style={s.timeTo}>{fmtTime(period.end_time)}</Text>}
-    </View>
-
     {avatarName !== undefined &&
       (avatar ? (
         <Image source={{ uri: avatar }} style={s.avatar} />
@@ -160,6 +170,11 @@ export const PeriodRow = ({
           {meta}
         </Text>
       )}
+    </View>
+
+    <View style={s.timeCol}>
+      <Text style={[s.timeFrom, isNow && s.timeNow]}>{fmtTime(period.start_time) || '—'}</Text>
+      {!!period.end_time && <Text style={s.timeTo}>{fmtTime(period.end_time)}</Text>}
     </View>
   </View>
 );
@@ -185,21 +200,21 @@ const __mk_s = () => StyleSheet.create({
   dayDateActive: { color: theme.colors.white },
   dayTextToday: { color: theme.colors.primary },
 
-  // Period
+  // Period — the face leads, the clock closes
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  timeCol: { width: 68 },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.colors.background },
+  avatarFallback: { alignItems: 'center', justifyContent: 'center' },
+  avatarInitials: { fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary },
+  body: { flex: 1, gap: 3 },
+  line: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  subject: { flexShrink: 1, fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  now: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: theme.colors.primary },
+  meta: { fontSize: 13, color: theme.colors.textSecondary },
+  timeCol: { alignItems: 'flex-end' },
   timeFrom: { fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
   timeNow: { color: theme.colors.primary },
   timeTo: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
-  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: theme.colors.background },
-  avatarFallback: { alignItems: 'center', justifyContent: 'center' },
-  avatarInitials: { fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary },
-  body: { flex: 1, gap: 3 },
-  line: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  subject: { flex: 1, fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  now: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: theme.colors.primary },
-  meta: { fontSize: 13, color: theme.colors.textSecondary },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

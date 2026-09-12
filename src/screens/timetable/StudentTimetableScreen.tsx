@@ -6,7 +6,7 @@ import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import type { Day } from './timetableData';
-import { DaySelector, PeriodRow, currentPeriodId, dateForDay, todayDay } from './timetableUi';
+import { DaySelector, PeriodRow, currentPeriodId, dateForDay, defaultDay, schoolToday } from './timetableUi';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { getInstructors } from '../../api/instructorApi';
 import {
@@ -23,7 +23,7 @@ const nameKey = (n?: string | null) => (n ?? '').trim().toLowerCase();
 const TITLE = 'Timetable';
 
 const StudentTimetableScreen = ({ navigation }: any) => {
-  const [selectedDay, setSelectedDay] = useState<Day>(todayDay());
+  const [selectedDay, setSelectedDay] = useState<Day>(defaultDay());
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +67,7 @@ const StudentTimetableScreen = ({ navigation }: any) => {
   useFocusLoad(load);
 
   const periods = useMemo(() => dayMap?.[selectedDay] ?? [], [dayMap, selectedDay]);
-  const liveId = currentPeriodId(periods, selectedDay === todayDay());
+  const liveId = currentPeriodId(periods, selectedDay === schoolToday());
 
   // Who is taking it — the stand-in when one has been arranged.
   const teacherOf = (p: TimetablePeriod) => ({
@@ -96,12 +96,12 @@ const StudentTimetableScreen = ({ navigation }: any) => {
         <View style={s.list}>
           {[0, 1, 2, 3, 4].map(i => (
             <View key={i} style={[s.skeletonRow, i < 4 && s.rowDivider]}>
-              <Skeleton width={58} height={13} />
-              <Skeleton width={34} height={34} radius={17} />
+              <Skeleton width={44} height={44} radius={22} />
               <View style={s.skeletonBody}>
                 <Skeleton width="55%" height={14} />
                 <Skeleton width="35%" height={12} />
               </View>
+              <Skeleton width={58} height={13} />
             </View>
           ))}
         </View>
@@ -166,7 +166,7 @@ const __mk_s = () => StyleSheet.create({
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
 
   // Loading
-  skeletonRow: { flexDirection: 'row', gap: 14, paddingVertical: 14 },
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   skeletonBody: { flex: 1, gap: 8 },
 
   // Error
