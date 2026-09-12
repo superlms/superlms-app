@@ -70,103 +70,91 @@ type MenuItem = {
   nestedRoute?: string;
 };
 
-// A run of menu items, under a small heading when it has one.
-type MenuSection = { title?: string; items: MenuItem[] };
-
 // ── Menu ─────────────────────────────────────────────────────────────────────
-// The same destinations as before, gathered so the list can be scanned: the
-// overview, then what is taught or learnt, then the school around it, then
-// help and settings.
+// One plain list in the order it has always had, with a line between every
+// item.
 const ITEM = {
   dashboard: { name: 'MainTabs', label: 'Dashboard', icon: 'grid-outline' },
   analytics: { name: 'Analytics', label: 'Analytics', icon: 'analytics-outline' },
+  fees: { name: 'Fees', label: 'Fees', icon: 'cash-outline' },
+  announcement: { name: 'Announcement', label: 'Announcements', icon: 'megaphone-outline' },
+  calendar: { name: 'Calendar', label: 'Calendar', icon: 'calendar-outline' },
+  transport: { name: 'Transport', label: 'Transport', icon: 'bus-outline' },
+  homework: { name: 'Homework', label: 'Homework', icon: 'create-outline' },
   timetable: { name: 'Timetable', label: 'Timetable', icon: 'time-outline' },
   markAttendance: { name: 'MarkAttendance', label: 'Mark Attendance', icon: 'checkbox-outline' },
-  homework: { name: 'Homework', label: 'Homework', icon: 'create-outline' },
+  attendance: { name: 'Attendance', label: 'Attendance', icon: 'clipboard-outline' },
   subjects: { name: 'Subjects', label: 'Subjects', icon: 'albums-outline' },
   syllabus: { name: 'Syllabus', label: 'Syllabus', icon: 'document-text-outline' },
   content: { name: 'Content', label: 'Content', icon: 'folder-outline' },
   quiz: { name: 'Quiz', label: 'Quiz', icon: 'help-circle-outline' },
   books: { name: 'Book', label: 'Books', icon: 'book-outline' },
+  instructor: { name: 'Instructor', label: 'Instructors', icon: 'person-outline' },
+  idCard: { name: 'IDCard', label: 'ID Card', icon: 'id-card-outline' },
+  chats: { name: 'Chats', label: 'Chats', icon: 'chatbubbles-outline' },
   exams: { name: 'Exams', label: 'Exams', icon: 'school-outline' },
   performance: { name: 'Performance', label: 'Performance', icon: 'speedometer-outline' },
-  instructor: { name: 'Instructor', label: 'Instructors', icon: 'person-outline' },
   uploadMarks: { name: 'UploadMarks', label: 'Upload Marks', icon: 'cloud-upload-outline' },
   uploadCopy: { name: 'UploadCopy', label: 'Upload Copy', icon: 'document-attach-outline' },
-  attendance: { name: 'Attendance', label: 'Attendance', icon: 'clipboard-outline' },
-  fees: { name: 'Fees', label: 'Fees', icon: 'cash-outline' },
-  transport: { name: 'Transport', label: 'Transport', icon: 'bus-outline' },
-  calendar: { name: 'Calendar', label: 'Calendar', icon: 'calendar-outline' },
-  announcement: { name: 'Announcement', label: 'Announcements', icon: 'megaphone-outline' },
-  chats: { name: 'Chats', label: 'Chats', icon: 'chatbubbles-outline' },
-  idCard: { name: 'IDCard', label: 'ID Card', icon: 'id-card-outline' },
   contact: { name: 'ContactSchool', label: 'Contact School', icon: 'call-outline' },
   settings: { name: 'Settings', label: 'Settings', icon: 'settings-outline' },
   more: { name: 'More', label: 'More', icon: 'ellipsis-horizontal-outline' },
 } satisfies Record<string, MenuItem>;
 
-const STUDENT_MENU: MenuSection[] = [
-  { items: [ITEM.dashboard, ITEM.analytics] },
-  {
-    title: 'Learning',
-    items: [
-      ITEM.timetable,
-      ITEM.subjects,
-      ITEM.syllabus,
-      ITEM.content,
-      ITEM.homework,
-      ITEM.quiz,
-      ITEM.books,
-      ITEM.exams,
-      ITEM.performance,
-      ITEM.instructor,
-    ],
-  },
-  {
-    title: 'School',
-    items: [
-      ITEM.attendance,
-      ITEM.fees,
-      ITEM.transport,
-      ITEM.calendar,
-      ITEM.announcement,
-      ITEM.chats,
-      ITEM.idCard,
-    ],
-  },
-  { items: [ITEM.contact, ITEM.settings, ITEM.more] },
+const STUDENT_MENU: MenuItem[] = [
+  ITEM.dashboard,
+  ITEM.analytics,
+  ITEM.fees,
+  ITEM.announcement,
+  ITEM.calendar,
+  ITEM.transport,
+  ITEM.homework,
+  ITEM.timetable,
+  ITEM.attendance,
+  ITEM.subjects,
+  ITEM.syllabus,
+  ITEM.content,
+  ITEM.quiz,
+  ITEM.books,
+  ITEM.instructor,
+  ITEM.idCard,
+  ITEM.chats,
+  ITEM.exams,
+  ITEM.performance,
+  ITEM.contact,
+  ITEM.settings,
+  ITEM.more,
 ];
 
-const TEACHER_MENU: MenuSection[] = [
-  { items: [ITEM.dashboard, ITEM.analytics] },
-  {
-    title: 'Teaching',
-    items: [
-      ITEM.timetable,
-      ITEM.markAttendance,
-      ITEM.homework,
-      ITEM.subjects,
-      ITEM.syllabus,
-      ITEM.content,
-      ITEM.quiz,
-      ITEM.books,
-      ITEM.exams,
-      ITEM.uploadMarks,
-      ITEM.uploadCopy,
-    ],
-  },
-  {
-    title: 'School',
-    items: [ITEM.attendance, ITEM.calendar, ITEM.announcement, ITEM.chats, ITEM.idCard],
-  },
-  { items: [ITEM.contact, ITEM.settings, ITEM.more] },
+const TEACHER_MENU: MenuItem[] = [
+  ITEM.dashboard,
+  ITEM.analytics,
+  ITEM.announcement,
+  ITEM.calendar,
+  ITEM.homework,
+  ITEM.timetable,
+  ITEM.markAttendance,
+  ITEM.attendance,
+  ITEM.subjects,
+  ITEM.syllabus,
+  ITEM.content,
+  ITEM.quiz,
+  ITEM.books,
+  ITEM.idCard,
+  ITEM.chats,
+  ITEM.exams,
+  ITEM.uploadMarks,
+  ITEM.uploadCopy,
+  ITEM.contact,
+  ITEM.settings,
+  ITEM.more,
 ];
 
 const DrawerNavigator = ({ route }: any) => {
   const role: DrawerRole =
     route?.params?.userRole === 'teacher' ? 'teacher' : 'student';
 
-  const menu: MenuSection[] = useMemo(
+  const menuItems: MenuItem[] = useMemo(
     () => (role === 'teacher' ? TEACHER_MENU : STUDENT_MENU),
     [role],
   );
@@ -294,40 +282,32 @@ const DrawerNavigator = ({ route }: any) => {
           </View>
           <View style={styles.headerDivider} />
 
-          {menu.map((section, si) => (
-            <View key={section.title ?? `section-${si}`} style={styles.section}>
-              {section.title ? (
-                <Text style={styles.sectionTitle}>{section.title.toUpperCase()}</Text>
-              ) : (
-                si > 0 && <View style={styles.sectionDivider} />
-              )}
-
-              {section.items.map((item, ii) => {
-                const isActive = activeRoute === item.name;
-                return (
-                  <View key={item.name}>
-                    <TouchableOpacity
-                      activeOpacity={0.6}
-                      onPress={() => navigation.navigate(item.name, item.params)}
-                      style={[styles.menuItem, isActive && styles.menuItemActive]}
-                    >
-                      <VectorIcon
-                        iconSet={item.iconSet || 'Ionicons'}
-                        iconName={item.icon}
-                        size={20}
-                        color={isActive ? theme.colors.primary : theme.colors.textSecondary}
-                      />
-                      <Text style={[styles.menuText, isActive && styles.menuTextActive]}>
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                    {/* A line between every item, so each one reads as its own row */}
-                    {ii < section.items.length - 1 && <View style={styles.itemDivider} />}
-                  </View>
-                );
-              })}
-            </View>
-          ))}
+          <View style={styles.menu}>
+            {menuItems.map((item, i) => {
+              const isActive = activeRoute === item.name;
+              return (
+                <View key={item.name}>
+                  <TouchableOpacity
+                    activeOpacity={0.6}
+                    onPress={() => navigation.navigate(item.name, item.params)}
+                    style={[styles.menuItem, isActive && styles.menuItemActive]}
+                  >
+                    <VectorIcon
+                      iconSet={item.iconSet || 'Ionicons'}
+                      iconName={item.icon}
+                      size={20}
+                      color={isActive ? theme.colors.primary : theme.colors.textSecondary}
+                    />
+                    <Text style={[styles.menuText, isActive && styles.menuTextActive]}>
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                  {/* A line between every item, so each one reads as its own row */}
+                  {i < menuItems.length - 1 && <View style={styles.itemDivider} />}
+                </View>
+              );
+            })}
+          </View>
 
           <View style={styles.logoutContainer}>
             <TouchableOpacity
@@ -572,23 +552,7 @@ const __mk_styles = () => StyleSheet.create({
   },
 
   // Menu
-  section: { paddingTop: 6 },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.8,
-    color: theme.colors.textMuted,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 6,
-  },
-  sectionDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: theme.colors.border,
-    marginHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 6,
-  },
+  menu: { paddingTop: 8 },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -609,7 +573,7 @@ const __mk_styles = () => StyleSheet.create({
 
   // Log out
   logoutContainer: {
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
     borderTopColor: theme.colors.border,
     marginTop: 12,
     paddingTop: 8,
