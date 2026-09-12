@@ -1,142 +1,173 @@
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import VectorIcon from '../../components/VectorIcon';
+import moment from 'moment';
 import Header from '../../components/Header';
+import VectorIcon from '../../components/VectorIcon';
+import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
-import { theme } from '../../utils/theme';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { ApiEvent, getCalendarEvents } from '../../api/calendarApi';
-import { colorFor } from './AdminCalendarFormScreen';
+import {
+  MonthBar,
+  EventRow,
+  FullDivider,
+  capitalize,
+  timingLabel,
+} from '../calendar/calendarUi';
+import { DocNoData } from '../more/docUi';
 
-const pad = (n: number) => String(n).padStart(2, '0');
-const fmtDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const monthLabel = (d: Date) => d.toLocaleString('default', { month: 'long', year: 'numeric' });
-const hhmm = (t?: string | null) => (t ? t.slice(0, 5) : '');
+const TITLE = 'Calendar';
+
+const fmtApi = (m: moment.Moment) => m.format('YYYY-MM-DD');
 
 const AdminCalendarScreen = ({ navigation }: any) => {
-  const [cursor, setCursor] = useState(new Date());
+  const [month, setMonth] = useState(moment());
   const [events, setEvents] = useState<ApiEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const start = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-      const end = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
-      const list = await getCalendarEvents(fmtDate(start), fmtDate(end), undefined, 100);
+      const start = fmtApi(month.clone().startOf('month'));
+      const end = fmtApi(month.clone().endOf('month'));
+      const list = await getCalendarEvents(start, end, undefined, 100);
       setEvents(list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)));
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load events.'));
+      setError(apiErr(e, 'Could not load events.'));
     } finally {
       setLoading(false);
     }
-  }, [cursor]);
+  }, [month]);
 
+  // Refetch on focus and whenever the month changes.
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const { refreshing, onRefresh } = useRefresh(load);
 
-  const shiftMonth = (delta: number) => setCursor(c => new Date(c.getFullYear(), c.getMonth() + delta, 1));
+  const shiftMonth = (delta: number) => setMonth(m => m.clone().add(delta, 'month'));
 
   return (
     <View style={s.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.card} />
       <Header
-        title="Calendar"
-        onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
+        title={TITLE}
+        divider
+        height={50}
+        onBackPress={() =>
+          navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome')
+        }
         rightSlot={
-          <TouchableOpacity style={s.headBtn} onPress={() => navigation.navigate('AdminCalendarMonth')} activeOpacity={0.8}>
-            <VectorIcon iconSet="Ionicons" iconName="calendar-outline" size={19} color={theme.colors.primary} />
-          </TouchableOpacity>
+          <View style={s.headActions}>
+            <TouchableOpacity
+              style={s.headBtn}
+              activeOpacity={0.6}
+              hitSlop={6}
+              onPress={() => navigation.navigate('AdminCalendarMonth')}
+            >
+              <VectorIcon iconSet="Ionicons" iconName="calendar-outline" size={19} color={theme.colors.primary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.headBtn}
+              activeOpacity={0.6}
+              hitSlop={6}
+              onPress={() => navigation.navigate('AdminCalendarForm')}
+            >
+              <VectorIcon iconSet="Ionicons" iconName="add" size={22} color={theme.colors.primary} />
+            </TouchableOpacity>
+          </View>
         }
       />
 
-      {/* Month nav */}
-      <View style={s.monthNav}>
-        <TouchableOpacity style={s.navBtn} onPress={() => shiftMonth(-1)} activeOpacity={0.8}>
-          <VectorIcon iconSet="Ionicons" iconName="chevron-back" size={18} color={theme.colors.primary} />
-        </TouchableOpacity>
-        <Text style={s.monthText}>{monthLabel(cursor)}</Text>
-        <TouchableOpacity style={s.navBtn} onPress={() => shiftMonth(1)} activeOpacity={0.8}>
-          <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={18} color={theme.colors.primary} />
-        </TouchableOpacity>
-      </View>
+      <MonthBar
+        label={month.format('MMMM YYYY')}
+        onPrev={() => shiftMonth(-1)}
+        onNext={() => shiftMonth(1)}
+      />
+      <FullDivider />
 
       {loading && !refreshing ? (
-        <View style={s.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>
+        <View style={s.list}>
+          {[0, 1, 2, 3, 4].map(i => (
+            <View key={i} style={[s.skeletonRow, i < 4 && s.rowDivider]}>
+              <View style={s.skeletonLine}>
+                <Skeleton width="55%" height={14} />
+                <Skeleton width={60} height={10} />
+              </View>
+              <Skeleton width="80%" height={12} />
+              <Skeleton width="35%" height={10} />
+            </View>
+          ))}
+        </View>
+      ) : error ? (
+        <View style={s.centeredBox}>
+          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
+          <Text style={s.errorText}>{error}</Text>
+          <TouchableOpacity onPress={load} hitSlop={10}>
+            <Text style={s.linkText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <ScrollView
-          contentContainerStyle={s.scroll}
           showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.list}
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          {events.length === 0 && <Text style={s.empty}>No events this month.</Text>}
-          {events.map(e => {
-            const color = e.color || colorFor(e.event_type);
-            return (
-              <TouchableOpacity key={e.id} style={s.card} activeOpacity={0.7}
-                onPress={() => navigation.navigate('AdminCalendarDetail', { item: e })}>
-                <View style={[s.colorBar, { backgroundColor: color }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={s.cardTitle} numberOfLines={1}>{e.title}</Text>
-                  {!!e.description && <Text style={s.cardBody} numberOfLines={1}>{e.description}</Text>}
-                  <View style={s.metaRow}>
-                    <VectorIcon iconSet="Ionicons" iconName="calendar-outline" size={13} color={theme.colors.textMuted} />
-                    <Text style={s.cardMeta}>{e.date}{e.is_all_day ? ' · All day' : (e.start_time ? ` · ${hhmm(e.start_time)}${e.end_time ? `–${hhmm(e.end_time)}` : ''}` : '')}</Text>
-                    <View style={[s.typeTag, { backgroundColor: color + '18' }]}>
-                      <Text style={[s.typeTagText, { color }]}>{e.event_type}</Text>
-                    </View>
-                  </View>
-                </View>
-                <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={18} color={theme.colors.textMuted} />
-              </TouchableOpacity>
-            );
-          })}
-          <View style={{ height: 90 }} />
+          {events.length === 0 ? (
+            <DocNoData
+              icon="calendar-outline"
+              title="No events"
+              subtitle="Nothing scheduled this month."
+            />
+          ) : (
+            events.map((e, i) => (
+              <EventRow
+                key={e.id}
+                title={e.title}
+                description={e.description}
+                time={timingLabel(e.is_all_day, e.start_time, e.end_time)}
+                meta={`${capitalize(e.event_type)} · ${moment(e.date).format('DD MMM YYYY')}`}
+                isLast={i === events.length - 1}
+                onPress={() => navigation.navigate('AdminCalendarDetail', { item: e })}
+              />
+            ))
+          )}
         </ScrollView>
       )}
-
-      <TouchableOpacity style={s.fab} onPress={() => navigation.navigate('AdminCalendarForm')} activeOpacity={0.9}>
-        <VectorIcon iconSet="Ionicons" iconName="add" size={28} color="#fff" />
-      </TouchableOpacity>
     </View>
   );
 };
 
 export default AdminCalendarScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
 
-  headBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
+  headActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
 
-  monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-  navBtn: { width: 38, height: 38, borderRadius: 10, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  monthText: { fontSize: 16, fontWeight: '800', color: theme.colors.textPrimary },
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
 
-  scroll: { paddingHorizontal: 16, paddingTop: 4 },
-  empty: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', marginTop: 30 },
+  // Loading skeleton
+  skeletonRow: { paddingVertical: 14, gap: 8 },
+  skeletonLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
 
-  card: { flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: theme.colors.border },
-  colorBar: { width: 4, borderRadius: 2, alignSelf: 'stretch' },
-  cardTitle: { fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary },
-  cardBody: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' },
-  cardMeta: { fontSize: 11, color: theme.colors.textMuted },
-  typeTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: theme.radius.full },
-  typeTagText: { fontSize: 10, fontWeight: '800', textTransform: 'capitalize' },
-
-  fab: { position: 'absolute', right: 18, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  // Error
+  centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
+  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  linkText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });

@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import ScreenSkeleton from '../../components/Skeleton';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import moment from 'moment';
-import Header from '../../components/Header';
-import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
-import { TYPE_META } from './calendarTypes';
 import type { CalEvent } from './calendarTypes';
-import { getEventById } from '../../api/calendarApi';
+import { DetailRow } from './calendarUi';
+import { getEventById, mapEventType } from '../../api/calendarApi';
 import type { EventDetail } from '../../api/calendarApi';
-import { mapEventType } from '../../api/calendarApi';
+import { DocHeader, DocSection, DocBody, DocLoading, docStyles } from '../more/docUi';
 import constant from '../../utils/constant';
+
+const TITLE = 'Event';
 
 // Files come from the same host as the API but outside the /api/v1 prefix
 const FILE_ORIGIN = constant.API_BASE_URL.replace(/\/api\/v\d+\/?$/, '');
@@ -28,6 +27,8 @@ const ViewEventScreen = ({ navigation, route }: any) => {
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // The event passed from the calendar shows straight away; this fills in the
+  // parts only the detail endpoint knows about.
   const load = useCallback(async () => {
     if (!passedEvent?.id) {
       setLoading(false);
@@ -50,21 +51,17 @@ const ViewEventScreen = ({ navigation, route }: any) => {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [passedEvent?.id]);
 
-  // Resolve type/colors from either the fetched detail or the passed event
-  const type = detail
-    ? mapEventType(detail.event_type)
-    : passedEvent?.type ?? 'Event';
-  const meta = TYPE_META[type];
-
+  const type = detail ? mapEventType(detail.event_type) : passedEvent?.type ?? 'Event';
   const title = detail?.title ?? passedEvent?.title ?? 'Event';
   const description = detail?.description ?? passedEvent?.description ?? '';
   const dateStr = detail?.date ?? passedEvent?.date;
   const dateLabel = dateStr ? moment(dateStr).format('dddd, DD MMM YYYY') : '';
   const timingDisplay =
     detail?.timing_display ??
-    (detail?.is_all_day ? 'All Day Event' : undefined) ??
+    (detail?.is_all_day ? 'All day' : undefined) ??
     passedEvent?.time;
 
   const location = detail?.location;
@@ -75,197 +72,102 @@ const ViewEventScreen = ({ navigation, route }: any) => {
   const creatorEmail = detail?.creator_email;
   const creatorAvatar = resolveFileUrl(detail?.creator_avatar);
 
+  const classLabel =
+    academic?.standard || academic?.section
+      ? [academic?.standard?.name, academic?.section?.name].filter(Boolean).join(' - ')
+      : undefined;
+
+  const details = [
+    ['Location', location?.full_address],
+    ['Subject', academic?.subject?.name],
+    ['Class', classLabel],
+    ['Teacher', academic?.teacher?.name],
+  ].filter(([, v]) => !!v) as [string, string][];
+
+  // Nothing to show yet: wait for the fetch before saying the event is missing.
+  if (loading && !detail && !passedEvent) return <DocLoading title={TITLE} />;
+
   if (!passedEvent && !detail) {
     return (
-      <View style={s.root}>
-        <Header title="View Event" onBackPress={() => navigation.goBack()} />
+      <View style={docStyles.root}>
+        <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
         <View style={s.centeredBox}>
-          <Text style={s.errorText}>Event not found</Text>
+          <Text style={s.mutedText}>Event not found</Text>
         </View>
       </View>
     );
   }
 
-  const Detail = ({
-    icon,
-    iconSet = 'Feather',
-    label,
-    value,
-  }: {
-    icon: string;
-    iconSet?: string;
-    label: string;
-    value?: string | null;
-  }) => {
-    if (!value) return null;
-    return (
-      <View style={s.detailRow}>
-        <View style={[s.detailIconBox, { backgroundColor: meta.bg }]}>
-          <VectorIcon
-            iconSet={iconSet as any}
-            iconName={icon}
-            size={16}
-            color={meta.color}
-          />
-        </View>
-        <View style={s.detailTextBox}>
-          <Text style={s.detailLabel}>{label}</Text>
-          <Text style={s.detailValue}>{value}</Text>
-        </View>
-      </View>
-    );
-  };
-
   return (
-    <View style={s.root}>
-      <Header title="View Event" onBackPress={() => navigation.goBack()} />
+    <View style={docStyles.root}>
+      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
 
-      {loading && !detail ? (
-        <View style={s.centeredBox}>
-          <ScreenSkeleton variant="detail" />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={docStyles.scroll}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Type, title, when */}
+        <View>
+          <Text style={s.metaText}>
+            {type}
+            {timingDisplay ? ` · ${timingDisplay}` : ''}
+          </Text>
+          <Text style={s.title}>{title}</Text>
+          {!!dateLabel && <Text style={s.dateText}>{dateLabel}</Text>}
+          {isCancelled && <Text style={s.cancelled}>Cancelled</Text>}
         </View>
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={s.scroll}
-          refreshControl={
-            <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        >
-          <View style={s.card}>
-            <View style={[s.accentStrip, { backgroundColor: meta.color }]} />
 
-            <View style={s.cardInner}>
-              {/* Meta row: type + cancelled + timing */}
-              <View style={s.metaRow}>
-                <View style={[s.tagPill, { backgroundColor: meta.bg }]}>
-                  <VectorIcon
-                    iconSet={meta.iconSet as any}
-                    iconName={meta.icon}
-                    size={11}
-                    color={meta.color}
-                  />
-                  <Text style={[s.tagPillText, { color: meta.color }]}>
-                    {type}
-                  </Text>
-                </View>
-                {isCancelled && (
-                  <View style={[s.tagPill, { backgroundColor: '#FEE2E2' }]}>
-                    <View style={s.cancelDot} />
-                    <Text style={[s.tagPillText, { color: theme.colors.danger }]}>
-                      Cancelled
-                    </Text>
-                  </View>
-                )}
-                <View style={s.metaSpacer} />
-                {!!timingDisplay && (
-                  <View style={s.timeRow}>
-                    <VectorIcon
-                      iconSet="Feather"
-                      iconName="clock"
-                      size={12}
-                      color={theme.colors.textMuted}
-                    />
-                    <Text style={s.timeText}>{timingDisplay}</Text>
-                  </View>
-                )}
-              </View>
+        {/* Description */}
+        <DocSection title="Description">
+          <DocBody>{description || 'No description available.'}</DocBody>
+        </DocSection>
 
-              {/* Title */}
-              <Text style={s.title}>{title}</Text>
-              {!!dateLabel && <Text style={s.dateText}>{dateLabel}</Text>}
+        {/* Why it was called off */}
+        {isCancelled && !!detail?.cancellation_reason && (
+          <DocSection title="Cancellation Reason">
+            <DocBody>{detail.cancellation_reason}</DocBody>
+          </DocSection>
+        )}
 
-              <View style={s.divider} />
-
-              {/* Description */}
-              <Text style={s.sectionLabel}>Description</Text>
-              <Text style={s.bodyText}>
-                {description || 'No description available'}
-              </Text>
-
-              {/* Cancellation reason */}
-              {isCancelled && !!detail?.cancellation_reason && (
-                <>
-                  <View style={s.divider} />
-                  <Text style={s.sectionLabel}>Cancellation Reason</Text>
-                  <Text style={s.bodyText}>{detail.cancellation_reason}</Text>
-                </>
-              )}
-
-              {/* Details */}
-              {(location?.full_address ||
-                academic?.standard ||
-                academic?.section ||
-                academic?.subject ||
-                academic?.teacher) && (
-                <>
-                  <View style={s.divider} />
-                  <Text style={s.sectionLabel}>Details</Text>
-                  <View style={s.detailList}>
-                    <Detail
-                      icon="map-pin"
-                      label="Location"
-                      value={location?.full_address}
-                    />
-                    <Detail
-                      icon="book"
-                      label="Subject"
-                      value={academic?.subject?.name}
-                    />
-                    <Detail
-                      icon="users"
-                      iconSet="Feather"
-                      label="Class"
-                      value={
-                        academic?.standard || academic?.section
-                          ? [academic?.standard?.name, academic?.section?.name]
-                              .filter(Boolean)
-                              .join(' - ')
-                          : undefined
-                      }
-                    />
-                    <Detail
-                      icon="user"
-                      label="Teacher"
-                      value={academic?.teacher?.name}
-                    />
-                  </View>
-                </>
-              )}
-
-              {/* Posted by */}
-              {!!creatorName && (
-                <>
-                  <View style={s.divider} />
-                  <Text style={s.sectionLabel}>Posted By</Text>
-                  <View style={s.creatorRow}>
-                    {creatorAvatar ? (
-                      <Image
-                        source={{ uri: creatorAvatar }}
-                        style={s.creatorAvatar}
-                      />
-                    ) : (
-                      <View
-                        style={[s.creatorAvatar, { backgroundColor: meta.bg }]}
-                      >
-                        <Text style={[s.creatorInitial, { color: meta.color }]}>
-                          {creatorName.charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
-                    <View style={s.creatorInfo}>
-                      <Text style={s.creatorName}>{creatorName}</Text>
-                      {!!creatorEmail && (
-                        <Text style={s.creatorEmail}>{creatorEmail}</Text>
-                      )}
-                    </View>
-                  </View>
-                </>
-              )}
+        {/* Where, what and who — only the parts that are filled in */}
+        {details.length > 0 && (
+          <DocSection title="Details">
+            <View style={s.detailList}>
+              {details.map(([label, value], i) => (
+                <DetailRow
+                  key={label}
+                  label={label}
+                  value={value}
+                  last={i === details.length - 1}
+                />
+              ))}
             </View>
-          </View>
-        </ScrollView>
-      )}
+          </DocSection>
+        )}
+
+        {/* Posted by */}
+        {!!creatorName && (
+          <>
+            <View style={s.divider} />
+            <DocSection title="Posted By">
+              <View style={s.creatorRow}>
+                {creatorAvatar ? (
+                  <Image source={{ uri: creatorAvatar }} style={s.creatorAvatar} />
+                ) : (
+                  <View style={[s.creatorAvatar, s.creatorAvatarFallback]}>
+                    <Text style={s.creatorInitial}>{creatorName.charAt(0).toUpperCase()}</Text>
+                  </View>
+                )}
+                <View style={s.creatorInfo}>
+                  <Text style={s.creatorName}>{creatorName}</Text>
+                  {!!creatorEmail && <Text style={s.creatorEmail}>{creatorEmail}</Text>}
+                </View>
+              </View>
+            </DocSection>
+          </>
+        )}
+      </ScrollView>
     </View>
   );
 };
@@ -273,137 +175,30 @@ const ViewEventScreen = ({ navigation, route }: any) => {
 export default ViewEventScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16, paddingBottom: 40 },
-  centeredBox: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  errorText: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-  },
+  centeredBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  mutedText: { fontSize: 14, color: theme.colors.textMuted },
 
-  card: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    overflow: 'hidden',
-    shadowColor: theme.colors.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  accentStrip: { height: 5 },
-  cardInner: { padding: 18 },
+  // Meta + title
+  metaText: { fontSize: 13, color: theme.colors.textMuted, marginBottom: 8 },
+  title: { fontSize: 20, fontWeight: '700', color: theme.colors.textPrimary, lineHeight: 27 },
+  dateText: { fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
+  cancelled: { fontSize: 13, fontWeight: '600', color: theme.colors.danger, marginTop: 8 },
 
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
-  },
-  metaSpacer: { flex: 1 },
-  tagPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: theme.radius.full,
-    paddingHorizontal: 11,
-    paddingVertical: 5,
-  },
-  tagPillText: { fontSize: 12, fontWeight: '700' },
-  cancelDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.colors.danger,
-  },
-  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  timeText: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    fontWeight: '600',
-  },
+  // Details
+  detailList: { marginTop: -6 },
 
-  title: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: theme.colors.textPrimary,
-    lineHeight: 28,
-    marginBottom: 4,
-  },
-  dateText: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    fontWeight: '500',
-  },
+  // Line before who posted it
+  divider: { height: 1, backgroundColor: theme.colors.border },
 
-  divider: {
-    height: 1,
-    backgroundColor: theme.colors.border,
-    marginVertical: 16,
-  },
-
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: theme.colors.textMuted,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginBottom: 10,
-  },
-  bodyText: {
-    fontSize: 15,
-    color: theme.colors.textPrimary,
-    lineHeight: 25,
-  },
-
-  detailList: { gap: 12 },
-  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  detailIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  detailTextBox: { flex: 1 },
-  detailLabel: {
-    fontSize: 12,
-    color: theme.colors.textMuted,
-    fontWeight: '600',
-    marginBottom: 1,
-  },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: theme.colors.textPrimary,
-  },
-
-  // Creator ("Posted By")
+  // Creator
   creatorRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  creatorAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  creatorInitial: { fontSize: 17, fontWeight: '800' },
+  creatorAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.background },
+  creatorAvatarFallback: { alignItems: 'center', justifyContent: 'center' },
+  creatorInitial: { fontSize: 15, fontWeight: '600', color: theme.colors.textSecondary },
   creatorInfo: { flex: 1 },
-  creatorName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: theme.colors.textPrimary,
-    marginBottom: 2,
-  },
-  creatorEmail: { fontSize: 13, color: theme.colors.textSecondary },
+  creatorName: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  creatorEmail: { fontSize: 13, color: theme.colors.textMuted, marginTop: 2 },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let s = __mk_s();

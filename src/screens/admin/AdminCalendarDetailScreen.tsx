@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,32 +10,25 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import Header from '../../components/Header';
+import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
-import { theme } from '../../utils/theme';
+import AppRefreshControl from '../../components/AppRefreshControl';
+import { useRefresh } from '../../hooks/useRefresh';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { ApiEvent, EventDetail, getEventById } from '../../api/calendarApi';
 import { deleteEvent } from '../../api/adminContentApi';
-import { colorFor } from './AdminCalendarFormScreen';
+import { DetailRow, capitalize, timingLabel } from '../calendar/calendarUi';
+import { DocHeader, DocSection, DocBody, DocLoading, docStyles } from '../more/docUi';
 
-const hhmm = (t?: string | null) => (t ? t.slice(0, 5) : '');
-
-const Row = ({ icon, label, value }: { icon: string; label: string; value?: string | null }) =>
-  value ? (
-    <View style={s.row}>
-      <VectorIcon iconSet="Ionicons" iconName={icon} size={16} color={theme.colors.textMuted} />
-      <View style={{ flex: 1 }}>
-        <Text style={s.rowLabel}>{label}</Text>
-        <Text style={s.rowValue}>{value}</Text>
-      </View>
-    </View>
-  ) : null;
+const TITLE = 'Event';
 
 const AdminCalendarDetailScreen = ({ navigation, route }: any) => {
   const passed: ApiEvent | undefined = route?.params?.item;
   const id: number = route?.params?.id ?? passed?.id;
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -50,37 +44,36 @@ const AdminCalendarDetailScreen = ({ navigation, route }: any) => {
 
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
-  const remove = () =>
-    Alert.alert('Delete event', `Delete "${detail?.title ?? passed?.title}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setDeleting(true);
-          try {
-            await deleteEvent(id);
-            navigation.goBack();
-          } catch (e) {
-            Alert.alert('Error', apiErr(e, 'Could not delete.'));
-          } finally {
-            setDeleting(false);
-          }
-        },
-      },
-    ]);
+  const { refreshing, onRefresh } = useRefresh(refresh);
 
-  // Prefer full detail; fall back to the passed list event.
+  // Prefer the full detail; fall back to the passed list event.
   const title = detail?.title ?? passed?.title ?? '';
   const eventType = detail?.event_type ?? passed?.event_type ?? 'event';
-  const color = detail?.color || passed?.color || colorFor(eventType);
+  const color = detail?.color || passed?.color || '';
   const date = detail?.date ?? passed?.date;
   const isAllDay = detail?.is_all_day ?? passed?.is_all_day;
   const startT = detail?.start_time ?? passed?.start_time;
   const endT = detail?.end_time ?? passed?.end_time;
   const description = detail?.description ?? passed?.description;
-  const timing = isAllDay ? 'All day' : (startT ? `${hhmm(startT)}${endT ? ` – ${hhmm(endT)}` : ''}` : null);
+  const timing = timingLabel(isAllDay, startT, endT);
 
+  const loc = detail?.location;
+  const acad = detail?.academic_details;
+
+  const details = [
+    ['Location', loc?.full_address || loc?.location || loc?.room_number || loc?.building],
+    [
+      'Class',
+      acad?.standard
+        ? `${acad.standard.name}${acad.section ? ' - ' + acad.section.name : ''}`
+        : undefined,
+    ],
+    ['Subject', acad?.subject?.name],
+    ['Teacher', acad?.teacher?.name],
+    ['Created by', detail?.creator_name],
+  ].filter(([, v]) => !!v) as [string, string][];
+
+  // What the form screen needs to open this event for editing.
   const forEdit: ApiEvent = {
     id,
     title,
@@ -90,84 +83,175 @@ const AdminCalendarDetailScreen = ({ navigation, route }: any) => {
     end_time: endT ?? null,
     is_all_day: !!isAllDay,
     event_type: eventType,
-    color: color ?? '',
+    color,
     location: null,
     academic_details: null,
     created_at: '',
     updated_at: '',
   };
 
-  const loc = detail?.location;
-  const acad = detail?.academic_details;
+  const remove = async () => {
+    setDeleting(true);
+    try {
+      await deleteEvent(id);
+      setConfirmOpen(false);
+      navigation.goBack();
+    } catch (e) {
+      setConfirmOpen(false);
+      Alert.alert('Error', apiErr(e, 'Could not delete.'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  if (loading && !detail && !passed) return <DocLoading title={TITLE} />;
 
   return (
-    <View style={s.root}>
-      <Header title="Event" onBackPress={() => navigation.goBack()} />
-      {loading && !detail ? (
-        <View style={s.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>
-      ) : (
-        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-          <View style={s.hero}>
-            <View style={[s.colorBar, { backgroundColor: color }]} />
-            <View style={{ flex: 1 }}>
-              <Text style={s.title}>{title}</Text>
-              <View style={[s.typeTag, { backgroundColor: color + '18' }]}>
-                <Text style={[s.typeTagText, { color }]}>{eventType}</Text>
-              </View>
+    <View style={docStyles.root}>
+      <DocHeader
+        title={TITLE}
+        onBackPress={() => navigation.goBack()}
+        rightIcon="create-outline"
+        onRightPress={() => navigation.navigate('AdminCalendarForm', { item: forEdit })}
+      />
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={docStyles.scroll}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Type, title, when */}
+        <View>
+          <Text style={s.metaText}>
+            {capitalize(eventType)}
+            {timing ? ` · ${timing}` : ''}
+          </Text>
+          <Text style={s.title}>{title}</Text>
+          {!!date && (
+            <Text style={s.dateText}>{moment(date).format('dddd, DD MMM YYYY')}</Text>
+          )}
+        </View>
+
+        <DocSection title="Description">
+          <DocBody>{description || 'No description added.'}</DocBody>
+        </DocSection>
+
+        {details.length > 0 && (
+          <DocSection title="Details">
+            <View style={s.detailList}>
+              {details.map(([label, value], i) => (
+                <DetailRow
+                  key={label}
+                  label={label}
+                  value={value}
+                  last={i === details.length - 1}
+                />
+              ))}
+            </View>
+          </DocSection>
+        )}
+
+        {/* Delete — a quiet text action, never a heavy red block */}
+        <TouchableOpacity
+          style={s.deleteBtn}
+          activeOpacity={0.6}
+          onPress={() => setConfirmOpen(true)}
+          hitSlop={8}
+        >
+          <VectorIcon iconSet="Feather" iconName="trash-2" size={15} color={theme.colors.danger} />
+          <Text style={s.deleteText}>Delete event</Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Delete confirmation */}
+      <Modal
+        transparent
+        visible={confirmOpen}
+        animationType="fade"
+        onRequestClose={() => setConfirmOpen(false)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>Delete event?</Text>
+            <Text style={s.modalDesc}>
+              “{title}” will be removed from the calendar for everyone. This cannot be undone.
+            </Text>
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                style={[s.modalBtn, s.modalBtnGhost]}
+                activeOpacity={0.7}
+                disabled={deleting}
+                onPress={() => setConfirmOpen(false)}
+              >
+                <Text style={s.modalBtnGhostText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalBtn, s.modalBtnDanger, deleting && s.modalBtnBusy]}
+                activeOpacity={0.85}
+                disabled={deleting}
+                onPress={remove}
+              >
+                {deleting ? (
+                  <ActivityIndicator size="small" color={theme.colors.white} />
+                ) : (
+                  <Text style={s.modalBtnDangerText}>Delete</Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
-
-          <View style={s.card}>
-            <Row icon="calendar-outline" label="Date" value={date} />
-            <Row icon="time-outline" label="Timing" value={timing} />
-            <Row icon="document-text-outline" label="Description" value={description} />
-            {!!loc && <Row icon="location-outline" label="Location" value={loc.full_address || loc.location || loc.room_number || loc.building} />}
-            {!!acad?.standard && <Row icon="school-outline" label="Class" value={`${acad.standard.name}${acad.section ? ' - ' + acad.section.name : ''}`} />}
-            {!!acad?.subject && <Row icon="book-outline" label="Subject" value={acad.subject.name} />}
-            {!!acad?.teacher?.name && <Row icon="person-outline" label="Teacher" value={acad.teacher.name} />}
-            {!!detail?.creator_name && <Row icon="create-outline" label="Created by" value={detail.creator_name} />}
-          </View>
-
-          <View style={s.actions}>
-            <TouchableOpacity style={[s.actBtn, s.editBtn]} activeOpacity={0.9}
-              onPress={() => navigation.navigate('AdminCalendarForm', { item: forEdit })}>
-              <VectorIcon iconSet="Ionicons" iconName="create-outline" size={18} color="#fff" />
-              <Text style={s.actBtnText}>Edit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[s.actBtn, s.deleteBtn]} activeOpacity={0.9} onPress={remove} disabled={deleting}>
-              {deleting ? <ActivityIndicator color="#fff" /> : (
-                <>
-                  <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={18} color="#fff" />
-                  <Text style={s.actBtnText}>Delete</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-          <View style={{ height: 30 }} />
-        </ScrollView>
-      )}
+        </View>
+      </Modal>
     </View>
   );
 };
 
 export default AdminCalendarDetailScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll: { padding: 16 },
-  hero: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  colorBar: { width: 5, borderRadius: 3, alignSelf: 'stretch', minHeight: 44 },
-  title: { fontSize: 20, fontWeight: '900', color: theme.colors.textPrimary },
-  typeTag: { alignSelf: 'flex-start', marginTop: 8, paddingHorizontal: 10, paddingVertical: 3, borderRadius: theme.radius.full },
-  typeTagText: { fontSize: 11, fontWeight: '800', textTransform: 'capitalize' },
-  card: { backgroundColor: theme.colors.card, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 14, marginTop: 18 },
-  row: { flexDirection: 'row', gap: 12, alignItems: 'flex-start', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  rowLabel: { fontSize: 11, color: theme.colors.textMuted, fontWeight: '600' },
-  rowValue: { fontSize: 14, color: theme.colors.textPrimary, marginTop: 2, lineHeight: 20 },
-  actions: { flexDirection: 'row', gap: 12, marginTop: 22 },
-  actBtn: { flex: 1, height: 50, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  editBtn: { backgroundColor: theme.colors.primary },
-  deleteBtn: { backgroundColor: theme.colors.danger },
-  actBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+const __mk_s = () => StyleSheet.create({
+  // Meta + title
+  metaText: { fontSize: 13, color: theme.colors.textMuted, marginBottom: 8 },
+  title: { fontSize: 20, fontWeight: '700', color: theme.colors.textPrimary, lineHeight: 27 },
+  dateText: { fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
+
+  // Details
+  detailList: { marginTop: -6 },
+
+  // Delete
+  deleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' },
+  deleteText: { fontSize: 14, fontWeight: '500', color: theme.colors.danger },
+
+  // Confirm modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.lg,
+    padding: 24,
+  },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
+  modalDesc: { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
+  modalBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: theme.radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnBusy: { opacity: 0.7 },
+  modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
+  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  modalBtnDanger: { backgroundColor: theme.colors.danger },
+  modalBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });

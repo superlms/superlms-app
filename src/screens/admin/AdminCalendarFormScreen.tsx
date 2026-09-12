@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
@@ -12,12 +13,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Header from '../../components/Header';
-import { theme } from '../../utils/theme';
+import VectorIcon from '../../components/VectorIcon';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { ApiEvent } from '../../api/calendarApi';
 import { EventType, createEvent, updateEvent } from '../../api/adminContentApi';
+import { DocHeader } from '../more/docUi';
 
+// The colour still travels to the API with every event; it is simply no longer
+// used to paint the screens.
 export const EVENT_TYPES: { key: EventType; label: string; color: string }[] = [
   { key: 'class', label: 'Class', color: '#3b82f6' },
   { key: 'exam', label: 'Exam', color: '#ef4444' },
@@ -26,6 +30,7 @@ export const EVENT_TYPES: { key: EventType; label: string; color: string }[] = [
   { key: 'holiday', label: 'Holiday', color: '#8b5cf6' },
 ];
 export const colorFor = (t: string) => EVENT_TYPES.find(e => e.key === t)?.color ?? '#6b7280';
+
 const hhmm = (t?: string | null) => (t ? t.slice(0, 5) : '');
 const pad = (n: number) => String(n).padStart(2, '0');
 const todayStr = () => {
@@ -41,21 +46,43 @@ const AdminCalendarFormScreen = ({ navigation, route }: any) => {
   const [title, setTitle] = useState(item?.title ?? '');
   const [desc, setDesc] = useState(item?.description ?? '');
   const [date, setDate] = useState(item?.date ?? presetDate ?? todayStr());
-  const [type, setType] = useState<EventType>((EVENT_TYPES.find(t => t.key === item?.event_type)?.key ?? 'event') as EventType);
+  const [type, setType] = useState<EventType>(
+    (EVENT_TYPES.find(t => t.key === item?.event_type)?.key ?? 'event') as EventType,
+  );
   const [allDay, setAllDay] = useState(item ? !!item.is_all_day : true);
   const [start, setStart] = useState(hhmm(item?.start_time));
   const [end, setEnd] = useState(hhmm(item?.end_time));
+  const [focused, setFocused] = useState<string | null>(null);
+  const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+
+  const titleRef = useRef<TextInput>(null);
+  const descRef = useRef<TextInput>(null);
 
   const validTime = (t: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
 
   const save = async () => {
-    if (!title.trim()) return Alert.alert('Required', 'Title is required.');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return Alert.alert('Invalid date', 'Use the format YYYY-MM-DD.');
-    if (!allDay) {
-      if (start && !validTime(start)) return Alert.alert('Invalid time', 'Start time must be HH:mm (24h).');
-      if (end && !validTime(end)) return Alert.alert('Invalid time', 'End time must be HH:mm (24h).');
+    if (!title.trim()) {
+      setError('Enter a title for the event.');
+      return;
     }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      setError('The date must be written as YYYY-MM-DD.');
+      return;
+    }
+    if (!allDay) {
+      if (start && !validTime(start)) {
+        setError('Start time must be HH:mm on a 24-hour clock.');
+        return;
+      }
+      if (end && !validTime(end)) {
+        setError('End time must be HH:mm on a 24-hour clock.');
+        return;
+      }
+    }
+
+    setError('');
     setSaving(true);
     try {
       const payload = {
@@ -70,84 +97,314 @@ const AdminCalendarFormScreen = ({ navigation, route }: any) => {
       };
       if (isEdit) await updateEvent(item!.id, payload);
       else await createEvent(payload);
-      Alert.alert('Success', `Event ${isEdit ? 'updated' : 'created'} successfully.`);
-      navigation.goBack();
+      setSuccessMsg(
+        isEdit ? 'The event has been updated.' : 'The event has been added to the calendar.',
+      );
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save event.'));
+      setError(apiErr(e, 'Could not save event.'));
     } finally {
       setSaving(false);
     }
   };
 
+  const closeSuccess = () => {
+    setSuccessMsg('');
+    navigation.goBack();
+  };
+
   return (
     <View style={s.root}>
-      <Header title={isEdit ? 'Edit Event' : 'New Event'} onBackPress={() => navigation.goBack()} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <Text style={s.label}>Title *</Text>
-          <TextInput style={s.input} value={title} onChangeText={setTitle} placeholder="Event title" placeholderTextColor={theme.colors.textMuted} />
+      <DocHeader
+        title={isEdit ? 'Edit Event' : 'New Event'}
+        onBackPress={() => navigation.goBack()}
+      />
 
-          <Text style={s.label}>Description</Text>
-          <TextInput style={[s.input, s.inputMultiline]} value={desc} onChangeText={setDesc} placeholder="Optional" placeholderTextColor={theme.colors.textMuted} multiline />
+      <KeyboardAvoidingView
+        style={s.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Title card — tap anywhere on it to type */}
+          <Pressable
+            style={[s.field, focused === 'title' && s.fieldFocused]}
+            onPress={() => titleRef.current?.focus()}
+          >
+            <Text style={s.fieldLabel}>Title</Text>
+            <TextInput
+              ref={titleRef}
+              style={s.fieldInput}
+              placeholder="What is happening?"
+              placeholderTextColor={theme.colors.textMuted}
+              value={title}
+              onChangeText={t => { setTitle(t); setError(''); }}
+              onFocus={() => setFocused('title')}
+              onBlur={() => setFocused(null)}
+              multiline
+              submitBehavior="submit"
+              textAlignVertical="top"
+              returnKeyType="next"
+              onSubmitEditing={() => descRef.current?.focus()}
+            />
+          </Pressable>
 
-          <Text style={s.label}>Date</Text>
-          <TextInput style={s.input} value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" placeholderTextColor={theme.colors.textMuted} />
+          {/* Description card */}
+          <Pressable
+            style={[s.field, focused === 'desc' && s.fieldFocused]}
+            onPress={() => descRef.current?.focus()}
+          >
+            <Text style={s.fieldLabel}>Description</Text>
+            <TextInput
+              ref={descRef}
+              style={[s.fieldInput, s.fieldInputMulti]}
+              placeholder="Optional"
+              placeholderTextColor={theme.colors.textMuted}
+              value={desc}
+              onChangeText={setDesc}
+              onFocus={() => setFocused('desc')}
+              onBlur={() => setFocused(null)}
+              multiline
+              textAlignVertical="top"
+            />
+          </Pressable>
 
-          <Text style={s.label}>Type</Text>
-          <View style={s.typeWrap}>
-            {EVENT_TYPES.map(t => {
-              const active = type === t.key;
-              return (
-                <TouchableOpacity key={t.key} style={[s.chip, active && { backgroundColor: t.color + '18', borderColor: t.color }]} onPress={() => setType(t.key)} activeOpacity={0.8}>
-                  <View style={[s.dot, { backgroundColor: t.color }]} />
-                  <Text style={[s.chipText, active && { color: t.color }]}>{t.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
+          {/* Date card */}
+          <View style={[s.field, focused === 'date' && s.fieldFocused]}>
+            <Text style={s.fieldLabel}>Date</Text>
+            <TextInput
+              style={s.fieldInput}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={theme.colors.textMuted}
+              value={date}
+              onChangeText={t => { setDate(t); setError(''); }}
+              onFocus={() => setFocused('date')}
+              onBlur={() => setFocused(null)}
+              keyboardType="numbers-and-punctuation"
+            />
           </View>
 
+          {/* Type */}
+          <View>
+            <Text style={s.sectionLabel}>Type</Text>
+            <View style={s.segment}>
+              {EVENT_TYPES.map(t => {
+                const active = type === t.key;
+                return (
+                  <TouchableOpacity
+                    key={t.key}
+                    activeOpacity={0.7}
+                    onPress={() => setType(t.key)}
+                    style={[s.segmentItem, active && s.segmentItemActive]}
+                  >
+                    <Text
+                      style={[s.segmentText, active && s.segmentTextActive]}
+                      numberOfLines={1}
+                    >
+                      {t.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* All day */}
           <View style={s.switchRow}>
-            <Text style={[s.label, { marginTop: 0 }]}>All day</Text>
-            <Switch value={allDay} onValueChange={setAllDay} trackColor={{ true: theme.colors.primary }} thumbColor="#fff" />
+            <Text style={s.switchLabel}>All day</Text>
+            <Switch
+              value={allDay}
+              onValueChange={setAllDay}
+              trackColor={{ true: theme.colors.primary, false: theme.colors.border }}
+              thumbColor={theme.colors.white}
+            />
           </View>
 
+          {/* Times, only when it is not an all-day event */}
           {!allDay && (
             <View style={s.timeRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.label}>Start (HH:mm)</Text>
-                <TextInput style={s.input} value={start} onChangeText={setStart} placeholder="09:00" placeholderTextColor={theme.colors.textMuted} />
+              <View style={[s.field, s.flex, focused === 'start' && s.fieldFocused]}>
+                <Text style={s.fieldLabel}>Start</Text>
+                <TextInput
+                  style={s.fieldInput}
+                  placeholder="09:00"
+                  placeholderTextColor={theme.colors.textMuted}
+                  value={start}
+                  onChangeText={t => { setStart(t); setError(''); }}
+                  onFocus={() => setFocused('start')}
+                  onBlur={() => setFocused(null)}
+                  keyboardType="numbers-and-punctuation"
+                />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.label}>End (HH:mm)</Text>
-                <TextInput style={s.input} value={end} onChangeText={setEnd} placeholder="10:00" placeholderTextColor={theme.colors.textMuted} />
+              <View style={[s.field, s.flex, focused === 'end' && s.fieldFocused]}>
+                <Text style={s.fieldLabel}>End</Text>
+                <TextInput
+                  style={s.fieldInput}
+                  placeholder="10:00"
+                  placeholderTextColor={theme.colors.textMuted}
+                  value={end}
+                  onChangeText={t => { setEnd(t); setError(''); }}
+                  onFocus={() => setFocused('end')}
+                  onBlur={() => setFocused(null)}
+                  keyboardType="numbers-and-punctuation"
+                />
               </View>
             </View>
           )}
 
-          <TouchableOpacity style={[s.saveBtn, saving && { opacity: 0.7 }]} onPress={save} disabled={saving} activeOpacity={0.9}>
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>{isEdit ? 'Update Event' : 'Create Event'}</Text>}
+          {!!error && <Text style={s.errorText}>{error}</Text>}
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={save}
+            style={[s.submitBtn, saving && s.submitBtnBusy]}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator color={theme.colors.white} size="small" />
+            ) : (
+              <Text style={s.submitText}>{isEdit ? 'Update Event' : 'Create Event'}</Text>
+            )}
           </TouchableOpacity>
-          <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Saved */}
+      <Modal
+        transparent
+        visible={!!successMsg}
+        animationType="fade"
+        onRequestClose={closeSuccess}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <VectorIcon iconSet="Ionicons" iconName="checkmark-circle-outline" size={44} color={theme.colors.success} />
+            <Text style={s.modalTitle}>{isEdit ? 'Event updated' : 'Event created'}</Text>
+            <Text style={s.modalDesc}>{successMsg}</Text>
+            <TouchableOpacity style={s.modalBtn} activeOpacity={0.85} onPress={closeSuccess}>
+              <Text style={s.modalBtnText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
 
 export default AdminCalendarFormScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16 },
-  label: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary, marginTop: 14, marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14, color: theme.colors.textPrimary, backgroundColor: theme.colors.card },
-  inputMultiline: { minHeight: 90, textAlignVertical: 'top' },
-  typeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 13, paddingVertical: 8, borderRadius: theme.radius.full, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  chipText: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
-  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  flex: { flex: 1 },
+  scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 14 },
+
+  // Input cards — label inside, borderless input underneath
+  field: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.card,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  fieldFocused: { borderColor: theme.colors.primary },
+  fieldLabel: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted },
+  fieldInput: {
+    fontSize: 15,
+    color: theme.colors.textPrimary,
+    paddingHorizontal: 0,
+    paddingVertical: 4,
+    marginTop: 2,
+  },
+  fieldInputMulti: { minHeight: 100 },
+
+  // Type segment
+  sectionLabel: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted, marginBottom: 8 },
+  segment: {
+    flexDirection: 'row',
+    padding: 3,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+  },
+  segmentItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  segmentItemActive: { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+  segmentText: { fontSize: 12, fontWeight: '500', color: theme.colors.textSecondary },
+  segmentTextActive: { color: theme.colors.primary, fontWeight: '600' },
+
+  // All day
+  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  switchLabel: { fontSize: 15, color: theme.colors.textPrimary },
+
   timeRow: { flexDirection: 'row', gap: 12 },
-  saveBtn: { marginTop: 24, height: 50, borderRadius: 14, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
-  saveBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  errorText: { fontSize: 13, color: theme.colors.danger, lineHeight: 18 },
+
+  // Submit
+  submitBtn: {
+    height: 48,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  submitBtnBusy: { opacity: 0.7 },
+  submitText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
+
+  // Success modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.lg,
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: theme.colors.textPrimary,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  modalDesc: {
+    marginTop: 6,
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  modalBtn: {
+    marginTop: 22,
+    alignSelf: 'stretch',
+    height: 48,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });
