@@ -174,12 +174,13 @@ const __mk_s = () => StyleSheet.create({
 
   body: { paddingHorizontal: 20, paddingTop: 4 },
 
-  // Two left-aligned columns: label in the left half, value from the middle,
-  // both in the same regular-weight font.
+  // Two left-aligned columns: label in the left half, value from the middle.
+  // Same 14px font; the value is just a touch heavier (medium, the lightest
+  // step above regular in the system font).
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 14 },
   infoRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
   infoLabel: { width: '50%', paddingRight: 12, fontSize: 14, color: theme.colors.textSecondary },
-  infoValue: { flex: 1, fontSize: 14, color: theme.colors.textPrimary },
+  infoValue: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
 });
 
 
