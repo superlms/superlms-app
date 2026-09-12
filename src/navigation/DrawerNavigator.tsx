@@ -312,7 +312,7 @@ const DrawerNavigator = ({ route }: any) => {
               <VectorIcon
                 iconSet="Ionicons"
                 iconName="log-out-outline"
-                size={20}
+                size={18}
                 color={theme.colors.danger}
               />
               <Text style={styles.logoutText}>Logout</Text>
@@ -328,14 +328,13 @@ const DrawerNavigator = ({ route }: any) => {
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalCard}>
-              <View style={styles.modalIconWrap}>
-                <VectorIcon
-                  iconSet="Ionicons"
-                  iconName="log-out-outline"
-                  size={28}
-                  color={theme.colors.danger}
-                />
-              </View>
+              <VectorIcon
+                iconSet="Ionicons"
+                iconName="log-out-outline"
+                size={32}
+                color={theme.colors.danger}
+                style={styles.modalIcon}
+              />
 
               <Text style={styles.modalTitle}>Logout</Text>
               <Text style={styles.modalDesc}>
@@ -588,15 +587,9 @@ const __mk_styles = () => StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
-  modalIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: theme.radius.full,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
+  modalIcon: {
     alignSelf: 'center',
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
   },
   modalTitle: {
     fontSize: 22,

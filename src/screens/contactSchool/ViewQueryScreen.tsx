@@ -39,7 +39,7 @@ const AttachmentChip = ({
 }) => (
   <TouchableOpacity style={s.chip} activeOpacity={0.7} onPress={onPress}>
     <VectorIcon iconSet="Feather" iconName={icon} size={14} color={theme.colors.primary} />
-    <Text style={s.chipText} numberOfLines={1}>
+    <Text style={s.chipText} numberOfLines={1} ellipsizeMode="middle">
       {label}
     </Text>
     <VectorIcon iconSet="Feather" iconName="external-link" size={12} color={theme.colors.textMuted} />
@@ -170,7 +170,7 @@ const __mk_s = () => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    maxWidth: '100%',
+    maxWidth: 200,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: theme.radius.full,

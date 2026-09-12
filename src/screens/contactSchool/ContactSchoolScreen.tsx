@@ -229,7 +229,7 @@ const ContactSchoolScreen = ({ navigation }: any) => {
                 ) : (
                   <VectorIcon iconSet="Feather" iconName="file" size={14} color={theme.colors.primary} />
                 )}
-                <Text style={s.chipText} numberOfLines={1}>
+                <Text style={s.chipText} numberOfLines={1} ellipsizeMode="middle">
                   {attachment.name}
                 </Text>
                 <TouchableOpacity onPress={() => setAttachment(null)} hitSlop={8}>
@@ -316,7 +316,7 @@ const __mk_s = () => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    maxWidth: '100%',
+    maxWidth: 200,
     paddingLeft: 8,
     paddingRight: 10,
     paddingVertical: 6,
