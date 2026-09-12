@@ -24,6 +24,7 @@ import TabNavigator from './TabNavigator';
 import SettingsScreen from '../screens/setting/SettingsScreen';
 import { theme, onThemeChange } from '../utils/theme';
 import VectorIcon from '../components/VectorIcon';
+import { BlurView } from '@react-native-community/blur';
 import MoreScreen from '../screens/more/MoreScreen';
 import CalendarScreen from '../screens/calendar/CalendarScreen';
 import AnnouncementScreen from '../screens/announcement/AnnouncementScreen';
@@ -324,10 +325,30 @@ const DrawerNavigator = ({ route }: any) => {
           transparent
           visible={logoutVisible}
           animationType="fade"
+          statusBarTranslucent
           onRequestClose={() => setLogoutVisible(false)}
         >
           <View style={styles.modalOverlay}>
+            {/* Blur everything behind the popup, with a light tint for contrast */}
+            <BlurView
+              style={StyleSheet.absoluteFill}
+              blurType="light"
+              blurAmount={10}
+              reducedTransparencyFallbackColor="rgba(0,0,0,0.35)"
+            />
+            <View style={[StyleSheet.absoluteFill, styles.modalTint]} />
+
             <View style={styles.modalCard}>
+              {/* Small close button, top-right */}
+              <TouchableOpacity
+                style={styles.modalClose}
+                onPress={() => setLogoutVisible(false)}
+                hitSlop={10}
+                activeOpacity={0.7}
+              >
+                <VectorIcon iconSet="Ionicons" iconName="close" size={18} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+
               <VectorIcon
                 iconSet="Ionicons"
                 iconName="log-out-outline"
@@ -573,19 +594,35 @@ const __mk_styles = () => StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: theme.spacing.lg,
   },
+  modalTint: {
+    backgroundColor: 'rgba(15, 23, 42, 0.2)',
+  },
   modalCard: {
-    width: '100%',
-    maxWidth: 420,
+    width: '84%',
+    maxWidth: 340,
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.lg,
-    padding: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.xl,
+    paddingBottom: theme.spacing.lg,
     borderWidth: 1,
     borderColor: theme.colors.border,
+  },
+  modalClose: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.background,
+    zIndex: 1,
   },
   modalIcon: {
     alignSelf: 'center',
@@ -606,8 +643,8 @@ const __mk_styles = () => StyleSheet.create({
   },
   modalActions: {
     flexDirection: 'row',
-    gap: theme.spacing.md,
-    marginTop: theme.spacing.xl,
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
   },
   modalBtn: {
     flex: 1,
