@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -6,6 +6,7 @@ import {
   Modal,
   PermissionsAndroid,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,15 +24,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { studentContactAdmin, teacherContactAdmin } from '../../api/contactApi';
 import { DocHeader } from '../more/docUi';
 
-// Short, human label for the picked file's type.
-const attachmentKind = (type?: string) => {
-  if (!type) return 'File';
-  if (type.startsWith('image/')) return 'Image';
-  if (type.startsWith('video/')) return 'Video';
-  if (type === 'application/pdf') return 'PDF';
-  return 'File';
-};
-
 const ContactSchoolScreen = ({ navigation }: any) => {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
@@ -40,6 +32,8 @@ const ContactSchoolScreen = ({ navigation }: any) => {
   const [role, setRole] = useState<string>('student');
   const [successVisible, setSuccessVisible] = useState(false);
   const [focused, setFocused] = useState<'subject' | 'message' | null>(null);
+  const subjectRef = useRef<TextInput>(null);
+  const messageRef = useRef<TextInput>(null);
 
   // TODO: wire to an API loader if this screen gains server data.
   const { refreshing, onRefresh } = useRefresh(() => {});
@@ -166,7 +160,13 @@ const ContactSchoolScreen = ({ navigation }: any) => {
 
   return (
     <View style={s.root}>
-      <DocHeader title="Contact School" onBackPress={() => navigation.goBack()} />
+      {/* The clip icon in the header attaches a file */}
+      <DocHeader
+        title="Contact School"
+        onBackPress={() => navigation.goBack()}
+        rightIcon="attach"
+        onRightPress={handlePickAttachment}
+      />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -180,10 +180,15 @@ const ContactSchoolScreen = ({ navigation }: any) => {
             <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
-          <View>
-            <Text style={s.label}>Subject</Text>
+          {/* Subject card — tap anywhere on it to type */}
+          <Pressable
+            style={[s.field, focused === 'subject' && s.fieldFocused]}
+            onPress={() => subjectRef.current?.focus()}
+          >
+            <Text style={s.fieldLabel}>Subject</Text>
             <TextInput
-              style={[s.input, focused === 'subject' && s.inputFocused]}
+              ref={subjectRef}
+              style={s.fieldInput}
               placeholder="Write your subject here..."
               placeholderTextColor={theme.colors.textMuted}
               value={subject}
@@ -191,13 +196,19 @@ const ContactSchoolScreen = ({ navigation }: any) => {
               onFocus={() => setFocused('subject')}
               onBlur={() => setFocused(null)}
               returnKeyType="next"
+              onSubmitEditing={() => messageRef.current?.focus()}
             />
-          </View>
+          </Pressable>
 
-          <View>
-            <Text style={s.label}>Message</Text>
+          {/* Message card */}
+          <Pressable
+            style={[s.field, focused === 'message' && s.fieldFocused]}
+            onPress={() => messageRef.current?.focus()}
+          >
+            <Text style={s.fieldLabel}>Message</Text>
             <TextInput
-              style={[s.input, s.inputMulti, focused === 'message' && s.inputFocused]}
+              ref={messageRef}
+              style={[s.fieldInput, s.fieldInputMulti]}
               placeholder="Enter your query here..."
               placeholderTextColor={theme.colors.textMuted}
               value={message}
@@ -207,51 +218,30 @@ const ContactSchoolScreen = ({ navigation }: any) => {
               multiline
               textAlignVertical="top"
             />
-          </View>
+          </Pressable>
 
-          {/* Attachment */}
-          <View>
-            <Text style={s.label}>Attachment</Text>
-            {attachment ? (
-              <View style={s.attachCard}>
+          {/* Attached file as a chip, or a quiet hint */}
+          {attachment ? (
+            <View style={s.chips}>
+              <View style={s.chip}>
                 {isImage ? (
-                  <Image source={{ uri: attachment.uri }} style={s.attachThumb} />
+                  <Image source={{ uri: attachment.uri }} style={s.chipThumb} />
                 ) : (
-                  <View style={s.attachIcon}>
-                    <VectorIcon iconSet="Feather" iconName="file" size={18} color={theme.colors.primary} />
-                  </View>
+                  <VectorIcon iconSet="Feather" iconName="file" size={14} color={theme.colors.primary} />
                 )}
-                <View style={s.attachText}>
-                  <Text style={s.attachTitle} numberOfLines={1}>
-                    {attachment.name}
-                  </Text>
-                  <Text style={s.attachMeta}>{attachmentKind(attachment.type)}</Text>
-                </View>
-                <TouchableOpacity
-                  style={s.attachRemove}
-                  onPress={() => setAttachment(null)}
-                  hitSlop={8}
-                >
-                  <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={theme.colors.textSecondary} />
+                <Text style={s.chipText} numberOfLines={1}>
+                  {attachment.name}
+                </Text>
+                <TouchableOpacity onPress={() => setAttachment(null)} hitSlop={8}>
+                  <VectorIcon iconSet="Ionicons" iconName="close" size={15} color={theme.colors.textSecondary} />
                 </TouchableOpacity>
               </View>
-            ) : (
-              <TouchableOpacity
-                style={s.attachPicker}
-                onPress={handlePickAttachment}
-                activeOpacity={0.7}
-              >
-                <View style={s.attachIcon}>
-                  <VectorIcon iconSet="Feather" iconName="paperclip" size={18} color={theme.colors.primary} />
-                </View>
-                <View style={s.attachText}>
-                  <Text style={s.attachTitle}>Attach a file</Text>
-                  <Text style={s.attachMeta}>Optional · from your gallery</Text>
-                </View>
-                <VectorIcon iconSet="Ionicons" iconName="add" size={20} color={theme.colors.textMuted} />
-              </TouchableOpacity>
-            )}
-          </View>
+            </View>
+          ) : (
+            <Text style={s.hint}>
+              Optional: attach a file with the clip icon at the top.
+            </Text>
+          )}
 
           {/* Submit */}
           <TouchableOpacity
@@ -298,70 +288,46 @@ export default ContactSchoolScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
-  scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 18 },
+  scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 14 },
 
-  // Fields
-  label: { fontSize: 13, color: theme.colors.textSecondary, marginBottom: 6 },
-  input: {
+  // Input cards — label inside, borderless input underneath
+  field: {
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: theme.radius.md,
     backgroundColor: theme.colors.card,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 10,
+  },
+  fieldFocused: { borderColor: theme.colors.primary },
+  fieldLabel: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted },
+  fieldInput: {
     fontSize: 15,
     color: theme.colors.textPrimary,
+    paddingHorizontal: 0,
+    paddingVertical: 4,
+    marginTop: 2,
   },
-  inputFocused: { borderColor: theme.colors.primary },
-  inputMulti: { minHeight: 140 },
+  fieldInputMulti: { minHeight: 120 },
 
-  // Attachment — dashed picker when empty, solid card once a file is picked
-  attachPicker: {
+  // Attachment chip
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: theme.colors.textMuted,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.background,
-  },
-  attachCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
+    gap: 8,
+    maxWidth: '100%',
+    paddingLeft: 8,
+    paddingRight: 10,
+    paddingVertical: 6,
+    borderRadius: theme.radius.full,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.card,
-  },
-  attachIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  attachThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: theme.radius.sm,
     backgroundColor: theme.colors.background,
   },
-  attachText: { flex: 1 },
-  attachTitle: { fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
-  attachMeta: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
-  attachRemove: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  chipThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: theme.colors.border },
+  chipText: { flexShrink: 1, fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
+  hint: { fontSize: 12, color: theme.colors.textMuted },
 
   // Submit
   submitBtn: {
@@ -370,7 +336,7 @@ const __mk_s = () => StyleSheet.create({
     backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
+    marginTop: 8,
   },
   submitBtnBusy: { opacity: 0.7 },
   submitText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },

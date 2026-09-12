@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Alert,
-  Image,
   Linking,
   ScrollView,
   StyleSheet,
@@ -16,7 +15,6 @@ import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { STATUS_META } from './queryTypes';
 import type { Query } from './queryTypes';
-import AttachmentPreviewModal from '../announcement/AttachmentPreviewModal';
 import constant from '../../utils/constant';
 import { DocHeader, DocSection, DocBody, docStyles } from '../more/docUi';
 
@@ -29,9 +27,27 @@ const resolveFileUrl = (url?: string | null): string | undefined => {
   return `${FILE_ORIGIN}/${url.replace(/^\/+/, '')}`;
 };
 
+// Tappable attachment chip — opens the file straight away, no preview screen.
+const AttachmentChip = ({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  onPress: () => void;
+}) => (
+  <TouchableOpacity style={s.chip} activeOpacity={0.7} onPress={onPress}>
+    <VectorIcon iconSet="Feather" iconName={icon} size={14} color={theme.colors.primary} />
+    <Text style={s.chipText} numberOfLines={1}>
+      {label}
+    </Text>
+    <VectorIcon iconSet="Feather" iconName="external-link" size={12} color={theme.colors.textMuted} />
+  </TouchableOpacity>
+);
+
 const ViewQueryScreen = ({ navigation, route }: any) => {
   const item: Query = route.params?.item;
-  const [imageVisible, setImageVisible] = useState(false);
 
   // TODO: wire to the query-detail API loader once integrated.
   const { refreshing, onRefresh } = useRefresh(() => {});
@@ -60,12 +76,12 @@ const ViewQueryScreen = ({ navigation, route }: any) => {
   const imageUrl = resolveFileUrl(item.attachmentUrl);
   const pdfUrl = resolveFileUrl(item.pdfUrl);
 
-  const openPdf = async () => {
-    if (!pdfUrl) return;
+  // Open attachments directly in the device's viewer / browser.
+  const openFile = async (url: string) => {
     try {
-      await Linking.openURL(pdfUrl);
+      await Linking.openURL(url);
     } catch {
-      Alert.alert('Error', 'Unable to open the PDF on this device.');
+      Alert.alert('Error', 'Unable to open this file on this device.');
     }
   };
 
@@ -91,53 +107,30 @@ const ViewQueryScreen = ({ navigation, route }: any) => {
           {!!dateLabel && <Text style={s.dateText}>{dateLabel}</Text>}
         </View>
 
+        {/* The query, with its attachments as chips right under it */}
         <DocSection title="Your Query">
           <DocBody>{item.message}</DocBody>
-        </DocSection>
-
-        {(imageUrl || pdfUrl) && (
-          <DocSection title="Attachments">
-            <View style={s.attachList}>
-              {/* Image: preview on top, name + action underneath */}
+          {(imageUrl || pdfUrl) && (
+            <View style={s.chips}>
               {!!imageUrl && (
-                <TouchableOpacity
-                  style={s.attachCard}
-                  activeOpacity={0.85}
-                  onPress={() => setImageVisible(true)}
-                >
-                  <Image source={{ uri: imageUrl }} style={s.attachPreview} resizeMode="cover" />
-                  <View style={s.attachFooter}>
-                    <VectorIcon iconSet="Feather" iconName="image" size={16} color={theme.colors.textSecondary} />
-                    <Text style={s.attachFooterName} numberOfLines={1}>
-                      {item.attachmentName || 'Image'}
-                    </Text>
-                    <Text style={s.attachAction}>View</Text>
-                  </View>
-                </TouchableOpacity>
+                <AttachmentChip
+                  icon="image"
+                  label={item.attachmentName || 'Image'}
+                  onPress={() => openFile(imageUrl)}
+                />
               )}
-
-              {/* PDF: icon, name + type, open action */}
               {!!pdfUrl && (
-                <TouchableOpacity
-                  style={[s.attachCard, s.attachFileRow]}
-                  activeOpacity={0.85}
-                  onPress={openPdf}
-                >
-                  <View style={s.fileIcon}>
-                    <VectorIcon iconSet="Feather" iconName="file-text" size={18} color={theme.colors.primary} />
-                  </View>
-                  <View style={s.fileText}>
-                    <Text style={s.fileName} numberOfLines={1}>
-                      {item.attachmentName || 'PDF Document'}
-                    </Text>
-                    <Text style={s.fileMeta}>PDF document</Text>
-                  </View>
-                  <Text style={s.attachAction}>Open</Text>
-                </TouchableOpacity>
+                <AttachmentChip
+                  icon="file-text"
+                  label={item.attachmentName || 'PDF Document'}
+                  onPress={() => openFile(pdfUrl)}
+                />
               )}
             </View>
-          </DocSection>
-        )}
+          )}
+        </DocSection>
+
+        <View style={s.divider} />
 
         <DocSection title="School's Reply">
           {item.admin_reply ? (
@@ -154,13 +147,6 @@ const ViewQueryScreen = ({ navigation, route }: any) => {
           )}
         </DocSection>
       </ScrollView>
-
-      <AttachmentPreviewModal
-        visible={imageVisible}
-        accentColor={theme.colors.primary}
-        imageUrl={imageUrl}
-        onClose={() => setImageVisible(false)}
-      />
     </View>
   );
 };
@@ -178,40 +164,24 @@ const __mk_s = () => StyleSheet.create({
   title: { fontSize: 20, fontWeight: '700', color: theme.colors.textPrimary, lineHeight: 27 },
   dateText: { fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
 
-  // Attachments
-  attachList: { gap: 12 },
-  attachCard: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.card,
-    overflow: 'hidden',
-  },
-  attachPreview: { width: '100%', height: 180, backgroundColor: theme.colors.background },
-  attachFooter: {
+  // Attachment chips
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    gap: 6,
+    maxWidth: '100%',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
   },
-  attachFooterName: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
-  attachAction: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
+  chipText: { flexShrink: 1, fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
 
-  attachFileRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
-  fileIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fileText: { flex: 1 },
-  fileName: { fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
-  fileMeta: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
+  // Line between the query and the school's reply
+  divider: { height: 1, backgroundColor: theme.colors.border },
 
   replyMeta: { fontSize: 12, color: theme.colors.textMuted, marginBottom: 6 },
   mutedText: { fontSize: 14, color: theme.colors.textMuted, lineHeight: 21 },
