@@ -10,20 +10,22 @@ import {
   View,
 } from 'react-native';
 import Pdf from 'react-native-pdf';
-import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
+import { DocHeader } from '../more/docUi';
 
 const { width, height } = Dimensions.get('window');
 
 /**
- * In-app PDF reader for books.
+ * In-app PDF reader — books, and the admit card and report card previews.
  *
  * Route params:
- *   url    – the (already resolved) absolute PDF url
- *   title  – book title for the header
+ *   url     – the (already resolved) absolute PDF url
+ *   title   – title for the header
+ *   headers – optional auth headers for a token-protected PDF
  *
- * Top bar lets the reader jump to any page by typing the page number.
+ * One quiet line under the header says where the reader is, and takes a page
+ * number to jump to.
  */
 const BookReaderScreen = ({ navigation, route }: any) => {
   const url: string | undefined = route?.params?.url;
@@ -34,16 +36,18 @@ const BookReaderScreen = ({ navigation, route }: any) => {
 
   // IMPORTANT: keep two separate values to avoid a feedback loop that crashes
   // the native Pdf view on fast scrolling.
-  //   • currentPage – display only (the page badge); updated as the user scrolls
+  //   • currentPage – display only (the page line); updated as the user scrolls
   //   • targetPage  – fed to <Pdf page={…}>; changed ONLY by "Go to page"
   // If we fed onPageChanged back into the page prop, every scroll frame would
-  // re-render the Pdf and re-trigger navigation → crash + flickering badge.
+  // re-render the Pdf and re-trigger navigation → crash + flickering page line.
   const [currentPage, setCurrentPage] = useState(1);
   const [targetPage, setTargetPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [pageInput, setPageInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Bumped by "Try again" so the native view is mounted afresh.
+  const [attempt, setAttempt] = useState(0);
 
   const goToPage = useCallback(() => {
     Keyboard.dismiss();
@@ -55,13 +59,19 @@ const BookReaderScreen = ({ navigation, route }: any) => {
     setPageInput('');
   }, [pageInput, totalPages]);
 
+  const retry = () => {
+    setError(null);
+    setLoading(true);
+    setAttempt(a => a + 1);
+  };
+
   if (!url) {
     return (
       <View style={s.root}>
-        <Header title={title} onBackPress={() => navigation.goBack()} />
+        <DocHeader title={title} onBackPress={() => navigation.goBack()} />
         <View style={s.center}>
-          <VectorIcon iconSet="Feather" iconName="file-text" size={48} color={theme.colors.textMuted} />
-          <Text style={s.errorText}>This book has no PDF attached.</Text>
+          <VectorIcon iconSet="Ionicons" iconName="document-outline" size={32} color={theme.colors.textMuted} />
+          <Text style={s.stateText}>There is no PDF to open.</Text>
         </View>
       </View>
     );
@@ -69,49 +79,55 @@ const BookReaderScreen = ({ navigation, route }: any) => {
 
   return (
     <View style={s.root}>
-      <Header title={title} onBackPress={() => navigation.goBack()} />
+      <DocHeader title={title} onBackPress={() => navigation.goBack()} />
 
-      {/* ── Go to page bar ── */}
-      <View style={s.gotoBar}>
-        <View style={s.gotoLeft}>
-          <VectorIcon iconSet="Feather" iconName="book-open" size={15} color={theme.colors.primary} />
-          <Text style={s.gotoLabel}>Go to page</Text>
-        </View>
-
-        <View style={s.gotoInputWrap}>
-          <TextInput
-            value={pageInput}
-            onChangeText={t => setPageInput(t.replace(/[^0-9]/g, ''))}
-            keyboardType="number-pad"
-            placeholder="Page no"
-            placeholderTextColor={theme.colors.textMuted}
-            style={s.gotoInput}
-            returnKeyType="go"
-            onSubmitEditing={goToPage}
-            maxLength={6}
-          />
-          <TouchableOpacity style={s.gotoBtn} onPress={goToPage} activeOpacity={0.85}>
-            <Text style={s.gotoBtnText}>Go</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={s.pageBadge}>
-          <Text style={s.pageBadgeText}>
-            {totalPages ? `${currentPage} / ${totalPages}` : currentPage}
+      {/* Where the reader is, and a page to jump to */}
+      {!error && (
+        <View style={s.bar}>
+          <Text style={s.pageText}>
+            {loading ? (
+              'Opening…'
+            ) : (
+              <>
+                Page <Text style={s.pageStrong}>{currentPage}</Text>
+                {totalPages > 0 ? ` of ${totalPages}` : ''}
+              </>
+            )}
           </Text>
-        </View>
-      </View>
 
-      {/* ── PDF ── */}
+          <View style={s.goto}>
+            <TextInput
+              value={pageInput}
+              onChangeText={t => setPageInput(t.replace(/[^0-9]/g, ''))}
+              keyboardType="number-pad"
+              placeholder="Go to page"
+              placeholderTextColor={theme.colors.textMuted}
+              style={s.gotoInput}
+              returnKeyType="go"
+              onSubmitEditing={goToPage}
+              maxLength={6}
+              editable={!loading}
+            />
+            <TouchableOpacity onPress={goToPage} disabled={!pageInput} hitSlop={10} activeOpacity={0.6}>
+              <Text style={[s.gotoBtn, !pageInput && s.gotoBtnIdle]}>Go</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       <View style={s.pdfWrap}>
         {error ? (
           <View style={s.center}>
-            <VectorIcon iconSet="Ionicons" iconName="alert-circle-outline" size={48} color={theme.colors.danger} />
-            <Text style={s.errorText}>{error}</Text>
+            <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
+            <Text style={s.stateText}>{error}</Text>
+            <TouchableOpacity onPress={retry} hitSlop={10}>
+              <Text style={s.linkText}>Try again</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <>
             <Pdf
+              key={attempt}
               source={{ uri: url, cache: true, ...(headers ? { headers } : {}) }}
               page={targetPage}
               trustAllCerts={false}
@@ -123,21 +139,20 @@ const BookReaderScreen = ({ navigation, route }: any) => {
               // Display-only: never feed this back into the page prop.
               // Guard against transient 0/undefined values the native view
               // can emit during very fast scrolling, which would otherwise
-              // make the badge / placeholder flicker to nothing.
+              // make the page line flicker to nothing.
               onPageChanged={(p: number) => {
                 if (Number.isFinite(p) && p > 0) setCurrentPage(p);
               }}
               onError={(e: any) => {
                 console.log('[BookReader] PDF error:', e);
-                setError('Failed to open this PDF. Please try again.');
+                setError('Couldn’t open this PDF.');
                 setLoading(false);
               }}
               style={s.pdf}
             />
             {loading && (
               <View style={s.loaderOverlay}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={s.loadingText}>Loading PDF…</Text>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
               </View>
             )}
           </>
@@ -150,67 +165,42 @@ const BookReaderScreen = ({ navigation, route }: any) => {
 export default BookReaderScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
+  root: { flex: 1, backgroundColor: theme.colors.card },
 
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
-  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 24 },
+  stateText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  linkText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 
-  // Go to page bar
-  gotoBar: {
+  // Page line
+  bar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: 10,
-    backgroundColor: theme.colors.card,
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
-  gotoLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  gotoLabel: { fontSize: 13, fontWeight: '700', color: theme.colors.textPrimary },
-  gotoInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-    justifyContent: 'center',
-  },
+  pageText: { fontSize: 13, color: theme.colors.textSecondary },
+  pageStrong: { fontWeight: '600', color: theme.colors.textPrimary },
+  goto: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   gotoInput: {
-    width: 80,
-    height: 36,
+    width: 104,
+    height: 34,
     borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
     backgroundColor: theme.colors.background,
     paddingHorizontal: 10,
+    paddingVertical: 0,
     fontSize: 14,
-    fontWeight: '700',
     color: theme.colors.textPrimary,
     textAlign: 'center',
   },
-  gotoBtn: {
-    height: 36,
-    paddingHorizontal: 16,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gotoBtnText: { color: theme.colors.white, fontWeight: '800', fontSize: 13 },
-  pageBadge: {
-    minWidth: 54,
-    paddingHorizontal: 8,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pageBadgeText: { fontSize: 12, fontWeight: '800', color: theme.colors.primary },
+  gotoBtn: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
+  gotoBtnIdle: { color: theme.colors.textMuted },
 
-  // PDF
-  pdfWrap: { flex: 1 },
+  // PDF — pages sit on the grey so their edges show
+  pdfWrap: { flex: 1, backgroundColor: theme.colors.background },
   pdf: { flex: 1, width, height, backgroundColor: theme.colors.background },
   loaderOverlay: {
     position: 'absolute',
@@ -220,12 +210,9 @@ const __mk_s = () => StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
     backgroundColor: theme.colors.background,
   },
-  loadingText: { fontSize: 14, color: theme.colors.textSecondary },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let s = __mk_s();

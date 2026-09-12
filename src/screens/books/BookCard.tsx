@@ -2,90 +2,88 @@ import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
-import constant from '../../utils/constant';
-import { subjectMetaFor } from './bookData';
+import { resolveFileUrl, subjectLabel } from './bookData';
 import type { ApiBook } from '../../api/booksApi';
-
-// Subject icon comes from the same host as the API but outside /api/v1.
-const FILE_ORIGIN = constant.API_BASE_URL.replace(/\/api\/v\d+\/?$/, '');
-const resolveFileUrl = (url?: string | null): string | undefined => {
-  if (!url) return undefined;
-  if (/^https?:\/\//i.test(url)) return url;
-  return `${FILE_ORIGIN}/${url.replace(/^\/+/, '')}`;
-};
 
 interface Props {
   item: ApiBook;
-  showClass?: boolean; // teacher cards include class · section
+  showClass?: boolean; // teacher rows include class · section
+  isLast?: boolean;
   onViewPress: (book: ApiBook) => void;
 }
 
-// Subjects-screen style card (accent bar + icon + title + pills + chevron).
-const BookCard = ({ item, showClass, onViewPress }: Props) => {
-  const subjectName = item.subject?.name ?? '—';
-  const meta = subjectMetaFor(subjectName);
-  const subjectImage = resolveFileUrl(item.subject?.image);
-  const [imgFailed, setImgFailed] = useState(false);
-  const showImage = !!subjectImage && !imgFailed;
+/**
+ * One book as a plain row: its cover, the title, and the line that places it —
+ * subject, and for a teacher the class it is for.
+ *
+ * With no cover, the slot holds the subject's own icon, and failing that a book
+ * glyph, on the page's quiet grey — so the column stays even whatever the shelf
+ * holds. A book with no PDF has nothing to open: it says so, and does not
+ * pretend to be tappable.
+ */
+const BookCard = ({ item, showClass, isLast, onViewPress }: Props) => {
+  const [coverFailed, setCoverFailed] = useState(false);
+  const [iconFailed, setIconFailed] = useState(false);
+
+  const hasPdf = !!item.pdf_url;
+  const cover = resolveFileUrl(item.cover_url ?? item.logo_url);
+  const icon = resolveFileUrl(item.subject?.image);
+
   const classLine = item.standard?.name
     ? `${item.standard.name}${item.section?.name ? ' · ' + item.section.name : ''}`
     : null;
-  const subtitle =
-    showClass && classLine ? `${subjectName} · ${classLine}` : subjectName;
+
+  const meta = [
+    subjectLabel(item.subject?.name) || null,
+    showClass ? classLine : null,
+    hasPdf ? null : 'No PDF yet',
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <TouchableOpacity style={s.card} onPress={() => onViewPress(item)} activeOpacity={0.85}>
-      <View style={[s.accentBar, { backgroundColor: meta.color }]} />
-      <View style={s.cardInner}>
-        <View style={s.cardTop}>
-          <View style={[s.iconWrap, { backgroundColor: meta.bg }]}>
-            {showImage ? (
-              <Image
-                source={{ uri: subjectImage }}
-                style={s.iconImage}
-                resizeMode="contain"
-                onError={() => setImgFailed(true)}
-              />
-            ) : (
-              <VectorIcon iconSet="Ionicons" iconName="book" size={22} color={meta.color} />
-            )}
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.cardTitle} numberOfLines={2}>{item.title}</Text>
-            <Text style={s.cardSubtitle} numberOfLines={1}>{subtitle}</Text>
-          </View>
-          <View style={s.chevronWrap}>
-            <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={16} color={theme.colors.textSecondary} />
-          </View>
-        </View>
-
-        <View style={s.pillsRow}>
-          <View style={[s.pill, { backgroundColor: meta.color + '15' }]}>
-            <VectorIcon iconSet="Ionicons" iconName="book-outline" size={12} color={meta.color} />
-            <Text style={[s.pillText, { color: meta.color }]} numberOfLines={1}>{subjectName}</Text>
-          </View>
-          {!!item.pdf_url && (
-            <View style={s.pill}>
-              <VectorIcon iconSet="Feather" iconName="file-text" size={12} color={theme.colors.primary} />
-              <Text style={s.pillText}>PDF</Text>
-            </View>
+    <TouchableOpacity
+      style={[s.row, !isLast && s.rowDivider]}
+      onPress={() => onViewPress(item)}
+      activeOpacity={0.6}
+      disabled={!hasPdf}
+    >
+      {cover && !coverFailed ? (
+        <Image
+          source={{ uri: cover }}
+          style={s.cover}
+          resizeMode="cover"
+          onError={() => setCoverFailed(true)}
+        />
+      ) : (
+        <View style={[s.cover, s.coverFallback]}>
+          {icon && !iconFailed ? (
+            <Image
+              source={{ uri: icon }}
+              style={s.subjectIcon}
+              resizeMode="contain"
+              onError={() => setIconFailed(true)}
+            />
+          ) : (
+            <VectorIcon iconSet="Ionicons" iconName="book-outline" size={18} color={theme.colors.textMuted} />
           )}
         </View>
+      )}
 
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={() => onViewPress(item)}
-          style={[s.openBtn, { backgroundColor: meta.color }]}
-        >
-          <VectorIcon
-            iconSet="Ionicons"
-            iconName={item.pdf_url ? 'reader-outline' : 'book-outline'}
-            size={14}
-            color="#fff"
-          />
-          <Text style={s.openBtnText}>{item.pdf_url ? 'Open PDF' : 'View Book'}</Text>
-        </TouchableOpacity>
+      <View style={s.body}>
+        <Text style={[s.title, !hasPdf && s.titleIdle]} numberOfLines={2}>
+          {item.title}
+        </Text>
+        {!!meta && (
+          <Text style={s.meta} numberOfLines={1}>
+            {meta}
+          </Text>
+        )}
       </View>
+
+      {hasPdf && (
+        <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={16} color={theme.colors.textMuted} />
+      )}
     </TouchableOpacity>
   );
 };
@@ -93,64 +91,21 @@ const BookCard = ({ item, showClass, onViewPress }: Props) => {
 export default BookCard;
 
 const __mk_s = () => StyleSheet.create({
-  card: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    overflow: 'hidden',
-    elevation: 2,
-    marginBottom: 14,
-  },
-  accentBar: { height: 4, width: '100%' },
-  cardInner: { padding: theme.spacing.md, gap: 10 },
-
-  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  iconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: theme.radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  iconImage: { width: 30, height: 30 },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, lineHeight: 20 },
-  cardSubtitle: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
-  chevronWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: theme.radius.sm,
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  cover: {
+    width: 38,
+    height: 50,
+    borderRadius: 4,
     backgroundColor: theme.colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-
-  pillsRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: theme.colors.primaryLight,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: theme.radius.full,
-    maxWidth: '70%',
-  },
-  pillText: { fontSize: 12, fontWeight: '600', color: theme.colors.primary },
-
-  openBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderRadius: theme.radius.md,
-    paddingVertical: 10,
-    marginTop: 2,
-  },
-  openBtnText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  coverFallback: { alignItems: 'center', justifyContent: 'center' },
+  subjectIcon: { width: 24, height: 24 },
+  body: { flex: 1, gap: 3 },
+  title: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary, lineHeight: 20 },
+  titleIdle: { color: theme.colors.textSecondary },
+  meta: { fontSize: 13, color: theme.colors.textSecondary },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let s = __mk_s();

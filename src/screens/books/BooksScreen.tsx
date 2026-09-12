@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import ScreenSkeleton from '../../components/Skeleton';
 import {
   FlatList,
   ScrollView,
@@ -8,184 +7,203 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
+import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { theme, onThemeChange } from '../../utils/theme';
 import BookCard from './BookCard';
-import { subjectMetaFor } from './bookData';
+import { resolveFileUrl, subjectLabel } from './bookData';
+import { DocHeader, DocNoData } from '../more/docUi';
 import { getBooks, type ApiBook } from '../../api/booksApi';
 import { getStoredRole } from '../../api/authApi';
-import constant from '../../utils/constant';
 
+const TITLE = 'Books';
 const ALL = 'All';
-
-// Files come from the same host as the API but outside the /api/v1 prefix
-const FILE_ORIGIN = constant.API_BASE_URL.replace(/\/api\/v\d+\/?$/, '');
-
-const resolveFileUrl = (url?: string | null): string | undefined => {
-  if (!url) return undefined;
-  if (/^https?:\/\//i.test(url)) return url;
-  return `${FILE_ORIGIN}/${url.replace(/^\/+/, '')}`;
-};
 
 const BooksScreen = ({ navigation, route }: any) => {
   // Prefer role from navigation params, fall back to AsyncStorage. The API
   // already auto-scopes from the bearer token — role only drives UI variations
-  // (teachers see class · section on each card).
+  // (teachers see class · section on each row).
   const paramRole: 'student' | 'teacher' | undefined = route?.params?.userRole;
   const [role, setRole] = useState<'student' | 'teacher'>(paramRole ?? 'student');
 
-  const [books, setBooks]       = useState<ApiBook[]>([]);
-  const [loading, setLoading]   = useState(true);
+  const [books, setBooks] = useState<ApiBook[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError]       = useState<string>('');
+  const [error, setError] = useState<string>('');
   const [activeSubject, setActiveSubject] = useState<string>(ALL);
 
-  // Build chip list from the books we actually got back — every subject the
-  // caller is entitled to see, plus "All".
+  // The tabs are built from the books we actually got back — every subject the
+  // caller is entitled to see, with how many books each holds.
   const subjects = useMemo(() => {
-    const set = new Set<string>();
-    books.forEach(b => b.subject?.name && set.add(b.subject.name));
-    return [ALL, ...Array.from(set).sort((a, b) => a.localeCompare(b))];
+    const counts = new Map<string, number>();
+    books.forEach(b => {
+      const name = b.subject?.name;
+      if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+    });
+    return Array.from(counts, ([name, count]) => ({ name, label: subjectLabel(name), count })).sort(
+      (a, b) => a.label.localeCompare(b.label),
+    );
   }, [books]);
 
-  const filtered = useMemo(() =>
-    activeSubject === ALL
-      ? books
-      : books.filter(b => b.subject?.name === activeSubject),
-    [activeSubject, books],
+  // Tabs only once there is more than one subject to choose from.
+  const showTabs = subjects.length > 1;
+
+  // A refresh can take away the subject being looked at; fall back to All.
+  const current =
+    showTabs && subjects.some(sub => sub.name === activeSubject) ? activeSubject : ALL;
+
+  const filtered = useMemo(
+    () => (current === ALL ? books : books.filter(b => b.subject?.name === current)),
+    [current, books],
   );
 
-  const fetchBooks = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setLoading(true);
-    setError('');
-    try {
-      // Resolve role lazily if it wasn't passed via nav params.
-      if (!paramRole) {
-        const stored = await getStoredRole();
-        if (stored === 'teacher' || stored === 'student') setRole(stored);
+  const fetchBooks = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoading(true);
+      setError('');
+      try {
+        // Resolve role lazily if it wasn't passed via nav params.
+        if (!paramRole) {
+          const stored = await getStoredRole();
+          if (stored === 'teacher' || stored === 'student') setRole(stored);
+        }
+        const { items } = await getBooks({ per_page: 50 });
+        setBooks(Array.isArray(items) ? items : []);
+      } catch (e: any) {
+        console.log('[BooksScreen] ❌', e?.response?.data ?? e?.message);
+        setError(e?.response?.data?.message ?? 'Failed to load books.');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-      const { items } = await getBooks({ per_page: 50 });
-      setBooks(Array.isArray(items) ? items : []);
-    } catch (e: any) {
-      console.log('[BooksScreen] ❌', e?.response?.data ?? e?.message);
-      setError(e?.response?.data?.message ?? 'Failed to load books.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [paramRole]);
+    },
+    [paramRole],
+  );
 
-  useEffect(() => { fetchBooks(); }, [fetchBooks]);
+  useEffect(() => {
+    fetchBooks();
+  }, [fetchBooks]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchBooks({ silent: true });
   }, [fetchBooks]);
 
-  // Open the book in the in-app PDF reader (with go-to-page support).
-  const openBook = useCallback((book: ApiBook) => {
-    navigation.navigate('BookReader', {
-      url: resolveFileUrl(book.pdf_url),
-      title: book.title,
-    });
-  }, [navigation]);
+  // Open the book in the in-app PDF reader (with go-to-page support). Rows
+  // without a PDF are not tappable, so there is always something to open.
+  const openBook = useCallback(
+    (book: ApiBook) => {
+      if (!book.pdf_url) return;
+      navigation.navigate('BookReader', {
+        url: resolveFileUrl(book.pdf_url),
+        title: book.title,
+      });
+    },
+    [navigation],
+  );
 
-  // ─── Loading ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <View style={s.root}>
-        <Header title="Books" onBackPress={() => navigation.goBack()} />
-        <View style={s.center}>
-          <ScreenSkeleton variant="list" />
-          <Text style={s.loadingText}>Loading books…</Text>
+        <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+        <View style={s.list}>
+          {[0, 1, 2, 3, 4].map(i => (
+            <View key={i} style={[s.skeletonRow, i < 4 && s.rowDivider]}>
+              <Skeleton width={38} height={50} radius={4} />
+              <View style={s.skeletonBody}>
+                <Skeleton width="70%" height={14} />
+                <Skeleton width="45%" height={12} />
+              </View>
+            </View>
+          ))}
         </View>
       </View>
     );
   }
 
-  // ─── Error ──────────────────────────────────────────────────────────────────
   if (error) {
     return (
       <View style={s.root}>
-        <Header title="Books" onBackPress={() => navigation.goBack()} />
-        <View style={s.center}>
-          <VectorIcon iconSet="Ionicons" iconName="alert-circle-outline" size={48} color={theme.colors.danger} />
+        <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+        <View style={s.centeredBox}>
+          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
           <Text style={s.errorText}>{error}</Text>
-          <TouchableOpacity style={s.retryBtn} onPress={() => fetchBooks()}>
-            <Text style={s.retryText}>Retry</Text>
+          <TouchableOpacity onPress={() => fetchBooks()} hitSlop={10}>
+            <Text style={s.linkText}>Try again</Text>
           </TouchableOpacity>
         </View>
       </View>
     );
   }
 
+  const tabs = [{ name: ALL, label: ALL, count: books.length }, ...subjects];
+
   return (
     <View style={s.root}>
-      <Header title="Books" onBackPress={() => navigation.goBack()} />
+      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
 
-      {/* Filter chips — only show when there are 2+ subjects to choose from */}
-      {subjects.length > 2 && (
-        <View style={s.filtersWrapper}>
+      {showTabs && (
+        <>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.filtersRow}
+            style={s.tabsBar}
+            contentContainerStyle={s.tabs}
           >
-            {subjects.map(subj => {
-              const active = activeSubject === subj;
-              const meta = subjectMetaFor(subj);
+            {tabs.map(tab => {
+              const active = current === tab.name;
               return (
                 <TouchableOpacity
-                  key={subj}
-                  activeOpacity={0.8}
-                  onPress={() => setActiveSubject(subj)}
-                  style={[s.chip, active && { backgroundColor: meta.color, borderColor: meta.color }]}
+                  key={tab.name}
+                  activeOpacity={0.6}
+                  onPress={() => setActiveSubject(tab.name)}
+                  style={[s.tab, active && s.tabActive]}
                 >
-                  {active && <View style={s.chipDot} />}
-                  <Text style={[s.chipText, active && s.chipTextActive, !active && { color: meta.color }]}>
-                    {subj}
+                  <Text style={[s.tabText, active && s.tabTextActive]}>
+                    {tab.label}
+                    <Text style={s.tabCount}>{`  ${tab.count}`}</Text>
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
-        </View>
+          <View style={s.fullDivider} />
+        </>
       )}
 
-      {/* Book list (subjects-style cards) */}
       <FlatList
         data={filtered}
         keyExtractor={item => String(item.id)}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[s.listContent, filtered.length === 0 && s.listEmpty]}
-        refreshControl={
-          <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        contentContainerStyle={[s.list, filtered.length === 0 && s.listEmpty]}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListHeaderComponent={
-          filtered.length > 0 ? (
-            <>
-              <Text style={s.sectionTitle}>All Books</Text>
-              <Text style={s.sectionDesc}>Tap a book to read it in the app.</Text>
-            </>
+          // With tabs on screen the counts are already there.
+          !showTabs && filtered.length > 0 ? (
+            <Text style={s.count}>
+              {filtered.length} {filtered.length === 1 ? 'book' : 'books'}
+            </Text>
           ) : null
         }
-        renderItem={({ item }) => (
-          <BookCard item={item} showClass={role === 'teacher'} onViewPress={openBook} />
+        renderItem={({ item, index }) => (
+          <BookCard
+            item={item}
+            showClass={role === 'teacher'}
+            isLast={index === filtered.length - 1}
+            onViewPress={openBook}
+          />
         )}
         ListEmptyComponent={
-          <View style={s.emptyBox}>
-            <View style={s.emptyIconRing}>
-              <VectorIcon iconSet="Ionicons" iconName="book-outline" size={36} color={theme.colors.primary} />
-            </View>
-            <Text style={s.emptyTitle}>No books found</Text>
-            <Text style={s.emptySubtitle}>
-              {role === 'teacher'
-                ? 'No books assigned to the classes & subjects you teach.'
-                : 'No books available for your class yet.'}
-            </Text>
-          </View>
+          <DocNoData
+            icon="book-outline"
+            title="No books found"
+            subtitle={
+              role === 'teacher'
+                ? 'No books for the classes and subjects you teach.'
+                : 'No books have been added for your class yet.'
+            }
+          />
         }
       />
     </View>
@@ -195,41 +213,35 @@ const BooksScreen = ({ navigation, route }: any) => {
 export default BooksScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
+  root: { flex: 1, backgroundColor: theme.colors.card },
 
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
-  loadingText: { fontSize: 14, color: theme.colors.textSecondary, marginTop: 8 },
-  errorText: { fontSize: 14, color: theme.colors.danger, textAlign: 'center' },
-  retryBtn: { backgroundColor: theme.colors.primary, paddingHorizontal: 24, paddingVertical: 10, borderRadius: theme.radius.full, marginTop: 8 },
-  retryText: { color: '#fff', fontWeight: '700' },
+  // Subject tabs. A horizontal ScrollView grows to fill a column by default,
+  // so the bar is held to its content.
+  tabsBar: { flexGrow: 0 },
+  tabs: { paddingHorizontal: 20, paddingTop: 12, gap: 20 },
+  tab: { paddingBottom: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabActive: { borderBottomColor: theme.colors.primary },
+  tabText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
+  tabTextActive: { color: theme.colors.primary, fontWeight: '600' },
+  tabCount: { fontWeight: '400', color: theme.colors.textMuted },
 
-  filtersWrapper: { paddingVertical: 12 },
-  filtersRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
-  chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    borderRadius: theme.radius.full, paddingHorizontal: 14, paddingVertical: 7,
-    backgroundColor: theme.colors.card, borderWidth: 1.5, borderColor: theme.colors.border,
-  },
-  chipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.card },
-  chipText: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
-  chipTextActive: { color: '#fff' },
+  fullDivider: { height: 1, backgroundColor: theme.colors.border },
 
-  listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 40 },
+  // List
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
   listEmpty: { flexGrow: 1 },
+  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
 
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 4 },
-  sectionDesc: { fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19, marginBottom: 16 },
+  // Loading
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13 },
+  skeletonBody: { flex: 1, gap: 8 },
 
-  emptyBox: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 24 },
-  emptyIconRing: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 4 },
-  emptySubtitle: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center' },
+  // Error
+  centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
+  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  linkText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let s = __mk_s();
