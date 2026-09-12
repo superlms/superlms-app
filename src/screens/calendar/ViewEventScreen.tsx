@@ -8,7 +8,7 @@ import type { CalEvent } from './calendarTypes';
 import { DetailRow } from './calendarUi';
 import { getEventById, mapEventType } from '../../api/calendarApi';
 import type { EventDetail } from '../../api/calendarApi';
-import { DocHeader, DocSection, DocBody, DocLoading, docStyles } from '../more/docUi';
+import { DocHeader, DocLoading } from '../more/docUi';
 import constant from '../../utils/constant';
 
 const TITLE = 'Event';
@@ -21,6 +21,17 @@ const resolveFileUrl = (url?: string | null): string | undefined => {
   if (/^https?:\/\//i.test(url)) return url;
   return `${FILE_ORIGIN}/${url.replace(/^\/+/, '')}`;
 };
+
+// A block of prose under a plain heading.
+const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <>
+    <View style={s.divider} />
+    <View style={s.section}>
+      <Text style={s.sectionTitle}>{title}</Text>
+      {children}
+    </View>
+  </>
+);
 
 const ViewEventScreen = ({ navigation, route }: any) => {
   const passedEvent: CalEvent | undefined = route.params?.event;
@@ -58,8 +69,7 @@ const ViewEventScreen = ({ navigation, route }: any) => {
   const title = detail?.title ?? passedEvent?.title ?? 'Event';
   const description = detail?.description ?? passedEvent?.description ?? '';
   const dateStr = detail?.date ?? passedEvent?.date;
-  const dateLabel = dateStr ? moment(dateStr).format('dddd, DD MMM YYYY') : '';
-  const timingDisplay =
+  const timing =
     detail?.timing_display ??
     (detail?.is_all_day ? 'All day' : undefined) ??
     passedEvent?.time;
@@ -77,10 +87,13 @@ const ViewEventScreen = ({ navigation, route }: any) => {
       ? [academic?.standard?.name, academic?.section?.name].filter(Boolean).join(' - ')
       : undefined;
 
-  const details = [
+  // When, where and what — every line that is actually filled in.
+  const rows = [
+    ['Date', dateStr ? moment(dateStr).format('dddd, DD MMM YYYY') : undefined],
+    ['Time', timing],
     ['Location', location?.full_address],
-    ['Subject', academic?.subject?.name],
     ['Class', classLabel],
+    ['Subject', academic?.subject?.name],
     ['Teacher', academic?.teacher?.name],
   ].filter(([, v]) => !!v) as [string, string][];
 
@@ -89,7 +102,7 @@ const ViewEventScreen = ({ navigation, route }: any) => {
 
   if (!passedEvent && !detail) {
     return (
-      <View style={docStyles.root}>
+      <View style={s.root}>
         <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
         <View style={s.centeredBox}>
           <Text style={s.mutedText}>Event not found</Text>
@@ -99,73 +112,64 @@ const ViewEventScreen = ({ navigation, route }: any) => {
   }
 
   return (
-    <View style={docStyles.root}>
+    <View style={s.root}>
       <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={docStyles.scroll}
+        contentContainerStyle={s.scroll}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Type, title, when */}
-        <View>
-          <Text style={s.metaText}>
-            {type}
-            {timingDisplay ? ` · ${timingDisplay}` : ''}
-          </Text>
+        {/* Kind of event, then its name */}
+        <View style={s.head}>
+          <Text style={s.type}>{type.toUpperCase()}</Text>
           <Text style={s.title}>{title}</Text>
-          {!!dateLabel && <Text style={s.dateText}>{dateLabel}</Text>}
           {isCancelled && <Text style={s.cancelled}>Cancelled</Text>}
         </View>
 
-        {/* Description */}
-        <DocSection title="Description">
-          <DocBody>{description || 'No description available.'}</DocBody>
-        </DocSection>
-
-        {/* Why it was called off */}
-        {isCancelled && !!detail?.cancellation_reason && (
-          <DocSection title="Cancellation Reason">
-            <DocBody>{detail.cancellation_reason}</DocBody>
-          </DocSection>
-        )}
-
-        {/* Where, what and who — only the parts that are filled in */}
-        {details.length > 0 && (
-          <DocSection title="Details">
-            <View style={s.detailList}>
-              {details.map(([label, value], i) => (
+        {/* When, where and what */}
+        {rows.length > 0 && (
+          <>
+            <View style={s.divider} />
+            <View style={s.body}>
+              {rows.map(([label, value], i) => (
                 <DetailRow
                   key={label}
                   label={label}
                   value={value}
-                  last={i === details.length - 1}
+                  last={i === rows.length - 1}
                 />
               ))}
             </View>
-          </DocSection>
+          </>
         )}
 
-        {/* Posted by */}
+        <Section title="Description">
+          <Text style={s.bodyText}>{description || 'No description available.'}</Text>
+        </Section>
+
+        {isCancelled && !!detail?.cancellation_reason && (
+          <Section title="Cancellation Reason">
+            <Text style={s.bodyText}>{detail.cancellation_reason}</Text>
+          </Section>
+        )}
+
         {!!creatorName && (
-          <>
-            <View style={s.divider} />
-            <DocSection title="Posted By">
-              <View style={s.creatorRow}>
-                {creatorAvatar ? (
-                  <Image source={{ uri: creatorAvatar }} style={s.creatorAvatar} />
-                ) : (
-                  <View style={[s.creatorAvatar, s.creatorAvatarFallback]}>
-                    <Text style={s.creatorInitial}>{creatorName.charAt(0).toUpperCase()}</Text>
-                  </View>
-                )}
-                <View style={s.creatorInfo}>
-                  <Text style={s.creatorName}>{creatorName}</Text>
-                  {!!creatorEmail && <Text style={s.creatorEmail}>{creatorEmail}</Text>}
+          <Section title="Posted By">
+            <View style={s.creatorRow}>
+              {creatorAvatar ? (
+                <Image source={{ uri: creatorAvatar }} style={s.creatorAvatar} />
+              ) : (
+                <View style={[s.creatorAvatar, s.creatorAvatarFallback]}>
+                  <Text style={s.creatorInitial}>{creatorName.charAt(0).toUpperCase()}</Text>
                 </View>
+              )}
+              <View style={s.creatorInfo}>
+                <Text style={s.creatorName}>{creatorName}</Text>
+                {!!creatorEmail && <Text style={s.creatorEmail}>{creatorEmail}</Text>}
               </View>
-            </DocSection>
-          </>
+            </View>
+          </Section>
         )}
       </ScrollView>
     </View>
@@ -175,20 +179,34 @@ const ViewEventScreen = ({ navigation, route }: any) => {
 export default ViewEventScreen;
 
 const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  scroll: { paddingBottom: 40 },
+
   centeredBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   mutedText: { fontSize: 14, color: theme.colors.textMuted },
 
-  // Meta + title
-  metaText: { fontSize: 13, color: theme.colors.textMuted, marginBottom: 8 },
-  title: { fontSize: 20, fontWeight: '700', color: theme.colors.textPrimary, lineHeight: 27 },
-  dateText: { fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
+  // Head
+  head: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 20 },
+  type: { fontSize: 11, fontWeight: '600', letterSpacing: 0.8, color: theme.colors.textMuted },
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    lineHeight: 29,
+    marginTop: 6,
+  },
   cancelled: { fontSize: 13, fontWeight: '600', color: theme.colors.danger, marginTop: 8 },
 
-  // Details
-  detailList: { marginTop: -6 },
+  // Full-width lines between the blocks
+  divider: { height: 1, backgroundColor: theme.colors.divider },
 
-  // Line before who posted it
-  divider: { height: 1, backgroundColor: theme.colors.border },
+  // Label / value rows
+  body: { paddingHorizontal: 20, paddingTop: 2 },
+
+  // Prose sections
+  section: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 22 },
+  sectionTitle: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 8 },
+  bodyText: { fontSize: 15, lineHeight: 24, color: theme.colors.textPrimary },
 
   // Creator
   creatorRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

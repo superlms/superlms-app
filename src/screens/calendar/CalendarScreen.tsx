@@ -133,7 +133,7 @@ const CalendarScreen = ({ navigation }: any) => {
 
           <FullDivider />
 
-          {/* The selected day */}
+          {/* The selected day, and the type filter under it */}
           <View style={s.dayHead}>
             <Text style={s.dayTitle}>{moment(selectedDate).format('dddd, D MMMM')}</Text>
             <Text style={s.dayCount}>
@@ -141,7 +141,6 @@ const CalendarScreen = ({ navigation }: any) => {
             </Text>
           </View>
 
-          {/* Type filter — a plain tab strip */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -162,6 +161,9 @@ const CalendarScreen = ({ navigation }: any) => {
             })}
           </ScrollView>
 
+          {/* Line between the day selector and what is on that day */}
+          <FullDivider />
+
           {/* Events on that day */}
           <View style={s.list}>
             {filteredEvents.length === 0 ? (
@@ -174,10 +176,10 @@ const CalendarScreen = ({ navigation }: any) => {
               filteredEvents.map((event, i) => (
                 <EventRow
                   key={event.id}
+                  type={event.type}
                   title={event.title}
                   description={event.description}
-                  time={event.time}
-                  meta={event.type}
+                  meta={event.time}
                   isLast={i === filteredEvents.length - 1}
                   onPress={() => navigation.navigate('ViewEvent', { event })}
                 />
@@ -206,13 +208,20 @@ const __mk_s = () => StyleSheet.create({
   grid: { paddingHorizontal: 20, paddingTop: 6, paddingBottom: 14 },
 
   // Selected day heading
-  dayHead: { paddingHorizontal: 20, paddingTop: 18 },
-  dayTitle: { fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary },
-  dayCount: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
+  dayHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+  },
+  dayTitle: { flex: 1, fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary },
+  dayCount: { fontSize: 12, color: theme.colors.textMuted },
 
   // Type filter tabs
-  tabs: { paddingHorizontal: 20, paddingTop: 12, gap: 18 },
-  tab: { paddingBottom: 8, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabs: { paddingHorizontal: 20, paddingTop: 14, gap: 18 },
+  tab: { paddingBottom: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabActive: { borderBottomColor: theme.colors.primary },
   tabText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
   tabTextActive: { color: theme.colors.primary, fontWeight: '600' },

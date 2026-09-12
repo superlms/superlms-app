@@ -19,7 +19,7 @@ import { apiErr } from '../../utils/filePickers';
 import { ApiEvent, EventDetail, getEventById } from '../../api/calendarApi';
 import { deleteEvent } from '../../api/adminContentApi';
 import { DetailRow, capitalize, timingLabel } from '../calendar/calendarUi';
-import { DocHeader, DocSection, DocBody, DocLoading, docStyles } from '../more/docUi';
+import { DocHeader, DocLoading } from '../more/docUi';
 
 const TITLE = 'Event';
 
@@ -60,7 +60,10 @@ const AdminCalendarDetailScreen = ({ navigation, route }: any) => {
   const loc = detail?.location;
   const acad = detail?.academic_details;
 
-  const details = [
+  // When, where and what — every line that is actually filled in.
+  const rows = [
+    ['Date', date ? moment(date).format('dddd, DD MMM YYYY') : undefined],
+    ['Time', timing],
     ['Location', loc?.full_address || loc?.location || loc?.room_number || loc?.building],
     [
       'Class',
@@ -107,7 +110,7 @@ const AdminCalendarDetailScreen = ({ navigation, route }: any) => {
   if (loading && !detail && !passed) return <DocLoading title={TITLE} />;
 
   return (
-    <View style={docStyles.root}>
+    <View style={s.root}>
       <DocHeader
         title={TITLE}
         onBackPress={() => navigation.goBack()}
@@ -117,41 +120,40 @@ const AdminCalendarDetailScreen = ({ navigation, route }: any) => {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={docStyles.scroll}
+        contentContainerStyle={s.scroll}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Type, title, when */}
-        <View>
-          <Text style={s.metaText}>
-            {capitalize(eventType)}
-            {timing ? ` · ${timing}` : ''}
-          </Text>
+        {/* Kind of event, then its name */}
+        <View style={s.head}>
+          <Text style={s.type}>{capitalize(eventType).toUpperCase()}</Text>
           <Text style={s.title}>{title}</Text>
-          {!!date && (
-            <Text style={s.dateText}>{moment(date).format('dddd, DD MMM YYYY')}</Text>
-          )}
         </View>
 
-        <DocSection title="Description">
-          <DocBody>{description || 'No description added.'}</DocBody>
-        </DocSection>
-
-        {details.length > 0 && (
-          <DocSection title="Details">
-            <View style={s.detailList}>
-              {details.map(([label, value], i) => (
+        {/* When, where and what */}
+        {rows.length > 0 && (
+          <>
+            <View style={s.divider} />
+            <View style={s.body}>
+              {rows.map(([label, value], i) => (
                 <DetailRow
                   key={label}
                   label={label}
                   value={value}
-                  last={i === details.length - 1}
+                  last={i === rows.length - 1}
                 />
               ))}
             </View>
-          </DocSection>
+          </>
         )}
 
+        <View style={s.divider} />
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Description</Text>
+          <Text style={s.bodyText}>{description || 'No description added.'}</Text>
+        </View>
+
         {/* Delete — a quiet text action, never a heavy red block */}
+        <View style={s.divider} />
         <TouchableOpacity
           style={s.deleteBtn}
           activeOpacity={0.6}
@@ -208,16 +210,40 @@ const AdminCalendarDetailScreen = ({ navigation, route }: any) => {
 export default AdminCalendarDetailScreen;
 
 const __mk_s = () => StyleSheet.create({
-  // Meta + title
-  metaText: { fontSize: 13, color: theme.colors.textMuted, marginBottom: 8 },
-  title: { fontSize: 20, fontWeight: '700', color: theme.colors.textPrimary, lineHeight: 27 },
-  dateText: { fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  scroll: { paddingBottom: 40 },
 
-  // Details
-  detailList: { marginTop: -6 },
+  // Head
+  head: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 20 },
+  type: { fontSize: 11, fontWeight: '600', letterSpacing: 0.8, color: theme.colors.textMuted },
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    lineHeight: 29,
+    marginTop: 6,
+  },
+
+  // Full-width lines between the blocks
+  divider: { height: 1, backgroundColor: theme.colors.divider },
+
+  // Label / value rows
+  body: { paddingHorizontal: 20, paddingTop: 2 },
+
+  // Prose section
+  section: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 22 },
+  sectionTitle: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 8 },
+  bodyText: { fontSize: 15, lineHeight: 24, color: theme.colors.textPrimary },
 
   // Delete
-  deleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
   deleteText: { fontSize: 14, fontWeight: '500', color: theme.colors.danger },
 
   // Confirm modal

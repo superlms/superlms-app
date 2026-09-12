@@ -161,20 +161,23 @@ export const MonthGrid = ({
 };
 
 // ── One event as a plain row, separated from the next by a divider ───────────
-//   title ......................... 09:00 – 10:00
+// The type sits at the top of the row, so a list can be read by kind at a
+// glance; the title, an optional preview and the timing follow.
+//   EXAM
+//   Mid-term Mathematics
 //   description
-//   Exam · 14 Sep 2026
+//   09:00 – 10:00 · 14 Sep 2026
 export const EventRow = ({
+  type,
   title,
   description,
-  time,
   meta,
   onPress,
   isLast,
 }: {
+  type?: string | null;
   title: string;
   description?: string | null;
-  time?: string | null;
   meta?: string | null;
   onPress?: () => void;
   isLast?: boolean;
@@ -185,12 +188,10 @@ export const EventRow = ({
     disabled={!onPress}
     onPress={onPress}
   >
-    <View style={s.rowLine}>
-      <Text style={s.rowTitle} numberOfLines={1}>
-        {title}
-      </Text>
-      {!!time && <Text style={s.rowTime}>{time}</Text>}
-    </View>
+    {!!type && <Text style={s.rowType}>{type.toUpperCase()}</Text>}
+    <Text style={s.rowTitle} numberOfLines={1}>
+      {title}
+    </Text>
     {!!description && (
       <Text style={s.rowDesc} numberOfLines={2}>
         {description}
@@ -258,13 +259,18 @@ const __mk_s = () => StyleSheet.create({
   dotOn: { backgroundColor: theme.colors.primary },
 
   // Event row
-  row: { paddingVertical: 12, gap: 4 },
+  row: { paddingVertical: 14, gap: 3 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  rowLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rowTitle: { flex: 1, fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  rowTime: { fontSize: 12, color: theme.colors.textMuted },
+  rowType: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+    color: theme.colors.textMuted,
+    marginBottom: 2,
+  },
+  rowTitle: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   rowDesc: { fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19 },
-  rowMeta: { fontSize: 12, color: theme.colors.textMuted },
+  rowMeta: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
 
   // Detail row
   detailRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 14 },

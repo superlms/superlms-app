@@ -67,10 +67,10 @@ const AdminCalendarDayScreen = ({ navigation, route }: any) => {
               {events.map((e, i) => (
                 <EventRow
                   key={e.id}
+                  type={capitalize(e.event_type)}
                   title={e.title}
                   description={e.description}
-                  time={timingLabel(e.is_all_day, e.start_time, e.end_time)}
-                  meta={capitalize(e.event_type)}
+                  meta={timingLabel(e.is_all_day, e.start_time, e.end_time)}
                   isLast={i === events.length - 1}
                   onPress={() => navigation.navigate('AdminCalendarDetail', { item: e })}
                 />

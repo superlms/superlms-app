@@ -1,5 +1,4 @@
 import apiClient from './apiClient';
-import moment from 'moment';
 
 // Types matching the API response
 export interface ApiEvent {
@@ -32,24 +31,27 @@ export const mapEventType = (eventType: string): 'Holiday' | 'Exam' | 'Event' | 
   }
 };
 
+// "09:00:00" → "09:00"
+const hhmm = (t?: string | null) => (t ? t.slice(0, 5) : '');
+
 // Map API event to your CalEvent format
 export const mapApiEventToCalEvent = (apiEvent: ApiEvent): any => {
-  console.log('[calendarApi] Mapping event:', apiEvent.id, apiEvent.title);
-  
   let timeDisplay: string | undefined;
   if (apiEvent.is_all_day) {
-    timeDisplay = 'All Day';
+    timeDisplay = 'All day';
   } else if (apiEvent.start_time && apiEvent.end_time) {
-    timeDisplay = `${apiEvent.start_time} - ${apiEvent.end_time}`;
+    timeDisplay = `${hhmm(apiEvent.start_time)} – ${hhmm(apiEvent.end_time)}`;
   } else if (apiEvent.start_time) {
-    timeDisplay = apiEvent.start_time;
+    timeDisplay = hhmm(apiEvent.start_time);
   }
 
   return {
     id: String(apiEvent.id),
     date: apiEvent.date,
     title: apiEvent.title,
-    description: apiEvent.description || 'No description available',
+    // Left empty on purpose — the screens decide what an absent description
+    // should read as, rather than showing filler in a list row.
+    description: apiEvent.description || '',
     type: mapEventType(apiEvent.event_type),
     time: timeDisplay,
     location: apiEvent.location,
