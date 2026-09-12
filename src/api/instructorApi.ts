@@ -56,14 +56,10 @@ export interface InstructorDetailResponse {
 
 // GET /instructors - Fetch all instructors
 export const getInstructors = async (per_page: number = 20): Promise<Instructor[]> => {
-  console.log('[getInstructors] Fetching instructors with per_page:', per_page);
-  
   const { data } = await apiClient.get('/instructors', {
     params: { per_page },
   });
-  
-  console.log('[getInstructors] Response:', JSON.stringify(data, null, 2));
-  
+
   // Extract items from response
   if (data?.data?.items && Array.isArray(data.data.items)) {
     return data.data.items;

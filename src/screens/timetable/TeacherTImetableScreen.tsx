@@ -6,7 +6,7 @@ import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import type { Day } from './timetableData';
-import { DaySelector, PeriodRow, currentPeriodId, todayDay } from './timetableUi';
+import { DaySelector, PeriodRow, currentPeriodId, dateForDay, todayDay } from './timetableUi';
 import { DocHeader, DocNoData } from '../more/docUi';
 import {
   getTeacherTimetable,
@@ -66,7 +66,7 @@ const TeacherTimetableScreen = ({ navigation }: any) => {
         <View style={s.list}>
           {[0, 1, 2, 3, 4].map(i => (
             <View key={i} style={[s.skeletonRow, i < 4 && s.rowDivider]}>
-              <Skeleton width={62} height={13} />
+              <Skeleton width={58} height={13} />
               <View style={s.skeletonBody}>
                 <Skeleton width="55%" height={14} />
                 <Skeleton width="35%" height={12} />
@@ -96,9 +96,12 @@ const TeacherTimetableScreen = ({ navigation }: any) => {
             />
           ) : (
             <>
-              <Text style={s.count}>
-                {selectedDay} · {periods.length} {periods.length === 1 ? 'class' : 'classes'}
-              </Text>
+              <View style={s.dayHead}>
+                <Text style={s.dayTitle}>{dateForDay(selectedDay).format('dddd, D MMMM')}</Text>
+                <Text style={s.dayCount}>
+                  {periods.length} {periods.length === 1 ? 'class' : 'classes'}
+                </Text>
+              </View>
               {periods.map((p, i) => (
                 <PeriodRow
                   key={p.id}
@@ -124,7 +127,9 @@ const __mk_s = () => StyleSheet.create({
 
   list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
   listEmpty: { flexGrow: 1 },
-  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
+  dayHead: { paddingTop: 14, paddingBottom: 6 },
+  dayTitle: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary },
+  dayCount: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
 
   // Loading

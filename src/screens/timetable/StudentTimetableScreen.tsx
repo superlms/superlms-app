@@ -6,14 +6,19 @@ import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import type { Day } from './timetableData';
-import { DaySelector, PeriodRow, currentPeriodId, todayDay } from './timetableUi';
+import { DaySelector, PeriodRow, currentPeriodId, dateForDay, todayDay } from './timetableUi';
 import { DocHeader, DocNoData } from '../more/docUi';
+import { getInstructors } from '../../api/instructorApi';
 import {
   getStudentTimetable,
   buildDayMap,
   timetableErrorMessage,
   type TimetablePeriod,
 } from '../../api/timetableApi';
+
+// Photos live on the instructors endpoint, not on the timetable, so the two are
+// joined here — by teacher id where the ids line up, and by name otherwise.
+const nameKey = (n?: string | null) => (n ?? '').trim().toLowerCase();
 
 const TITLE = 'Timetable';
 
@@ -23,6 +28,9 @@ const StudentTimetableScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dayMap, setDayMap] = useState<Record<Day, TimetablePeriod[]> | null>(null);
+  const [photos, setPhotos] = useState<{ byId: Record<number, string>; byName: Record<string, string> }>(
+    { byId: {}, byName: {} },
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -30,6 +38,21 @@ const StudentTimetableScreen = ({ navigation }: any) => {
     try {
       const res = await getStudentTimetable();
       setDayMap(buildDayMap(res?.timetable_by_day));
+
+      // Best effort: a missing photo only costs us the initials.
+      try {
+        const instructors = await getInstructors(100);
+        const byId: Record<number, string> = {};
+        const byName: Record<string, string> = {};
+        instructors.forEach(i => {
+          if (!i.avatar) return;
+          byId[i.id] = i.avatar;
+          byName[nameKey(i.name)] = i.avatar;
+        });
+        setPhotos({ byId, byName });
+      } catch {
+        setPhotos({ byId: {}, byName: {} });
+      }
     } catch (e: any) {
       console.log('[getStudentTimetable] ❌', e?.response?.status, e?.message);
       setError(timetableErrorMessage(e));
@@ -47,11 +70,19 @@ const StudentTimetableScreen = ({ navigation }: any) => {
   const liveId = currentPeriodId(periods, selectedDay === todayDay());
 
   // Who is taking it — the stand-in when one has been arranged.
-  const teacherFor = (p: TimetablePeriod) => {
-    const name = p.has_substitute
+  const teacherOf = (p: TimetablePeriod) => ({
+    id: p.has_substitute ? p.substitute_details?.substitute_teacher_id ?? p.teacher_id : p.teacher_id,
+    name: p.has_substitute
       ? p.substitute_details?.substitute_teacher_name ?? p.teacher
-      : p.teacher;
-    return [name, p.has_substitute ? 'Substitute' : null].filter(Boolean).join(' · ');
+      : p.teacher,
+  });
+
+  const metaFor = (p: TimetablePeriod) =>
+    [teacherOf(p).name, p.has_substitute ? 'Substitute' : null].filter(Boolean).join(' · ');
+
+  const photoFor = (p: TimetablePeriod) => {
+    const t = teacherOf(p);
+    return (t.id != null ? photos.byId[t.id] : undefined) ?? photos.byName[nameKey(t.name)] ?? null;
   };
 
   return (
@@ -65,7 +96,8 @@ const StudentTimetableScreen = ({ navigation }: any) => {
         <View style={s.list}>
           {[0, 1, 2, 3, 4].map(i => (
             <View key={i} style={[s.skeletonRow, i < 4 && s.rowDivider]}>
-              <Skeleton width={62} height={13} />
+              <Skeleton width={58} height={13} />
+              <Skeleton width={34} height={34} radius={17} />
               <View style={s.skeletonBody}>
                 <Skeleton width="55%" height={14} />
                 <Skeleton width="35%" height={12} />
@@ -95,14 +127,19 @@ const StudentTimetableScreen = ({ navigation }: any) => {
             />
           ) : (
             <>
-              <Text style={s.count}>
-                {selectedDay} · {periods.length} {periods.length === 1 ? 'period' : 'periods'}
-              </Text>
+              <View style={s.dayHead}>
+                <Text style={s.dayTitle}>{dateForDay(selectedDay).format('dddd, D MMMM')}</Text>
+                <Text style={s.dayCount}>
+                  {periods.length} {periods.length === 1 ? 'period' : 'periods'}
+                </Text>
+              </View>
               {periods.map((p, i) => (
                 <PeriodRow
                   key={p.id}
                   period={p}
-                  meta={teacherFor(p)}
+                  meta={metaFor(p)}
+                  avatar={photoFor(p)}
+                  avatarName={teacherOf(p).name}
                   isNow={p.id === liveId}
                   isLast={i === periods.length - 1}
                 />
@@ -123,7 +160,9 @@ const __mk_s = () => StyleSheet.create({
 
   list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
   listEmpty: { flexGrow: 1 },
-  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
+  dayHead: { paddingTop: 14, paddingBottom: 6 },
+  dayTitle: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary },
+  dayCount: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
 
   // Loading
