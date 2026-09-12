@@ -106,23 +106,3 @@ export const dashboardErrorMessage = (e: any): string => {
   if (status >= 500) return serverMsg || 'The server ran into a problem. Please try again.';
   return serverMsg || 'Something went wrong. Please try again.';
 };
-
-// Deterministic colour + emoji for a subject name (the dashboard payload carries
-// no styling), so homework/subject rows keep their colourful look.
-const PALETTE = [
-  { color: '#4F46E5', icon: '📘' },
-  { color: '#0EA5E9', icon: '📐' },
-  { color: '#10B981', icon: '🧪' },
-  { color: '#22C55E', icon: '🌿' },
-  { color: '#D97706', icon: '📖' },
-  { color: '#DC2626', icon: '🏛️' },
-  { color: '#8B5CF6', icon: '🌍' },
-  { color: '#EC4899', icon: '💻' },
-];
-
-export const subjectTheme = (name?: string | null): { color: string; icon: string } => {
-  const str = String(name ?? '');
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
-  return PALETTE[hash % PALETTE.length];
-};

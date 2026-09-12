@@ -3,29 +3,6 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from './VectorIcon';
 import { theme, onThemeChange } from '../utils/theme';
 
-// ─── Chip ────────────────────────────────────────────────────────────────────
-export const Chip = ({
-  icon,
-  label,
-  value,
-  color,
-  bg,
-}: {
-  icon: string;
-  label: string;
-  value?: string;
-  color: string;
-  bg: string;
-}) => (
-  <View style={[c.chip, { backgroundColor: bg }]}>
-    <VectorIcon iconSet="Ionicons" iconName={icon} size={13} color={color} />
-    <Text style={[c.chipLabel, { color }]} numberOfLines={1}>
-      {label}
-      {value != null ? <Text style={c.chipValue}> {value}</Text> : null}
-    </Text>
-  </View>
-);
-
 // ─── Donut (arc progress ring, no SVG) ───────────────────────────────────────
 export const Donut = ({
   size = 110,
@@ -224,22 +201,6 @@ export const StackedBar = ({
   );
 };
 
-// ─── Week strip (day cells coloured by status) ───────────────────────────────
-export const WeekDots = ({
-  days,
-}: {
-  days: { label: string; color: string; bg: string }[];
-}) => (
-  <View style={wd.row}>
-    {days.map((dd, i) => (
-      <View key={i} style={[wd.cell, { backgroundColor: dd.bg }]}>
-        <View style={[wd.dot, { backgroundColor: dd.color }]} />
-        <Text style={wd.label}>{dd.label}</Text>
-      </View>
-    ))}
-  </View>
-);
-
 // ─── Card wrapper with titled header ─────────────────────────────────────────
 // Pass `onPress` to make the whole card tappable — it renders a chevron and a
 // small "open" hint after the title so users know it drills into a screen.
@@ -295,19 +256,6 @@ export const ChartCard = ({
     </View>
   );
 };
-
-const __mk_c = () => StyleSheet.create({
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: theme.radius.full,
-  },
-  chipLabel: { fontSize: 12, fontWeight: '700' },
-  chipValue: { fontWeight: '900' },
-});
 
 const __mk_d = () => StyleSheet.create({
   clip: { position: 'absolute', overflow: 'hidden' },
@@ -368,19 +316,6 @@ const __mk_sbar = () => StyleSheet.create({
   legendText: { fontSize: 11, color: theme.colors.textSecondary, fontWeight: '500' },
 });
 
-const __mk_wd = () => StyleSheet.create({
-  row: { flexDirection: 'row', gap: 6 },
-  cell: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 8,
-    borderRadius: theme.radius.sm,
-  },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  label: { fontSize: 10, fontWeight: '700', color: theme.colors.textSecondary },
-});
-
 const __mk_cc = () => StyleSheet.create({
   card: {
     backgroundColor: theme.colors.card,
@@ -412,8 +347,6 @@ const __mk_cc = () => StyleSheet.create({
 
 
 // Themed stylesheets — rebuilt on light/dark toggle.
-let c = __mk_c();
-onThemeChange(() => { c = __mk_c(); });
 let d = __mk_d();
 onThemeChange(() => { d = __mk_d(); });
 let mb = __mk_mb();
@@ -422,7 +355,5 @@ let hb = __mk_hb();
 onThemeChange(() => { hb = __mk_hb(); });
 let sbar = __mk_sbar();
 onThemeChange(() => { sbar = __mk_sbar(); });
-let wd = __mk_wd();
-onThemeChange(() => { wd = __mk_wd(); });
 let cc = __mk_cc();
 onThemeChange(() => { cc = __mk_cc(); });

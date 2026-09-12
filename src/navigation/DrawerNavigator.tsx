@@ -70,102 +70,106 @@ type MenuItem = {
   nestedRoute?: string;
 };
 
+// A run of menu items, under a small heading when it has one.
+type MenuSection = { title?: string; items: MenuItem[] };
+
+// ── Menu ─────────────────────────────────────────────────────────────────────
+// The same destinations as before, gathered so the list can be scanned: the
+// overview, then what is taught or learnt, then the school around it, then
+// help and settings.
+const ITEM = {
+  dashboard: { name: 'MainTabs', label: 'Dashboard', icon: 'grid-outline' },
+  analytics: { name: 'Analytics', label: 'Analytics', icon: 'analytics-outline' },
+  timetable: { name: 'Timetable', label: 'Timetable', icon: 'time-outline' },
+  markAttendance: { name: 'MarkAttendance', label: 'Mark Attendance', icon: 'checkbox-outline' },
+  homework: { name: 'Homework', label: 'Homework', icon: 'create-outline' },
+  subjects: { name: 'Subjects', label: 'Subjects', icon: 'albums-outline' },
+  syllabus: { name: 'Syllabus', label: 'Syllabus', icon: 'document-text-outline' },
+  content: { name: 'Content', label: 'Content', icon: 'folder-outline' },
+  quiz: { name: 'Quiz', label: 'Quiz', icon: 'help-circle-outline' },
+  books: { name: 'Book', label: 'Books', icon: 'book-outline' },
+  exams: { name: 'Exams', label: 'Exams', icon: 'school-outline' },
+  performance: { name: 'Performance', label: 'Performance', icon: 'speedometer-outline' },
+  instructor: { name: 'Instructor', label: 'Instructors', icon: 'person-outline' },
+  uploadMarks: { name: 'UploadMarks', label: 'Upload Marks', icon: 'cloud-upload-outline' },
+  uploadCopy: { name: 'UploadCopy', label: 'Upload Copy', icon: 'document-attach-outline' },
+  attendance: { name: 'Attendance', label: 'Attendance', icon: 'clipboard-outline' },
+  fees: { name: 'Fees', label: 'Fees', icon: 'cash-outline' },
+  transport: { name: 'Transport', label: 'Transport', icon: 'bus-outline' },
+  calendar: { name: 'Calendar', label: 'Calendar', icon: 'calendar-outline' },
+  announcement: { name: 'Announcement', label: 'Announcements', icon: 'megaphone-outline' },
+  chats: { name: 'Chats', label: 'Chats', icon: 'chatbubbles-outline' },
+  idCard: { name: 'IDCard', label: 'ID Card', icon: 'id-card-outline' },
+  contact: { name: 'ContactSchool', label: 'Contact School', icon: 'call-outline' },
+  settings: { name: 'Settings', label: 'Settings', icon: 'settings-outline' },
+  more: { name: 'More', label: 'More', icon: 'ellipsis-horizontal-outline' },
+} satisfies Record<string, MenuItem>;
+
+const STUDENT_MENU: MenuSection[] = [
+  { items: [ITEM.dashboard, ITEM.analytics] },
+  {
+    title: 'Learning',
+    items: [
+      ITEM.timetable,
+      ITEM.subjects,
+      ITEM.syllabus,
+      ITEM.content,
+      ITEM.homework,
+      ITEM.quiz,
+      ITEM.books,
+      ITEM.exams,
+      ITEM.performance,
+      ITEM.instructor,
+    ],
+  },
+  {
+    title: 'School',
+    items: [
+      ITEM.attendance,
+      ITEM.fees,
+      ITEM.transport,
+      ITEM.calendar,
+      ITEM.announcement,
+      ITEM.chats,
+      ITEM.idCard,
+    ],
+  },
+  { items: [ITEM.contact, ITEM.settings, ITEM.more] },
+];
+
+const TEACHER_MENU: MenuSection[] = [
+  { items: [ITEM.dashboard, ITEM.analytics] },
+  {
+    title: 'Teaching',
+    items: [
+      ITEM.timetable,
+      ITEM.markAttendance,
+      ITEM.homework,
+      ITEM.subjects,
+      ITEM.syllabus,
+      ITEM.content,
+      ITEM.quiz,
+      ITEM.books,
+      ITEM.exams,
+      ITEM.uploadMarks,
+      ITEM.uploadCopy,
+    ],
+  },
+  {
+    title: 'School',
+    items: [ITEM.attendance, ITEM.calendar, ITEM.announcement, ITEM.chats, ITEM.idCard],
+  },
+  { items: [ITEM.contact, ITEM.settings, ITEM.more] },
+];
+
 const DrawerNavigator = ({ route }: any) => {
   const role: DrawerRole =
     route?.params?.userRole === 'teacher' ? 'teacher' : 'student';
 
-  const menuItems: MenuItem[] = useMemo(() => {
-    const studentMenuItems: MenuItem[] = [
-      { name: 'MainTabs', label: 'Dashboard', icon: 'grid-outline' },
-      { name: 'Analytics', label: 'Analytics', icon: 'analytics-outline' },
-      { name: 'Fees', label: 'Fees', icon: 'cash-outline' },
-      {
-        name: 'Announcement',
-        label: 'Announcement',
-        icon: 'megaphone-outline',
-      },
-      { name: 'Calendar', label: 'Calendar', icon: 'calendar-outline' },
-      { name: 'Transport', label: 'Transport', icon: 'bus-outline' },
-      { name: 'Homework', label: 'Homework', icon: 'create-outline' },
-      { name: 'Timetable', label: 'Timetable', icon: 'time-outline' },
-      { name: 'Attendance', label: 'Attendance', icon: 'clipboard-outline' },
-      {
-        name: 'Subjects',
-        label: 'Subjects',
-        icon: 'albums-outline',
-      },
-      { name: 'Syllabus', label: 'Syllabus', icon: 'document-text-outline' },
-      { name: 'Content', label: 'Content', icon: 'folder-outline' },
-      { name: 'Quiz', label: 'Quiz', icon: 'help-circle-outline' },
-      {
-        name: 'Book',
-        label: 'Book',
-        icon: 'book-outline',
-      },
-      { name: 'Instructor', label: 'Instructor', icon: 'person-outline' },
-      { name: 'IDCard', label: 'ID Card', icon: 'id-card-outline' },
-      { name: 'Chats', label: 'Chats', icon: 'chatbubbles-outline' },
-      { name: 'Exams', label: 'Exams', icon: 'school-outline' },
-      {
-        name: 'Performance',
-        label: 'Performance',
-        icon: 'speedometer-outline',
-      },
-      { name: 'ContactSchool', label: 'Contact School', icon: 'call-outline' },
-      { name: 'Settings', label: 'Settings', icon: 'settings-outline' },
-      { name: 'More', label: 'More', icon: 'ellipsis-horizontal-outline' },
-    ];
-
-    const teacherMenuItems: MenuItem[] = [
-      { name: 'MainTabs', label: 'Dashboard', icon: 'grid-outline' },
-      { name: 'Analytics', label: 'Analytics', icon: 'analytics-outline' },
-      {
-        name: 'Announcement',
-        label: 'Announcement',
-        icon: 'megaphone-outline',
-      },
-      { name: 'Calendar', label: 'Calendar', icon: 'calendar-outline' },
-      { name: 'Homework', label: 'Homework', icon: 'create-outline' },
-      { name: 'Timetable', label: 'Timetable', icon: 'time-outline' },
-      {
-        name: 'MarkAttendance',
-        label: 'Mark Attendance',
-        icon: 'checkbox-outline',
-      },
-      { name: 'Attendance', label: 'Attendance', icon: 'clipboard-outline' },
-      {
-        name: 'Subjects',
-        label: 'Subjects',
-        icon: 'albums-outline',
-      },
-      { name: 'Syllabus', label: 'Syllabus', icon: 'document-text-outline' },
-      { name: 'Content', label: 'Content', icon: 'folder-outline' },
-      { name: 'Quiz', label: 'Quiz', icon: 'help-circle-outline' },
-      {
-        name: 'Book',
-        label: 'Book',
-        icon: 'book-outline',
-      },
-      { name: 'IDCard', label: 'ID Card', icon: 'id-card-outline' },
-      { name: 'Chats', label: 'Chats', icon: 'chatbubbles-outline' },
-      { name: 'Exams', label: 'Exams', icon: 'school-outline' },
-      {
-        name: 'UploadMarks',
-        label: 'Upload Marks',
-        icon: 'cloud-upload-outline',
-      },
-      {
-        name: 'UploadCopy',
-        label: 'Upload Copy',
-        icon: 'document-attach-outline',
-      },
-      { name: 'ContactSchool', label: 'Contact School', icon: 'call-outline' },
-      { name: 'Settings', label: 'Settings', icon: 'settings-outline' },
-      { name: 'More', label: 'More', icon: 'ellipsis-horizontal-outline' },
-    ];
-
-    return role === 'teacher' ? teacherMenuItems : studentMenuItems;
-  }, [role]);
+  const menu: MenuSection[] = useMemo(
+    () => (role === 'teacher' ? TEACHER_MENU : STUDENT_MENU),
+    [role],
+  );
 
   const CustomDrawer = (props: any) => {
     const { navigation, state } = props;
@@ -198,6 +202,7 @@ const DrawerNavigator = ({ route }: any) => {
       }).start(() => setLogoutVisible(false));
     };
     const [org, setOrg] = useState<{ name?: string; logo?: string | null } | null>(null);
+    const [logoBroken, setLogoBroken] = useState(false);
 
     useEffect(() => {
       getActiveAccount()
@@ -262,90 +267,76 @@ const DrawerNavigator = ({ route }: any) => {
       );
     };
 
+    const activeRoute = state.routeNames[state.index];
+
     return (
       <>
         <DrawerContentScrollView
           {...props}
-          contentContainerStyle={{ paddingTop: 0, paddingBottom: 0 }}
+          contentContainerStyle={styles.drawerScroll}
         >
+          {/* The school */}
           <View style={styles.header}>
-              {org?.logo ? (
-                <Image source={{ uri: org.logo }} style={styles.logoImage} />
+            {org?.logo && !logoBroken ? (
+              <Image
+                source={{ uri: org.logo }}
+                style={styles.logoImage}
+                onError={() => setLogoBroken(true)}
+              />
+            ) : (
+              <View style={styles.schoolRow}>
+                <VectorIcon iconSet="Ionicons" iconName="school-outline" size={22} color={theme.colors.textSecondary} />
+                <Text style={styles.schoolName} numberOfLines={2}>
+                  {org?.name || 'School'}
+                </Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.headerDivider} />
+
+          {menu.map((section, si) => (
+            <View key={section.title ?? `section-${si}`} style={styles.section}>
+              {section.title ? (
+                <Text style={styles.sectionTitle}>{section.title.toUpperCase()}</Text>
               ) : (
-                <VectorIcon
-                  iconSet="Ionicons"
-                  iconName="school"
-                  size={56}
-                  color={theme.colors.primary}
-                />
+                si > 0 && <View style={styles.sectionDivider} />
               )}
-            </View>
-            <View style={styles.headerDivider} />
 
-            <View style={styles.menu}>
-              {menuItems.map((item, index) => {
-                const isActive = state.routeNames[state.index] === item.name;
-
+              {section.items.map((item, ii) => {
+                const isActive = activeRoute === item.name;
                 return (
-                  <View key={index}>
+                  <View key={item.name}>
                     <TouchableOpacity
-                      activeOpacity={0.7}
-                      onPress={() =>
-                        navigation.navigate(item.name, item.params)
-                      }
-                      style={[
-                        styles.menuItem,
-                        {
-                          backgroundColor: isActive
-                            ? theme.colors.primaryLight
-                            : 'transparent',
-                        },
-                      ]}
+                      activeOpacity={0.6}
+                      onPress={() => navigation.navigate(item.name, item.params)}
+                      style={[styles.menuItem, isActive && styles.menuItemActive]}
                     >
                       <VectorIcon
                         iconSet={item.iconSet || 'Ionicons'}
                         iconName={item.icon}
                         size={20}
-                        color={
-                          isActive
-                            ? theme.colors.primary
-                            : theme.colors.textPrimary
-                        }
+                        color={isActive ? theme.colors.primary : theme.colors.textSecondary}
                       />
-                      <Text
-                        style={[
-                          styles.menuText,
-                          {
-                            color: isActive
-                              ? theme.colors.primary
-                              : theme.colors.textPrimary,
-                            fontWeight: isActive ? '600' : '400',
-                          },
-                        ]}
-                      >
+                      <Text style={[styles.menuText, isActive && styles.menuTextActive]}>
                         {item.label}
                       </Text>
                     </TouchableOpacity>
-                    {index !== menuItems.length - 1 && (
-                      <View style={styles.divider} />
-                    )}
+                    {/* A line between every item, so each one reads as its own row */}
+                    {ii < section.items.length - 1 && <View style={styles.itemDivider} />}
                   </View>
                 );
               })}
             </View>
+          ))}
 
           <View style={styles.logoutContainer}>
             <TouchableOpacity
-              style={styles.logoutButton}
+              style={styles.menuItem}
+              activeOpacity={0.6}
               onPress={() => setLogoutVisible(true)}
             >
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="log-out-outline"
-                size={18}
-                color={theme.colors.danger}
-              />
-              <Text style={styles.logoutText}>Logout</Text>
+              <VectorIcon iconSet="Ionicons" iconName="log-out-outline" size={20} color={theme.colors.danger} />
+              <Text style={styles.logoutText}>Log out</Text>
             </TouchableOpacity>
           </View>
         </DrawerContentScrollView>
@@ -388,50 +379,26 @@ const DrawerNavigator = ({ route }: any) => {
                 },
               ]}
             >
-              {/* Small close button, top-right */}
-              <TouchableOpacity
-                style={styles.modalClose}
-                onPress={closeLogout}
-                hitSlop={10}
-                activeOpacity={0.7}
-              >
-                <VectorIcon iconSet="Ionicons" iconName="close" size={18} color={theme.colors.textSecondary} />
-              </TouchableOpacity>
-
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="log-out-outline"
-                size={32}
-                color={theme.colors.danger}
-                style={styles.modalIcon}
-              />
-
-              <Text style={styles.modalTitle}>Logout</Text>
+              <Text style={styles.modalTitle}>Log out?</Text>
               <Text style={styles.modalDesc}>
-                Are you sure you want to sign out of your account?
+                You will be signed out of this account on this device.
               </Text>
 
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={[styles.modalBtn, styles.modalBtnGhost]}
-                  activeOpacity={0.85}
+                  activeOpacity={0.7}
                   onPress={closeLogout}
                 >
-                  <Text style={[styles.modalBtnText, styles.modalBtnGhostText]}>
-                    Cancel
-                  </Text>
+                  <Text style={styles.modalBtnGhostText}>Cancel</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.modalBtn, styles.modalBtnDanger]}
-                  activeOpacity={0.9}
+                  activeOpacity={0.85}
                   onPress={doLogout}
                 >
-                  <Text
-                    style={[styles.modalBtnText, styles.modalBtnDangerText]}
-                  >
-                    Logout
-                  </Text>
+                  <Text style={styles.modalBtnDangerText}>Log out</Text>
                 </TouchableOpacity>
               </View>
             </Animated.View>
@@ -447,8 +414,8 @@ const DrawerNavigator = ({ route }: any) => {
       screenOptions={{
         headerShown: false,
         drawerStyle: {
-          backgroundColor: theme.colors.surface,
-          width: '70%',
+          backgroundColor: theme.colors.card,
+          width: '74%',
           borderTopRightRadius: 0,
           borderBottomRightRadius: 0,
         },
@@ -584,151 +551,103 @@ const DrawerNavigator = ({ route }: any) => {
 export default DrawerNavigator;
 
 const __mk_styles = () => StyleSheet.create({
+  drawerScroll: { paddingTop: 0, paddingBottom: 16 },
+
+  // The school
   header: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: theme.spacing.sm,
-    paddingBottom: theme.spacing.xs,
-  },
-  headerDivider: {
-    height: 1,
-    alignSelf: 'stretch',
-    backgroundColor: theme.colors.border,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 14,
   },
   logoImage: {
-    width: 220,
-    height: 104,
+    width: 170,
+    height: 64,
     resizeMode: 'contain',
   },
-  userName: {
-    color: theme.colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: theme.spacing.sm,
+  schoolRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
+  schoolName: { flex: 1, fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary },
+  headerDivider: {
+    height: 1,
+    backgroundColor: theme.colors.border,
   },
-  menu: {
-    marginTop: theme.spacing.sm,
+
+  // Menu
+  section: { paddingTop: 6 },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+    color: theme.colors.textMuted,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 6,
+  },
+  sectionDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.border,
+    marginHorizontal: 20,
+    marginTop: 10,
+    marginBottom: 6,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 12,
-    marginBottom: 6,
+    gap: 16,
+    marginHorizontal: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
     borderRadius: theme.radius.sm,
   },
-  menuText: {
-    marginLeft: 20,
-    fontSize: 15,
+  menuItemActive: { backgroundColor: theme.colors.background },
+  itemDivider: {
+    height: 1,
+    backgroundColor: theme.colors.border,
+    marginHorizontal: 20,
   },
+  menuText: { fontSize: 15, color: theme.colors.textPrimary },
+  menuTextActive: { color: theme.colors.primary, fontWeight: '600' },
+
+  // Log out
   logoutContainer: {
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: theme.colors.border,
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: 12,
-    paddingBottom: 12,
+    marginTop: 12,
+    paddingTop: 8,
   },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  logoutText: {
-    marginLeft: 15,
-    fontSize: 14,
-    color: theme.colors.danger,
-    fontWeight: '600',
-  },
+  logoutText: { fontSize: 15, fontWeight: '500', color: theme.colors.danger },
+
+  // Log out dialog
   modalOverlay: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.lg,
+    padding: 24,
   },
   modalTint: {
     backgroundColor: 'rgba(15, 23, 42, 0.2)',
   },
   modalCard: {
-    width: '84%',
-    maxWidth: 340,
+    width: '100%',
+    maxWidth: 380,
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.lg,
-    paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.xl,
-    paddingBottom: theme.spacing.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    padding: 24,
   },
-  modalClose: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.background,
-    zIndex: 1,
-  },
-  modalIcon: {
-    alignSelf: 'center',
-    marginBottom: theme.spacing.sm,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: theme.colors.textPrimary,
-    textAlign: 'center',
-  },
-  modalDesc: {
-    marginTop: theme.spacing.sm,
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.lg,
-  },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
+  modalDesc: { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
   modalBtn: {
     flex: 1,
-    height: 48,
+    height: 46,
     borderRadius: theme.radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  modalBtnGhost: {
-    // Outline-only Cancel: no fill, border in the colour the fill used to be
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  modalBtnGhostText: {
-    color: theme.colors.textPrimary,
-  },
-  modalBtnDanger: {
-    backgroundColor: theme.colors.danger,
-  },
-  modalBtnDangerText: {
-    color: theme.colors.white,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: theme.colors.border,
-    marginHorizontal: theme.spacing.md,
-    // opacity: 0.5,
-  },
+  modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
+  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  modalBtnDanger: { backgroundColor: theme.colors.danger },
+  modalBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let styles = __mk_styles();

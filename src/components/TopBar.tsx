@@ -23,34 +23,38 @@ import { useUnreadCount } from '../notifications';
 
 interface TopBarProps {
   userName?: string;
-  subtitle?: string;
-  subtitleIcon?: string;
   onBellPress?: () => void;
   onAvatarPress?: () => void;
 }
 
-// White header + status-bar area with dark content.
-const HEADER_BG = '#FFFFFF';
-const HEADER_TOP = '#FFFFFF';
-
 const getGreeting = () => {
   const h = new Date().getHours();
-  if (h < 12) return 'Good Morning';
-  if (h < 17) return 'Good Afternoon';
-  return 'Good Evening';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
 };
 
-const TopBar = ({
-  userName,
-  onBellPress,
-  onAvatarPress,
-}: TopBarProps) => {
+const initialsOf = (name?: string | null) =>
+  (name || '?')
+    .trim()
+    .split(/\s+/)
+    .map(p => p[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+/**
+ * The dashboard's header: the menu, who is signed in (tap to switch account),
+ * notifications and the profile photo — plain icons on white, with a thin line
+ * under it like every other header.
+ */
+const TopBar = ({ userName, onBellPress, onAvatarPress }: TopBarProps) => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const unreadCount = useUnreadCount();
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [displayName, setDisplayName]   = useState<string>(userName ?? '');
-  const [avatarUri, setAvatarUri]       = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState<string>(userName ?? '');
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [avatarBroken, setAvatarBroken] = useState(false);
 
   const refreshAccount = useCallback(async () => {
@@ -117,75 +121,39 @@ const TopBar = ({
   return (
     <View style={styles.container}>
       {/* White status-bar tint with dark icons. */}
-      <StatusBar
-        translucent={false}
-        backgroundColor={HEADER_TOP}
-        barStyle="dark-content"
-      />
+      <StatusBar translucent={false} backgroundColor={theme.colors.statusBar} barStyle="dark-content" />
       {/* Paint the safe-area inset (notch / status-bar strip) white. */}
-      <View
-        style={[styles.statusBackdrop, { top: -insets.top, height: insets.top }]}
-      />
+      <View style={[styles.statusBackdrop, { top: -insets.top, height: insets.top }]} />
 
-      {/* Row 1: menu · greeting+name · bell · avatar */}
       <View style={styles.wrap}>
-        <TouchableOpacity
-          onPress={openDrawer}
-          activeOpacity={0.7}
-          style={styles.menuBtn}
-        >
-          <VectorIcon iconSet="Feather" iconName="menu" size={20} color={theme.colors.primary} />
+        <TouchableOpacity onPress={openDrawer} activeOpacity={0.6} hitSlop={8} style={styles.iconBtn}>
+          <VectorIcon iconSet="Feather" iconName="menu" size={21} color={theme.colors.textPrimary} />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.userInfo}
-          activeOpacity={0.7}
-          onPress={() => setSwitcherOpen(true)}
-        >
-          <Text style={styles.greeting}>{getGreeting()} 👋</Text>
+        <TouchableOpacity style={styles.userInfo} activeOpacity={0.6} onPress={() => setSwitcherOpen(true)}>
+          <Text style={styles.greeting}>{getGreeting()}</Text>
           <View style={styles.nameRow}>
             <Text style={styles.userName} numberOfLines={1}>
               {displayName || 'Account'}
             </Text>
-            <VectorIcon
-              iconSet="Feather"
-              iconName="chevron-down"
-              size={16}
-              color={theme.colors.textSecondary}
-            />
+            <VectorIcon iconSet="Feather" iconName="chevron-down" size={15} color={theme.colors.textMuted} />
           </View>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={onBellPress} style={styles.iconBtn}>
-          <VectorIcon
-            iconSet="Ionicons"
-            iconName="notifications-outline"
-            size={19}
-            color={theme.colors.primary}
-          />
+        <TouchableOpacity onPress={onBellPress} activeOpacity={0.6} hitSlop={8} style={styles.iconBtn}>
+          <VectorIcon iconSet="Ionicons" iconName="notifications-outline" size={21} color={theme.colors.textPrimary} />
           {unreadCount > 0 && (
             <View style={styles.bellBadge}>
-              <Text style={styles.bellBadgeText}>
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </Text>
+              <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
             </View>
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={onAvatarPress} style={[styles.iconBtn, styles.avatarBtn]}>
+        <TouchableOpacity onPress={onAvatarPress} activeOpacity={0.7} style={styles.avatar}>
           {avatarUri && !avatarBroken ? (
-            <Image
-              source={{ uri: avatarUri }}
-              onError={() => setAvatarBroken(true)}
-              style={styles.avatarImg}
-            />
+            <Image source={{ uri: avatarUri }} onError={() => setAvatarBroken(true)} style={styles.avatarImg} />
           ) : (
-            <VectorIcon
-              iconSet="Ionicons"
-              iconName="person-circle"
-              size={26}
-              color={theme.colors.primary}
-            />
+            <Text style={styles.avatarInitials}>{initialsOf(displayName)}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -202,36 +170,35 @@ const __mk_styles = () => StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    backgroundColor: HEADER_TOP,
+    backgroundColor: theme.colors.statusBar,
   },
   container: {
-    backgroundColor: HEADER_BG,
-    paddingTop: theme.spacing.md,
-    paddingBottom: 14,
+    backgroundColor: theme.colors.card,
+    paddingTop: 10,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.divider,
   },
   wrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: theme.spacing.lg,
+    gap: 8,
+    paddingHorizontal: 16,
   },
-  menuBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: theme.colors.primaryLight,
+  iconBtn: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
   userInfo: {
     flex: 1,
     justifyContent: 'center',
+    paddingLeft: 2,
   },
   greeting: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: theme.colors.textSecondary,
-    letterSpacing: 0.3,
+    fontSize: 12,
+    color: theme.colors.textMuted,
   },
   nameRow: {
     flexDirection: 'row',
@@ -240,51 +207,52 @@ const __mk_styles = () => StyleSheet.create({
     marginTop: 1,
   },
   userName: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '600',
     color: theme.colors.textPrimary,
     flexShrink: 1,
   },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   bellBadge: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: 3,
+    right: 2,
     minWidth: 16,
     height: 16,
     paddingHorizontal: 3,
     borderRadius: 8,
-    backgroundColor: '#EF4444',
+    backgroundColor: theme.colors.danger,
     borderWidth: 1.5,
-    borderColor: HEADER_BG,
+    borderColor: theme.colors.card,
     alignItems: 'center',
     justifyContent: 'center',
   },
   bellBadgeText: {
-    color: '#fff',
+    color: theme.colors.white,
     fontSize: 9,
-    fontWeight: '800',
+    fontWeight: '700',
     lineHeight: 11,
   },
-  avatarBtn: {
-    backgroundColor: theme.colors.primaryLight,
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginLeft: 4,
     overflow: 'hidden',
+    backgroundColor: theme.colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarImg: {
     width: '100%',
     height: '100%',
-    borderRadius: theme.radius.full,
     resizeMode: 'cover',
   },
+  avatarInitials: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+  },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let styles = __mk_styles();
