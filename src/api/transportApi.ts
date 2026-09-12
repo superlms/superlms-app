@@ -47,6 +47,5 @@ export interface TransportRoute {
 // GET /transport/my-route — active route + fee schedule for the logged-in student
 export const getMyTransport = async (): Promise<TransportRoute> => {
   const { data } = await apiClient.get('/transport/my-route');
-  console.log('[getMyTransport] Response:', JSON.stringify(data, null, 2));
   return data?.data ?? data;
 };

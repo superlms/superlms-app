@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Image,
+  Keyboard,
   Modal,
+  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -10,9 +12,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
-import { useKeyboardLift } from '../../hooks/useKeyboardLift';
+import { useKeyboardLiftStyle } from '../../hooks/useKeyboardLift';
 import { DayLabel, chatColors as CH } from './chatUi';
 
 type DrawerRole = 'student' | 'teacher';
@@ -172,7 +175,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
   const selectionMode = selectedIds.length > 0;
 
   // Android draws behind the keyboard, so the composer is lifted by hand.
-  const lift = useKeyboardLift();
+  const liftStyle = useKeyboardLiftStyle();
 
   // Mark where each run of messages from one person starts and ends.
   const grouped = useMemo<GroupedMessage[]>(
@@ -185,11 +188,14 @@ const ChatsScreen = ({ navigation, route }: any) => {
     [messages],
   );
 
-  // Keep the newest message in view as the keyboard opens and closes.
+  // Keep the newest message in view as the keyboard opens.
   useEffect(() => {
-    const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
-    return () => clearTimeout(t);
-  }, [lift]);
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const sub = Keyboard.addListener(showEvent, () => {
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 120);
+    });
+    return () => sub.remove();
+  }, []);
 
   const send = () => {
     const text = input.trim();
@@ -231,7 +237,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
   const hasText = input.trim().length > 0;
 
   return (
-    <View style={[s.root, { paddingBottom: lift }]}>
+    <Animated.View style={[s.root, liftStyle]}>
       <StatusBar barStyle="dark-content" backgroundColor={theme.colors.statusBar} />
 
       {/* ── Who you are talking to ── */}
@@ -370,7 +376,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
           </View>
         </View>
       </Modal>
-    </View>
+    </Animated.View>
   );
 };
 
