@@ -20,16 +20,21 @@ export type NotifCategory =
   | 'General';
 
 // Icon (Ionicons) + colours per category — shared by the inbox list and banner.
+//
+// The icons are deliberately the same glyphs the drawer already uses for those
+// parts of the app, so a notification is recognisable as "the homework one" or
+// "the fees one" before its title is read. The colours are kept for the native
+// banner; the inbox draws the icons plainly.
 export const CATEGORY_CONFIG: Record<
   NotifCategory,
   { icon: string; color: string; bg: string }
 > = {
-  Exam: { icon: 'document-text-outline', color: '#4F46E5', bg: '#E0E7FF' },
+  Exam: { icon: 'school-outline', color: '#4F46E5', bg: '#E0E7FF' },
   Marks: { icon: 'ribbon-outline', color: '#9333EA', bg: '#F3E8FF' },
-  Attendance: { icon: 'calendar-outline', color: '#16A34A', bg: '#DCFCE7' },
-  Fee: { icon: 'card-outline', color: '#D97706', bg: '#FEF3C7' },
+  Attendance: { icon: 'clipboard-outline', color: '#16A34A', bg: '#DCFCE7' },
+  Fee: { icon: 'cash-outline', color: '#D97706', bg: '#FEF3C7' },
   Announcement: { icon: 'megaphone-outline', color: '#0EA5E9', bg: '#E0F2FE' },
-  Homework: { icon: 'book-outline', color: '#7C3AED', bg: '#EDE9FE' },
+  Homework: { icon: 'create-outline', color: '#7C3AED', bg: '#EDE9FE' },
   Leave: { icon: 'person-remove-outline', color: '#DC2626', bg: '#FEE2E2' },
   General: { icon: 'notifications-outline', color: '#2563EB', bg: '#DBEAFE' },
 };

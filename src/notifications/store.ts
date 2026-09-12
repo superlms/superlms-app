@@ -89,6 +89,17 @@ class NotificationStore {
     this.emit();
   }
 
+  /** Drop a batch in one go — one write and one re-render, not one per id. */
+  async removeMany(ids: string[]): Promise<void> {
+    if (!ids.length) return;
+    const drop = new Set(ids);
+    const next = this.items.filter(i => !drop.has(i.id));
+    if (next.length === this.items.length) return;
+    this.items = next;
+    this.persist();
+    this.emit();
+  }
+
   async clearAll(): Promise<void> {
     if (!this.items.length) return;
     this.items = [];
@@ -131,6 +142,7 @@ export function useNotifications() {
     markRead: (id: string) => notificationStore.markRead(id),
     markAllRead: () => notificationStore.markAllRead(),
     remove: (id: string) => notificationStore.remove(id),
+    removeMany: (ids: string[]) => notificationStore.removeMany(ids),
     clearAll: () => notificationStore.clearAll(),
   };
 }

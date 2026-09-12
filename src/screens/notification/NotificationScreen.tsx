@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import {
   FlatList,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
@@ -18,7 +20,7 @@ import {
   type NotificationItem,
 } from '../../notifications';
 import { navigateToScreen } from '../../navigation/navigationRef';
-import { DocHeader, DocNoData } from '../more/docUi';
+import { DocNoData } from '../more/docUi';
 
 const TITLE = 'Notifications';
 
@@ -38,19 +40,26 @@ const relativeTime = (ts: number): string => {
 
 // ── One notification as a plain row, separated by a divider ──────────────────
 // The category's own icon leads the row; an unread one carries that icon and
-// its title in the accent colour, which is what a loose dot used to say.
-//   📄  Exam Schedule Released                        ✕
+// its title in the accent colour, which is what a loose dot used to say. While
+// picking rows to delete, the same slot holds the tick — so nothing shifts.
+//   🎓  Exam Schedule Released                        ✕
 //       The mid-term timetable has been published.
 //       Exam · 2 hrs ago
 const NotificationRow = ({
   item,
   isLast,
+  selectionMode,
+  selected,
   onPress,
+  onLongPress,
   onDismiss,
 }: {
   item: NotificationItem;
   isLast: boolean;
+  selectionMode: boolean;
+  selected: boolean;
   onPress: () => void;
+  onLongPress: () => void;
   onDismiss: () => void;
 }) => {
   const cfg = CATEGORY_CONFIG[item.category] ?? CATEGORY_CONFIG.General;
@@ -58,16 +67,31 @@ const NotificationRow = ({
 
   return (
     <TouchableOpacity
-      style={[s.row, !isLast && s.rowDivider]}
+      style={[s.row, !isLast && s.rowDivider, selected && s.rowSelected]}
       activeOpacity={0.6}
       onPress={onPress}
+      onLongPress={onLongPress}
     >
       <View style={s.iconSlot}>
         <VectorIcon
           iconSet="Ionicons"
-          iconName={cfg.icon}
-          size={18}
-          color={unread ? theme.colors.primary : theme.colors.textSecondary}
+          iconName={
+            selectionMode
+              ? selected
+                ? 'checkmark-circle'
+                : 'ellipse-outline'
+              : cfg.icon
+          }
+          size={selectionMode ? 20 : 18}
+          color={
+            selectionMode
+              ? selected
+                ? theme.colors.primary
+                : theme.colors.border
+              : unread
+              ? theme.colors.primary
+              : theme.colors.textSecondary
+          }
         />
       </View>
 
@@ -76,9 +100,11 @@ const NotificationRow = ({
           <Text style={[s.title, unread && s.titleUnread]} numberOfLines={1}>
             {item.title}
           </Text>
-          <TouchableOpacity onPress={onDismiss} hitSlop={10} activeOpacity={0.6}>
-            <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={theme.colors.textMuted} />
-          </TouchableOpacity>
+          {!selectionMode && (
+            <TouchableOpacity onPress={onDismiss} hitSlop={10} activeOpacity={0.6}>
+              <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+          )}
         </View>
 
         {!!item.body && (
@@ -95,9 +121,11 @@ const NotificationRow = ({
   );
 };
 
-const NotificationScreen = () => {
-  const { items, unreadCount, markRead, markAllRead, remove } = useNotifications();
+const NotificationScreen = ({ navigation }: any) => {
+  const { items, unreadCount, markRead, markAllRead, remove, removeMany } = useNotifications();
   const [activeFilter, setActiveFilter] = useState<NotifCategory | 'All'>('All');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // The tabs are built from whatever categories actually turned up in the inbox.
   const categories = useMemo(() => {
@@ -115,6 +143,25 @@ const NotificationScreen = () => {
   // so push-synced inboxes (Phase 2) can hook a real loader here.
   const { refreshing, onRefresh } = useRefresh(async () => {});
 
+  const selectionMode = selectedIds.length > 0;
+  // Selecting everything means everything currently on screen, not the whole
+  // inbox — a filter is on screen for a reason.
+  const allSelected = filtered.length > 0 && selectedIds.length === filtered.length;
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+
+  const clearSelection = () => setSelectedIds([]);
+
+  const toggleSelectAll = () =>
+    setSelectedIds(allSelected ? [] : filtered.map(i => i.id));
+
+  const deleteSelected = () => {
+    removeMany(selectedIds);
+    setSelectedIds([]);
+    setConfirmDelete(false);
+  };
+
   const open = (item: NotificationItem) => {
     markRead(item.id);
     const data = item.data as { screen?: string; params?: Record<string, any> } | undefined;
@@ -123,22 +170,50 @@ const NotificationScreen = () => {
 
   return (
     <View style={s.root}>
-      <DocHeader title={TITLE} />
+      <Header
+        title={selectionMode ? `${selectedIds.length} selected` : TITLE}
+        divider
+        height={50}
+        onBackPress={() => (selectionMode ? clearSelection() : navigation.goBack())}
+        rightSlot={
+          selectionMode ? (
+            <TouchableOpacity
+              style={s.headBtn}
+              activeOpacity={0.6}
+              hitSlop={8}
+              onPress={() => setConfirmDelete(true)}
+            >
+              <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={19} color={theme.colors.danger} />
+            </TouchableOpacity>
+          ) : undefined
+        }
+      />
 
-      {/* How many are waiting, and a way to clear them all at once */}
+      {/* What is waiting, and what can be done with the lot */}
       <View style={s.metaBar}>
         <Text style={s.metaBarText}>
-          {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+          {selectionMode
+            ? `${selectedIds.length} of ${filtered.length} selected`
+            : unreadCount > 0
+            ? `${unreadCount} unread`
+            : 'All caught up'}
         </Text>
-        {unreadCount > 0 && (
-          <TouchableOpacity onPress={markAllRead} activeOpacity={0.6} hitSlop={8}>
-            <Text style={s.linkText}>Mark all read</Text>
+
+        {selectionMode ? (
+          <TouchableOpacity onPress={toggleSelectAll} activeOpacity={0.6} hitSlop={8}>
+            <Text style={s.linkText}>{allSelected ? 'Clear all' : 'Select all'}</Text>
           </TouchableOpacity>
+        ) : (
+          unreadCount > 0 && (
+            <TouchableOpacity onPress={markAllRead} activeOpacity={0.6} hitSlop={8}>
+              <Text style={s.linkText}>Mark all read</Text>
+            </TouchableOpacity>
+          )
         )}
       </View>
 
       {/* Category tabs, only once there is more than one kind to choose from */}
-      {categories.length > 2 && (
+      {categories.length > 2 && !selectionMode && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -178,11 +253,53 @@ const NotificationScreen = () => {
           <NotificationRow
             item={item}
             isLast={index === filtered.length - 1}
-            onPress={() => open(item)}
+            selectionMode={selectionMode}
+            selected={selectedIds.includes(item.id)}
+            onPress={() => (selectionMode ? toggleSelect(item.id) : open(item))}
+            onLongPress={() => toggleSelect(item.id)}
             onDismiss={() => remove(item.id)}
           />
         )}
       />
+
+      {/* Delete confirmation */}
+      <Modal
+        transparent
+        visible={confirmDelete}
+        animationType="fade"
+        onRequestClose={() => setConfirmDelete(false)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>
+              Delete{' '}
+              {selectedIds.length === 1
+                ? 'this notification'
+                : `${selectedIds.length} notifications`}
+              ?
+            </Text>
+            <Text style={s.modalDesc}>
+              They will be removed from this device. This cannot be undone.
+            </Text>
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                style={[s.modalBtn, s.modalBtnGhost]}
+                activeOpacity={0.7}
+                onPress={() => setConfirmDelete(false)}
+              >
+                <Text style={s.modalBtnGhostText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalBtn, s.modalBtnDanger]}
+                activeOpacity={0.85}
+                onPress={deleteSelected}
+              >
+                <Text style={s.modalBtnDangerText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -192,7 +309,9 @@ export default NotificationScreen;
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
 
-  // Count and "mark all read"
+  headBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+
+  // Count, and whatever applies to the whole list
   metaBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -220,6 +339,12 @@ const __mk_s = () => StyleSheet.create({
 
   row: { flexDirection: 'row', gap: 12, paddingVertical: 13 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  // Full-bleed highlight: the row's own padding stops at the page margin.
+  rowSelected: {
+    backgroundColor: theme.colors.background,
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
+  },
   iconSlot: { width: 22, alignItems: 'center', paddingTop: 1 },
   body: { flex: 1, gap: 4 },
   line: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -227,6 +352,36 @@ const __mk_s = () => StyleSheet.create({
   titleUnread: { fontWeight: '600', color: theme.colors.primary },
   preview: { fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19 },
   meta: { fontSize: 12, color: theme.colors.textMuted },
+
+  // Confirm modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.lg,
+    padding: 24,
+  },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
+  modalDesc: { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
+  modalBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: theme.radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
+  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  modalBtnDanger: { backgroundColor: theme.colors.danger },
+  modalBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.
