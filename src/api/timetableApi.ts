@@ -71,7 +71,10 @@ export const buildDayMap = (
   });
   (groups ?? []).forEach(g => {
     const day = DAYS[g.day_of_week - 1]; // ISO 1=Mon … 6=Sat
-    if (day) map[day] = g.timetable ?? [];
+    // The teacher week has sent every day after the first as an object keyed
+    // by row number ({"3": {...}}) rather than a list; either way it is a list here.
+    const periods = g.timetable as TimetablePeriod[] | Record<string, TimetablePeriod> | null | undefined;
+    if (day) map[day] = Array.isArray(periods) ? periods : Object.values(periods ?? {});
   });
   return map;
 };
