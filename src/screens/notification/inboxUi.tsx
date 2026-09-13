@@ -302,10 +302,16 @@ export const InboxRowSkeleton = ({
   index,
   isLast,
   metaWidth = 96,
+  titleWidth,
+  bodyWidth,
 }: {
   index: number;
   isLast: boolean;
   metaWidth?: number;
+  /** The title's width, when the row it stands in for is known. */
+  titleWidth?: number | string;
+  /** The description's width, when known; null for a row without one. */
+  bodyWidth?: number | string | null;
 }) => (
   <View style={[s.row, !isLast && s.rowDivider]}>
     <View style={s.leadSlot}>
@@ -313,11 +319,13 @@ export const InboxRowSkeleton = ({
     </View>
     <View style={s.body}>
       <View style={s.skTitle}>
-        <Skeleton width={TITLE_W[index % TITLE_W.length]} height={13} />
+        <Skeleton width={titleWidth ?? TITLE_W[index % TITLE_W.length]} height={13} />
       </View>
-      <View style={s.skPreview}>
-        <Skeleton width={BODY_W[index % BODY_W.length]} height={11} />
-      </View>
+      {bodyWidth !== null && (
+        <View style={s.skPreview}>
+          <Skeleton width={bodyWidth ?? BODY_W[index % BODY_W.length]} height={11} />
+        </View>
+      )}
       <View style={s.skMeta}>
         <Skeleton width={metaWidth} height={9} />
       </View>

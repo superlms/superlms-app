@@ -5,7 +5,9 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import moment from 'moment';
 import { Skeleton } from '../../components/Skeleton';
 import VectorIcon from '../../components/VectorIcon';
@@ -32,15 +34,94 @@ const TYPE_ICON: Record<CalEvent['type'], string> = {
 
 // ── Loading ──────────────────────────────────────────────────────────────────
 // The month as it will be drawn — the weekday letters, a number in every day
-// that exists (the blanks before the 1st and after the last stay blank), the day
-// heading, the type tabs and a few event rows — each box at the size of what it
-// stands in for, so nothing moves when the events land.
+// that exists (the blanks before the 1st and after the last stay blank), the
+// selected day's circle, the day heading, then what that day holds — each box
+// at the size of what it stands in for, so nothing moves when the events land.
+//
+// A month that has loaded on this phone before is drawn as it was: a dot under
+// each day with events, and for the selected day its count, the tabs and one
+// row per event (its title, description and time line at their lengths), or
+// just the "No event" line. A month never loaded shows the tabs and a few rows.
 const TAB_W = [18, 50, 34, 38, 76]; // All, Holiday, Exam, Event, Assignment
 
-const CalendarSkeleton = ({ month }: { month: moment.Moment }) => {
-  const offset = (month.clone().startOf('month').day() + 6) % 7; // weeks start Monday
+// About how wide one character is: day heading 16px semibold, count 12px, empty
+// note 14px, row title 15px, description 13px, kind · time 11px.
+const CHAR_W = { day: 9, count: 6.1, note: 7.1, title: 7.9, body: 6.6, meta: 5.6 };
+
+const fit = (len: number, charW: number, maxW: number) => Math.min(Math.max(2, len) * charW, maxW);
+
+/** One event row's shape: its type, for the tabs, and its lines' lengths in characters. */
+interface RowShape {
+  type: CalEvent['type'];
+  title: number;
+  body: number;
+  meta: number;
+}
+/** A month's rows, by date. */
+type MonthShape = Record<string, RowShape[]>;
+
+const shapeCache: Record<string, MonthShape> = {};
+
+// What a month held, kept in memory and on the phone for its next skeleton.
+const rememberMonthShape = (key: string, events: CalEvent[]) => {
+  const shape: MonthShape = {};
+  events.forEach(e => {
+    if (!shape[e.date]) shape[e.date] = [];
+    shape[e.date].push({
+      type: e.type,
+      title: e.title.length,
+      body: e.description.length,
+      meta: e.type.length + (e.time ? 3 + e.time.length : 0),
+    });
+  });
+  shapeCache[key] = shape;
+  AsyncStorage.setItem(`calendar_shape:${key}`, JSON.stringify(shape)).catch(() => {});
+};
+
+// The month's shape from its last load on this phone; undefined if it never loaded.
+const useMonthShape = (key: string) => {
+  const [, setRead] = useState(0);
+  useEffect(() => {
+    if (shapeCache[key]) return;
+    AsyncStorage.getItem(`calendar_shape:${key}`)
+      .then(raw => {
+        const saved = raw ? JSON.parse(raw) : null;
+        if (saved && typeof saved === 'object' && !shapeCache[key]) {
+          shapeCache[key] = saved;
+          setRead(n => n + 1);
+        }
+      })
+      .catch(() => {});
+  }, [key]);
+  return shapeCache[key] as MonthShape | undefined;
+};
+
+const CalendarSkeleton = ({
+  month,
+  selected,
+  filter,
+  shape,
+}: {
+  month: moment.Moment;
+  selected: string;
+  filter: FilterType;
+  shape?: MonthShape;
+}) => {
+  const { width } = useWindowDimensions();
+  const textW = width - 40;
+  const rowW = textW - 46; // beside the round icon and its gap
+
+  const first = month.clone().startOf('month');
+  const offset = (first.day() + 6) % 7; // weeks start Monday
   const days = month.daysInMonth();
   const cells = Math.ceil((offset + days) / 7) * 7;
+
+  const dayRows = shape?.[selected] ?? [];
+  const rows = (filter === 'All' ? dayRows : dayRows.filter(r => r.type === filter)).slice(0, 12);
+  const heading = moment(selected).format('dddd, D MMMM');
+  const count = `${rows.length} ${rows.length === 1 ? 'event' : 'events'}`;
+  // Known to be empty: the day reads "No event", with no tabs under it.
+  const empty = !!shape && dayRows.length === 0;
 
   return (
     <View>
@@ -57,14 +138,22 @@ const CalendarSkeleton = ({ month }: { month: moment.Moment }) => {
         {Array.from({ length: cells / 7 }, (_, w) => (
           <View key={w} style={s.skWeekRow}>
             {Array.from({ length: 7 }, (_, d) => {
-              const i = w * 7 + d;
-              const exists = i >= offset && i < offset + days;
+              const n = w * 7 + d - offset + 1; // the day of the month
+              const exists = n >= 1 && n <= days;
+              const date = exists ? first.clone().add(n - 1, 'day').format('YYYY-MM-DD') : '';
               return (
                 <View key={d} style={s.skCell}>
                   <View style={s.skDayCircle}>
-                    {exists && <Skeleton width={i - offset + 1 < 10 ? 9 : 17} height={12} />}
+                    {exists &&
+                      (date === selected ? (
+                        <Skeleton width={DAY} height={DAY} radius={DAY / 2} />
+                      ) : (
+                        <Skeleton width={n < 10 ? 9 : 17} height={12} />
+                      ))}
                   </View>
-                  <View style={s.skDot} />
+                  <View style={s.skDot}>
+                    {!!shape?.[date]?.length && <Skeleton width={4} height={4} radius={2} style={s.skDotOn} />}
+                  </View>
                 </View>
               );
             })}
@@ -75,25 +164,48 @@ const CalendarSkeleton = ({ month }: { month: moment.Moment }) => {
       <FullDivider />
 
       <View style={s.skDayHead}>
-        <Skeleton width={170} height={14} />
-        <Skeleton width={46} height={10} />
+        <Skeleton width={fit(heading.length, CHAR_W.day, textW - 80)} height={14} />
+        {!empty && <Skeleton width={shape ? fit(count.length, CHAR_W.count, 80) : 46} height={10} />}
       </View>
 
-      <View style={s.skTabs}>
-        {TAB_W.map((w, i) => (
-          <View key={i} style={s.skTab}>
-            <Skeleton width={w} height={11} />
+      {empty ? (
+        <View style={s.skNoEvent}>
+          <Skeleton width={fit('No event'.length, CHAR_W.note, textW)} height={11} />
+        </View>
+      ) : (
+        <>
+          <View style={s.skTabs}>
+            {TAB_W.map((w, i) => (
+              <View key={i} style={s.skTab}>
+                <Skeleton width={w} height={11} />
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
 
-      <FullDivider />
+          <FullDivider />
 
-      <View style={s.list}>
-        {[0, 1, 2].map(i => (
-          <InboxRowSkeleton key={i} index={i} isLast={i === 2} metaWidth={90} />
-        ))}
-      </View>
+          <View style={s.list}>
+            {!shape ? (
+              [0, 1, 2].map(i => <InboxRowSkeleton key={i} index={i} isLast={i === 2} metaWidth={90} />)
+            ) : rows.length === 0 ? (
+              <View style={s.skNoneOfType}>
+                <Skeleton width={fit(`No ${filter} on this date`.length, CHAR_W.note, textW)} height={11} />
+              </View>
+            ) : (
+              rows.map((r, i) => (
+                <InboxRowSkeleton
+                  key={i}
+                  index={i}
+                  isLast={i === rows.length - 1}
+                  titleWidth={fit(r.title, CHAR_W.title, rowW)}
+                  bodyWidth={r.body ? fit(r.body, CHAR_W.body, rowW) : null}
+                  metaWidth={fit(r.meta, CHAR_W.meta, rowW)}
+                />
+              ))
+            )}
+          </View>
+        </>
+      )}
     </View>
   );
 };
@@ -109,6 +221,9 @@ const CalendarScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // What this month held when it last loaded, for the skeleton.
+  const monthShape = useMonthShape(currentMonth.format('YYYY-MM'));
+
   // Events are fetched a month at a time.
   const fetchEvents = useCallback(async (showSkeleton = true) => {
     if (showSkeleton) setLoading(true);
@@ -119,7 +234,9 @@ const CalendarScreen = ({ navigation }: any) => {
 
     try {
       const apiEvents = await getCalendarEvents(startDate, endDate, undefined, 100);
-      setAllEvents(apiEvents.map(mapApiEventToCalEvent));
+      const events: CalEvent[] = apiEvents.map(mapApiEventToCalEvent);
+      rememberMonthShape(currentMonth.format('YYYY-MM'), events);
+      setAllEvents(events);
     } catch (err: any) {
       console.error('[CalendarScreen] Error fetching events:', err?.message);
       setError('Failed to load calendar events');
@@ -200,7 +317,12 @@ const CalendarScreen = ({ navigation }: any) => {
       <FullDivider />
 
       {loading ? (
-        <CalendarSkeleton month={currentMonth} />
+        <CalendarSkeleton
+          month={currentMonth}
+          selected={selectedDate}
+          filter={activeFilter}
+          shape={monthShape}
+        />
       ) : error ? (
         <View style={s.centeredBox}>
           <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
@@ -336,12 +458,15 @@ const __mk_s = () => StyleSheet.create({
   noneOfType: { paddingVertical: 18, fontSize: 14, color: QUIET },
 
   // Skeleton — the grid's cells (weekday label 11px + 6 padding; a day circle
-  // plus its dot) and the heading and tab lines at their real heights
+  // plus its dot) and the heading, tab and note lines at their real heights
   skWeekRow: { flexDirection: 'row' },
   skCell: { width: CELL, alignItems: 'center', paddingVertical: 3 },
   skWeekLabel: { height: 27, justifyContent: 'center' },
   skDayCircle: { width: DAY, height: DAY, alignItems: 'center', justifyContent: 'center' },
   skDot: { height: 7 },
+  skDotOn: { marginTop: 3 },
+  skNoEvent: { height: 25, paddingTop: 6, paddingHorizontal: 20, justifyContent: 'center' },
+  skNoneOfType: { height: 55, justifyContent: 'center' },
   skDayHead: {
     flexDirection: 'row',
     alignItems: 'center',

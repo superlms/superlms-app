@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import moment from 'moment';
 import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
@@ -31,53 +31,173 @@ const clock = (t?: string | null) => (t ? moment(t, 'HH:mm:ss').format('h:mm A')
 // The page line for line: the type/date line, the timing, the title, the
 // Description heading and text, the rule, then Posted By — each box at the
 // height of the text it stands in for.
+//
+// With the event already known (pulling to refresh) the skeleton is that
+// event's own page: the title and description wrapped as they read, the
+// attachment chip, the cancellation, one row per detail, and Posted By only
+// where there is one.
 const BODY_W = ['100%', '94%', '97%', '58%'];
+// The wrapped lines of a paragraph before its last one run nearly to the edge.
+const FULL_W = [1, 0.95, 0.98, 0.92, 0.97];
 
-const DetailSkeleton = () => (
-  <View style={docStyles.scroll}>
-    <View>
-      <View style={[s.skLine, s.skMeta]}>
-        <Skeleton width={190} height={10} />
-      </View>
-      <View style={[s.skLine, s.skMeta, s.skTiming]}>
-        <Skeleton width={120} height={10} />
-      </View>
-      <View style={[s.skLine, s.skTitle]}>
-        <Skeleton width="70%" height={18} />
-      </View>
-    </View>
+// About how wide one character is: meta 12px, title 20px bold, body 15px,
+// detail 14px, school name 13px.
+const CHAR_W = { meta: 6.1, title: 12.3, body: 7.6, detail: 7.3, sub: 6.6 };
 
-    <View>
-      <View style={[s.skLine, s.skSection]}>
-        <Skeleton width={100} height={14} />
-      </View>
-      {BODY_W.map((w, i) => (
-        <View key={i} style={[s.skLine, s.skBody]}>
-          <Skeleton width={w} height={12} />
+const fit = (len: number, charW: number, maxW: number) => Math.min(Math.max(2, len) * charW, maxW);
+
+// A text's lines as drawn at `maxW`: one width per line, 0 for a blank line.
+const lineWidths = (text: string, charW: number, maxW: number) => {
+  const perLine = Math.max(8, Math.floor(maxW / charW));
+  const rows: number[] = [];
+  text.split('\n').forEach(line => {
+    const len = line.trim().length;
+    if (len === 0) {
+      rows.push(0);
+      return;
+    }
+    const count = Math.ceil(len / perLine);
+    for (let i = 1; i < count; i++) rows.push(Math.round(maxW * FULL_W[rows.length % FULL_W.length]));
+    rows.push(fit(len - (count - 1) * perLine, charW, maxW));
+  });
+  return rows;
+};
+
+/** The event's page as it stands, for its skeleton. */
+interface PageShape {
+  headLine: string;
+  timing?: string;
+  title: string;
+  cancelled: boolean;
+  description: string;
+  attachment?: 'pdf' | 'image';
+  cancellation?: string;
+  rows: [string, string][];
+  /** The school named under "Admin"; absent when the page has no Posted By. */
+  school?: string;
+}
+
+const SectionHeadSkeleton = ({ width }: { width: number }) => (
+  <View style={[s.skLine, s.skSection]}>
+    <Skeleton width={width} height={14} />
+  </View>
+);
+
+// Who posted it: the round photo, "Admin", and the school's name under it.
+const PostedBySkeleton = ({ schoolWidth = 150 }: { schoolWidth?: number }) => (
+  <View>
+    <SectionHeadSkeleton width={84} />
+    <View style={s.creatorRow}>
+      <Skeleton width={40} height={40} radius={20} />
+      <View style={s.creatorInfo}>
+        <View style={[s.skLine, s.skName]}>
+          <Skeleton width={56} height={12} />
         </View>
-      ))}
-    </View>
-
-    <View style={s.divider} />
-
-    <View>
-      <View style={[s.skLine, s.skSection]}>
-        <Skeleton width={84} height={14} />
-      </View>
-      <View style={s.creatorRow}>
-        <Skeleton width={40} height={40} radius={20} />
-        <View style={s.creatorInfo}>
-          <View style={[s.skLine, s.skName]}>
-            <Skeleton width={56} height={12} />
-          </View>
+        {schoolWidth > 0 && (
           <View style={[s.skLine, s.skSub]}>
-            <Skeleton width={150} height={10} />
+            <Skeleton width={schoolWidth} height={10} />
           </View>
-        </View>
+        )}
       </View>
     </View>
   </View>
 );
+
+const DetailSkeleton = ({ shape }: { shape?: PageShape }) => {
+  const { width } = useWindowDimensions();
+  const textW = width - 40;
+  // Details: the label takes 40% of the line, the value the rest.
+  const labelW = textW * 0.4 - 12;
+  const valueW = textW * 0.6;
+
+  const titleRows: (number | string)[] = shape ? lineWidths(shape.title, CHAR_W.title, textW) : ['70%'];
+  const bodyRows: (number | string)[] = shape
+    ? lineWidths(shape.description || 'No description available', CHAR_W.body, textW).slice(0, 40)
+    : BODY_W;
+  // Beside the 40px photo and its gap; no line when the school is unnamed.
+  const schoolWidth = !shape ? 150 : shape.school ? fit(shape.school.length, CHAR_W.sub, textW - 52) : 0;
+
+  return (
+    <View style={s.skRoot}>
+      <View style={docStyles.scroll}>
+        <View>
+          <View style={[s.skLine, s.skMeta]}>
+            <Skeleton width={shape ? fit(shape.headLine.length, CHAR_W.meta, textW) : 190} height={10} />
+          </View>
+          {(!shape || !!shape.timing) && (
+            <View style={[s.skLine, s.skMeta, s.skTiming]}>
+              <Skeleton width={shape?.timing ? fit(shape.timing.length, CHAR_W.meta, textW) : 120} height={10} />
+            </View>
+          )}
+          {titleRows.map((w, i) => (
+            <View key={i} style={[s.skLine, s.skTitle, i === 0 && s.skTitleFirst]}>
+              <Skeleton width={w} height={18} />
+            </View>
+          ))}
+          {shape?.cancelled && (
+            <View style={[s.skLine, s.skCancelled]}>
+              <Skeleton width={64} height={11} />
+            </View>
+          )}
+        </View>
+
+        <View>
+          <SectionHeadSkeleton width={100} />
+          {bodyRows.map((w, i) => (
+            <View key={i} style={[s.skLine, s.skBody]}>
+              {!!w && <Skeleton width={w} height={12} />}
+            </View>
+          ))}
+          {!!shape?.attachment && (
+            <View style={s.skChips}>
+              <Skeleton width={shape.attachment === 'pdf' ? 88 : 100} height={32} radius={16} />
+            </View>
+          )}
+        </View>
+
+        {!!shape?.cancellation && (
+          <View>
+            <SectionHeadSkeleton width={176} />
+            {lineWidths(shape.cancellation, CHAR_W.body, textW)
+              .slice(0, 12)
+              .map((w, i) => (
+                <View key={i} style={[s.skLine, s.skBody]}>
+                  {!!w && <Skeleton width={w} height={12} />}
+                </View>
+              ))}
+          </View>
+        )}
+
+        {!!shape && shape.rows.length > 0 && (
+          <View>
+            <SectionHeadSkeleton width={64} />
+            {shape.rows.map(([label, value], i) => (
+              <View key={label} style={[s.skDetailRow, i < shape.rows.length - 1 && s.skDetailDivider]}>
+                <View style={[s.skLine, s.skDetailLabel]}>
+                  <Skeleton width={fit(label.length, CHAR_W.detail, labelW)} height={11} />
+                </View>
+                <View style={s.skDetailValue}>
+                  {lineWidths(value, CHAR_W.detail, valueW).map((w, j) => (
+                    <View key={j} style={[s.skLine, s.skDetailLine]}>
+                      {!!w && <Skeleton width={w} height={11} />}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {(!shape || shape.school !== undefined) && (
+          <>
+            <View style={s.divider} />
+            <PostedBySkeleton schoolWidth={schoolWidth} />
+          </>
+        )}
+      </View>
+    </View>
+  );
+};
 
 const ViewEventScreen = ({ navigation, route }: any) => {
   // From the calendar the event shows at once and the detail fills in the rest.
@@ -88,19 +208,19 @@ const ViewEventScreen = ({ navigation, route }: any) => {
 
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState(!passedEvent && !!id);
+  // The first fetch has answered, one way or the other.
+  const [fetched, setFetched] = useState(false);
 
   const load = useCallback(async () => {
-    if (!id) {
-      setLoading(false);
-      return;
-    }
     try {
+      if (!id) return;
       const data = await getEventById(id);
       if (data?.id) setDetail(data);
     } catch (err: any) {
       console.log('[ViewEvent] Fetch failed:', err?.response?.status ?? err?.message);
     } finally {
       setLoading(false);
+      setFetched(true);
     }
   }, [id]);
 
@@ -160,11 +280,27 @@ const ViewEventScreen = ({ navigation, route }: any) => {
     ['Teacher', academic?.teacher?.name],
   ].filter(([, v]) => !!v) as [string, string][];
 
+  // The page as it stands, once any of the event is known — the skeleton's shape.
+  const shape: PageShape | undefined =
+    passedEvent || detail
+      ? {
+          headLine,
+          timing: timing || undefined,
+          title,
+          cancelled: !!isCancelled,
+          description,
+          attachment: attachmentUrl ? (/\.pdf(\?|#|$)/i.test(attachmentUrl) ? 'pdf' : 'image') : undefined,
+          cancellation: (isCancelled && detail?.cancellation_reason) || undefined,
+          rows,
+          school: detail?.creator_name ? schoolName ?? '' : undefined,
+        }
+      : undefined;
+
   if (loading) {
     return (
       <View style={docStyles.root}>
         <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
-        <DetailSkeleton />
+        <DetailSkeleton shape={shape} />
       </View>
     );
   }
@@ -200,7 +336,11 @@ const ViewEventScreen = ({ navigation, route }: any) => {
         {/* Description, with the attachment right under it */}
         <DocSection title="Description">
           <DocBody>{description || 'No description available'}</DocBody>
-          <AttachmentChips items={[{ url: attachmentUrl }]} />
+          <AttachmentChips
+            // A tap saves the file to Downloads, named after the event
+            downloadAs={title}
+            items={[{ url: attachmentUrl }]}
+          />
         </DocSection>
 
         {isCancelled && !!detail?.cancellation_reason && (
@@ -238,6 +378,14 @@ const ViewEventScreen = ({ navigation, route }: any) => {
             </DocSection>
           </>
         )}
+
+        {/* Who posted it comes with the event's detail; its outline holds the place meanwhile */}
+        {!detail && !fetched && (
+          <>
+            <View style={s.divider} />
+            <PostedBySkeleton />
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -268,13 +416,23 @@ const __mk_s = () => StyleSheet.create({
   creatorSub: { fontSize: 13, color: QUIET, marginTop: 2 },
 
   // Skeleton boxes, at the heights of the real lines: meta 12px, title 20/27,
-  // section heading 17px, body 15/24, name 15px, school 13px.
+  // cancelled 13px, section heading 17px, body 15/24, attachment chip, detail
+  // rows 14px, name 15px, school 13px. Clipped at the bottom of the screen.
+  skRoot: { flex: 1, overflow: 'hidden' },
   skLine: { justifyContent: 'center' },
   skMeta: { height: 16 },
   skTiming: { marginTop: 2 },
-  skTitle: { height: 27, marginTop: 6 },
+  skTitle: { height: 27 },
+  skTitleFirst: { marginTop: 6 },
+  skCancelled: { height: 18, marginTop: 6 },
   skSection: { height: 23, marginBottom: 8 },
   skBody: { height: 24 },
+  skChips: { flexDirection: 'row', marginTop: 14 },
+  skDetailRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 14 },
+  skDetailDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  skDetailLabel: { width: '40%', height: 20, paddingRight: 12 },
+  skDetailValue: { flex: 1 },
+  skDetailLine: { height: 20 },
   skName: { height: 20 },
   skSub: { height: 18, marginTop: 2 },
 });
