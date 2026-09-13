@@ -16,7 +16,7 @@ const constant = {
    * `versionCode`/`versionName` whenever you cut a new native (Play Store) build
    * so it equals the OTA `version` whose JS is baked into that build.
    */
-  OTA_BASELINE_VERSION: 1,
+  OTA_BASELINE_VERSION: 2,
   /** screen */
   screen: Dimensions.get('window'),
   screenHeight:

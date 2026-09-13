@@ -37,7 +37,7 @@ const MANIFEST_URL = `${CDN_BASE}/update.json`;
 // Must match `constant.OTA_BASELINE_VERSION` in the app. When nothing is
 // published yet, the first release becomes baseline+1 so it actually reaches
 // devices already running the baseline JS baked into the installed build.
-const OTA_BASELINE_VERSION = 1;
+const OTA_BASELINE_VERSION = 2;
 // -----------------------------------------------------------------------------
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

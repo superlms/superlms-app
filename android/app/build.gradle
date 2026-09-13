@@ -83,8 +83,8 @@ android {
         applicationId "com.edyoneapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 109
-        versionName "1.10.9"
+        versionCode 110
+        versionName "1.11.0"
     }
     signingConfigs {
         debug {
