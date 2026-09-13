@@ -1,15 +1,22 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
+import { launchImageLibrary } from 'react-native-image-picker';
 import { theme, onThemeChange } from '../../utils/theme';
 import AppRefreshControl from '../../components/AppRefreshControl';
+import VectorIcon from '../../components/VectorIcon';
+import PhotoCropper, { type CropRect } from '../../components/PhotoCropper';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
-import { getTeacherProfile } from '../../api/teacherApi';
+import { getTeacherProfile, updateTeacherPhoto, type PickedPhoto } from '../../api/teacherApi';
+import { apiErr } from '../../utils/filePickers';
 import { DocHeader, DocLoading, DocError } from '../more/docUi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -33,6 +40,9 @@ const val = (v: any): string => {
 
 const hasVal = (v: any) => val(v) !== '—';
 
+// Gender is stored lower-case ("male").
+const capitalize = (v: any) => (hasVal(v) ? val(v).charAt(0).toUpperCase() + val(v).slice(1) : v);
+
 // ─── Info Row: label, then value from the middle ──────────────────────────────
 const InfoRow = ({
   label, value, last,
@@ -50,6 +60,8 @@ const TeacherProfileScreen = () => {
   const [profile, setProfile] = useState<TeacherProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
+  const [picked, setPicked]   = useState<PickedPhoto | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -69,6 +81,42 @@ const TeacherProfileScreen = () => {
 
   useFocusLoad(fetchProfile);
 
+  // Pick a photo, then frame it in the cropper before it goes up. The picker
+  // scales big photos down first so the upload stays small.
+  const choosePhoto = () => {
+    launchImageLibrary({ mediaType: 'photo', quality: 0.9, maxWidth: 1600, maxHeight: 1600 }, res => {
+      if (res.didCancel) return;
+      if (res.errorCode) {
+        Alert.alert('Could not open photos', res.errorMessage ?? 'Please try again.');
+        return;
+      }
+      const a = res.assets?.[0];
+      if (!a?.uri) return;
+      setPicked({
+        uri: a.uri,
+        type: a.type ?? 'image/jpeg',
+        name: a.fileName ?? 'photo.jpg',
+        width: a.width,
+        height: a.height,
+      });
+    });
+  };
+
+  const savePhoto = async (crop: CropRect) => {
+    const photo = picked;
+    setPicked(null);
+    if (!photo) return;
+    setUploading(true);
+    try {
+      setProfile(await updateTeacherPhoto(photo, crop));
+    } catch (e: any) {
+      console.log('[TeacherProfile] photo ❌', e?.response?.data ?? e?.message);
+      Alert.alert('Could not update photo', apiErr(e, 'Please try again.'));
+    } finally {
+      setUploading(false);
+    }
+  };
+
   if (loading) return <DocLoading title="Profile" />;
   if (error || !profile) {
     return <DocError title="Profile" message={error || 'Something went wrong.'} onRetry={fetchProfile} />;
@@ -76,15 +124,15 @@ const TeacherProfileScreen = () => {
 
   const { personal_info: p, professional_info: pr, address_info: a } = profile;
 
-  // One plain list: personal, then professional, then address details. Name and
-  // employee ID sit at the top, so they aren't repeated; empty fields are left
-  // out.
+  // One plain list: professional ID first, then personal, then address details.
+  // Name and email sit at the top, so they aren't repeated; empty fields are
+  // left out.
   const rows = ([
-    ['Email', p.email],
+    ['Employee ID', pr.employee_id],
     ['Mobile', p.mobile_number],
     ['Emergency Contact', p.emergency_contact],
     ['DOB', p.dob],
-    ['Gender', p.gender],
+    ['Gender', capitalize(p.gender)],
     ['Date of Joining', pr.date_of_joining],
     ['Qualification', pr.qualification],
     ['Address', a.address],
@@ -103,20 +151,31 @@ const TeacherProfileScreen = () => {
           <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Photo, name, employee ID — centred */}
+        {/* Photo (tap to add or change), name, email — centred */}
         <View style={s.head}>
-          {p.image ? (
-            <Image source={{ uri: p.image }} style={s.avatar} />
-          ) : (
-            <View style={[s.avatar, s.avatarFallback]}>
-              <Text style={s.avatarInitial}>
-                {(p.name?.charAt(0) ?? 'T').toUpperCase()}
-              </Text>
-            </View>
-          )}
+          <TouchableOpacity activeOpacity={0.8} onPress={choosePhoto} disabled={uploading}>
+            {p.image ? (
+              <Image source={{ uri: p.image }} style={s.avatar} />
+            ) : (
+              <View style={[s.avatar, s.avatarFallback]}>
+                <Text style={s.avatarInitial}>
+                  {(p.name?.charAt(0) ?? 'T').toUpperCase()}
+                </Text>
+              </View>
+            )}
+            {uploading ? (
+              <View style={[s.avatar, s.avatarBusy]}>
+                <ActivityIndicator color={theme.colors.white} />
+              </View>
+            ) : (
+              <View style={s.avatarBadge}>
+                <VectorIcon iconSet="Ionicons" iconName="camera" size={15} color={theme.colors.white} />
+              </View>
+            )}
+          </TouchableOpacity>
           <Text style={s.name}>{val(p.name)}</Text>
-          {hasVal(pr.employee_id) && (
-            <Text style={s.employee}>Employee ID {val(pr.employee_id)}</Text>
+          {hasVal(p.email) && (
+            <Text style={s.email}>{val(p.email)}</Text>
           )}
         </View>
 
@@ -133,6 +192,14 @@ const TeacherProfileScreen = () => {
           ))}
         </View>
       </ScrollView>
+
+      <PhotoCropper
+        uri={picked?.uri ?? null}
+        width={picked?.width}
+        height={picked?.height}
+        onCancel={() => setPicked(null)}
+        onDone={savePhoto}
+      />
     </View>
   );
 };
@@ -152,6 +219,28 @@ const __mk_s = () => StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitial: { fontSize: 36, fontWeight: '600', color: theme.colors.textSecondary },
+  avatarBusy: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Small camera mark on the photo's lower right, so it reads as tappable.
+  avatarBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: theme.colors.primary,
+    borderWidth: 2,
+    borderColor: theme.colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   name: {
     fontSize: 20,
     fontWeight: '700',
@@ -159,7 +248,7 @@ const __mk_s = () => StyleSheet.create({
     textAlign: 'center',
     marginTop: 14,
   },
-  employee: { fontSize: 13, color: theme.colors.textMuted, marginTop: 4 },
+  email: { fontSize: 13, color: theme.colors.textMuted, marginTop: 4, textAlign: 'center' },
 
   // Full-width line between the head and the details — 1px, a touch stronger
   // than the hairline under the header.
