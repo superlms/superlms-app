@@ -286,45 +286,48 @@ const __mk_styles = () => StyleSheet.create({
   container: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: 72,
+    paddingTop: 56,
   },
 
-  // Logo, title, subtitle — left-aligned, nothing behind them
-  logo: { width: 56, height: 56, resizeMode: 'contain' },
+  // Logo, title, subtitle — centred, as on Forgot Password
+  logo: { width: 112, height: 112, resizeMode: 'contain', alignSelf: 'center' },
   title: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
     color: theme.colors.textPrimary,
-    marginTop: 28,
+    textAlign: 'center',
+    marginTop: 20,
   },
   subtitle: {
     fontSize: 14,
     lineHeight: 20,
     color: theme.colors.textSecondary,
+    textAlign: 'center',
     marginTop: 6,
     marginBottom: 32,
+    paddingHorizontal: 12,
   },
 
-  // Fields
+  // Fields — the Forgot Password screen's
   label: {
     fontSize: 13,
-    fontWeight: '500',
-    color: theme.colors.textSecondary,
-    marginBottom: 8,
+    fontWeight: '600',
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.xs,
   },
   input: {
-    height: 52,
-    paddingHorizontal: 14,
+    height: 50,
+    paddingHorizontal: theme.spacing.md,
     paddingVertical: 0,
-    marginBottom: 18,
+    marginBottom: theme.spacing.md,
     borderRadius: theme.radius.sm,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.card,
+    backgroundColor: theme.colors.surface,
     fontSize: 15,
     color: theme.colors.textPrimary,
   },
-  inputActive: { borderColor: theme.colors.primary },
+  inputActive: { borderColor: '#5B7FFF' },
   passWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   passInput: {
     flex: 1,
@@ -333,18 +336,18 @@ const __mk_styles = () => StyleSheet.create({
     fontSize: 15,
     color: theme.colors.textPrimary,
   },
-  forgotWrap: { alignSelf: 'flex-end', marginTop: -6, marginBottom: 28 },
-  forgot: { fontSize: 13, fontWeight: '500', color: theme.colors.primary },
+  forgotWrap: { alignSelf: 'flex-end', marginTop: -4, marginBottom: theme.spacing.lg },
+  forgot: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 
-  // Continue
+  // Continue — the Forgot Password screen's pill button
   button: {
-    height: 52,
-    borderRadius: theme.radius.sm,
+    height: 48,
+    borderRadius: 99,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.primary,
   },
-  buttonDisabled: { opacity: 0.4 },
+  buttonDisabled: { backgroundColor: '#B0B0B0' },
   buttonText: { color: theme.colors.white, fontWeight: '600', fontSize: 16 },
 
   keyboardSpace: { height: 100 },
