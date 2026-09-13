@@ -153,7 +153,7 @@ const TeacherHomeworkScreen = ({ navigation }: any) => {
                     hw={hw}
                     period={periodFor(hw)}
                     heading={headingFor(hw)}
-                    attachmentFirst
+                    stacked
                     isLast={i === dayItems.length - 1}
                     onPreviewImage={setPreview}
                     trailing={
@@ -197,7 +197,7 @@ const __mk_s = () => StyleSheet.create({
   fullDivider: { height: 1, backgroundColor: theme.colors.border },
   list: { paddingHorizontal: 20, paddingBottom: 40 },
   // Edit and delete, side by side
-  actions: { flexDirection: 'row', gap: 18, paddingTop: 2 },
+  actions: { flexDirection: 'row', gap: 18 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

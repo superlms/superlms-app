@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -89,6 +89,7 @@ const AddHomeworkScreen = ({ navigation, route }: any) => {
   const [pickerFieldY, setPickerFieldY] = useState(0);
   const [title, setTitle] = useState(editing?.title ?? '');
   const [desc, setDesc] = useState(editing?.description ?? '');
+  const descRef = useRef<TextInput>(null);
   const [file, setFile] = useState<PickedFile | null>(null);
   // The attachment the homework already has, until it is removed or replaced.
   const [keptFile, setKeptFile] = useState<PickedFile | null>(
@@ -216,28 +217,37 @@ const AddHomeworkScreen = ({ navigation, route }: any) => {
             </TouchableOpacity>
           </View>
 
-          {/* Title */}
+          {/* Title — the box grows a line at a time as the title wraps */}
           <View>
             <Text style={s.label}>Title</Text>
             <TextInput
               style={s.field}
               value={title}
-              onChangeText={setTitle}
+              // Still one line of text, however it is pasted.
+              onChangeText={t => setTitle(t.replace(/\n/g, ' '))}
               placeholder="e.g. Chapter 3 Exercise"
               placeholderTextColor={theme.colors.textMuted}
+              multiline
+              scrollEnabled={false}
+              textAlignVertical="top"
+              submitBehavior="submit"
+              returnKeyType="next"
+              onSubmitEditing={() => descRef.current?.focus()}
             />
           </View>
 
-          {/* Description */}
+          {/* Description — grows with the text too */}
           <View>
             <Text style={s.label}>Description</Text>
             <TextInput
+              ref={descRef}
               style={[s.field, s.fieldMulti]}
               value={desc}
               onChangeText={setDesc}
               placeholder="What should the class do?"
               placeholderTextColor={theme.colors.textMuted}
               multiline
+              scrollEnabled={false}
               textAlignVertical="top"
             />
           </View>
@@ -264,6 +274,20 @@ const AddHomeworkScreen = ({ navigation, route }: any) => {
               </View>
             </View>
           )}
+
+          {/* Post — right under the form, as Submit Query is on Contact School */}
+          <TouchableOpacity
+            style={[s.postBtn, submitting && s.postBtnBusy]}
+            activeOpacity={0.85}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <ActivityIndicator size="small" color={theme.colors.white} />
+            ) : (
+              <Text style={s.postText}>{editing ? 'Save changes' : 'Post homework'}</Text>
+            )}
+          </TouchableOpacity>
 
           {/* Class menu: opens over the field, starting at its top line. It
               lives at the form level (not inside the field's box) so Android
@@ -297,22 +321,6 @@ const AddHomeworkScreen = ({ navigation, route }: any) => {
             </>
           )}
         </ScrollView>
-
-        {/* Post */}
-        <View style={s.bar}>
-          <TouchableOpacity
-            style={[s.postBtn, submitting && s.postBtnBusy]}
-            activeOpacity={0.85}
-            onPress={handleSubmit}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color={theme.colors.white} />
-            ) : (
-              <Text style={s.postText}>{editing ? 'Save changes' : 'Post homework'}</Text>
-            )}
-          </TouchableOpacity>
-        </View>
       </>
     );
   };
@@ -403,14 +411,7 @@ const __mk_s = () => StyleSheet.create({
   chipTypeText: { fontSize: 11, fontWeight: '700', color: theme.colors.textSecondary, letterSpacing: 0.3 },
   chipName: { flexShrink: 1, fontSize: 14, color: theme.colors.textPrimary },
 
-  // Post
-  bar: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.card,
-  },
+  // Post — the Contact School submit button; the form's gap spaces it
   postBtn: {
     height: 48,
     borderRadius: theme.radius.md,

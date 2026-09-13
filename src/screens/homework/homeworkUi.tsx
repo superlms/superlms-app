@@ -137,17 +137,19 @@ export const DoneTick = ({ done, onPress }: { done: boolean; onPress?: () => voi
 //      Solve problems 1–10 from chapter 3 …
 //      Open attachment
 //
-// The teacher's list puts the attachment first and the period above the title:
-//      View image
-//      09:00 AM – 09:45 AM · Mathematics · 10th (A)
-//      Chapter 3 Exercise
-//      Solve problems 1–10 from chapter 3 …
+// The teacher's list stacks it: the period's time and the attachment on the
+// line with the actions, then the class, the title and the whole task, each
+// running to the row's right edge.
+//   09:00 AM – 09:45 AM · View image                             ✎  🗑
+//   Mathematics · 10th (A)
+//   Chapter 3 Exercise
+//   Solve problems 1–10 from chapter 3, showing every step.
 export const HomeworkRow = ({
   hw,
   meta,
   period,
   heading,
-  attachmentFirst,
+  stacked,
   leading,
   trailing,
   done,
@@ -156,11 +158,11 @@ export const HomeworkRow = ({
 }: {
   hw: HomeworkItem;
   meta?: string;
-  // The line above the title: the period's time, then e.g. "Mathematics · 10th (A)".
+  // Stacked rows: the period's time, and e.g. "Mathematics · 10th (A)" under it.
   period?: string | null;
   heading?: string;
-  // The attachment above everything else, not under the task.
-  attachmentFirst?: boolean;
+  // The teacher's layout, above.
+  stacked?: boolean;
   leading?: React.ReactNode;
   trailing?: React.ReactNode;
   done?: boolean;
@@ -171,10 +173,11 @@ export const HomeworkRow = ({
   const [expanded, setExpanded] = useState(false);
   const desc = hw.description?.trim();
   const isImage = hw.file_type === 'image';
+  const hasFile = !!hw.file_url;
 
-  const attachment = !!hw.file_url && (
+  const attachment = hasFile && (
     <TouchableOpacity
-      style={[s.attach, attachmentFirst && s.attachFirst]}
+      style={[s.attach, stacked && s.attachInline]}
       hitSlop={6}
       activeOpacity={0.6}
       onPress={() => (isImage ? onPreviewImage(hw.file_url!) : openFile(hw.file_url))}
@@ -182,12 +185,42 @@ export const HomeworkRow = ({
       <VectorIcon
         iconSet="Ionicons"
         iconName={isImage ? 'image-outline' : 'document-attach-outline'}
-        size={15}
+        size={stacked ? 13 : 15}
         color={theme.colors.primary}
       />
-      <Text style={s.attachText}>{isImage ? 'View image' : 'Open attachment'}</Text>
+      <Text style={[s.attachText, stacked && s.attachTextInline]}>
+        {isImage ? 'View image' : 'Open attachment'}
+      </Text>
     </TouchableOpacity>
   );
+
+  const title = <Text style={[s.title, done && s.titleDone]}>{quietCaps(hw.title)}</Text>;
+
+  if (stacked) {
+    // With no time and no file, the class takes the top line itself.
+    const hasTop = !!period || hasFile;
+    return (
+      <View style={[s.stackedRow, !isLast && s.rowDivider]}>
+        <View style={s.topLine}>
+          <View style={s.topLeft}>
+            {hasTop ? (
+              <>
+                {!!period && <Text style={s.period}>{period}</Text>}
+                {!!period && hasFile && <Text style={s.heading}>·</Text>}
+                {attachment}
+              </>
+            ) : (
+              !!heading && <Text style={s.heading}>{heading}</Text>
+            )}
+          </View>
+          {trailing}
+        </View>
+        {hasTop && !!heading && <Text style={s.heading}>{heading}</Text>}
+        {title}
+        {!!desc && <Text style={[s.desc, done && s.descDone]}>{desc}</Text>}
+      </View>
+    );
+  }
 
   return (
     <View style={[s.row, !isLast && s.rowDivider]}>
@@ -199,15 +232,7 @@ export const HomeworkRow = ({
         disabled={!desc}
         onPress={() => setExpanded(e => !e)}
       >
-        {attachmentFirst && attachment}
-        {(!!period || !!heading) && (
-          <Text style={s.heading}>
-            {!!period && <Text style={s.period}>{period}</Text>}
-            {!!period && !!heading && ' · '}
-            {heading}
-          </Text>
-        )}
-        <Text style={[s.title, done && s.titleDone]}>{quietCaps(hw.title)}</Text>
+        {title}
         {!!meta && (
           <Text style={s.meta} numberOfLines={1}>
             {meta}
@@ -218,7 +243,7 @@ export const HomeworkRow = ({
             {desc}
           </Text>
         )}
-        {!attachmentFirst && attachment}
+        {attachment}
       </TouchableOpacity>
 
       {trailing}
@@ -296,10 +321,17 @@ const __mk_s = () => StyleSheet.create({
   desc: { fontSize: 13, lineHeight: 19, color: theme.colors.textSecondary, marginTop: 3 },
   descDone: { color: theme.colors.textMuted },
   attach: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 7, alignSelf: 'flex-start' },
-  attachFirst: { marginTop: 0, marginBottom: 5 },
   attachText: { fontSize: 13, fontWeight: '500', color: theme.colors.primary },
-  heading: { fontSize: 12, lineHeight: 17, color: theme.colors.textMuted, marginBottom: 1 },
-  period: { fontWeight: '600', color: theme.colors.primary },
+
+  // Stacked row (teacher): time · attachment and the actions, then full-width lines
+  stackedRow: { paddingVertical: 14, gap: 3 },
+  topLine: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  topLeft: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 6 },
+  attachInline: { marginTop: 0, gap: 4 },
+  // As big as the subject and class line
+  attachTextInline: { fontSize: 12, lineHeight: 17 },
+  heading: { fontSize: 12, lineHeight: 17, color: theme.colors.textMuted },
+  period: { fontSize: 12, lineHeight: 17, fontWeight: '600', color: theme.colors.primary },
 
   // Loading
   skLine: { marginTop: 6 },
