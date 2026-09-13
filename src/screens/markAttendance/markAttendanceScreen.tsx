@@ -1,20 +1,18 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Image,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import {
   AttendanceStatus,
-  DateItem,
   STATUS_CODE,
   STATUS_CONFIG,
   STATUS_ORDER,
@@ -28,16 +26,14 @@ import {
   type AttendanceClass,
   type AttendanceStudent,
 } from '../../api/attendanceApi';
-import { useNavigation } from '@react-navigation/native';
 import { theme, onThemeChange } from '../../utils/theme';
 import constant from '../../utils/constant';
-import VectorIcon from '../../components/VectorIcon';
-import Header from '../../components/Header';
+import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { ConfirmDialog, SuccessDialog } from '../../components/ConfirmDialog';
 import { useRefresh } from '../../hooks/useRefresh';
-
-type Step = 'setup' | 'mark' | 'preview';
+import { DocHeader, DocNoData } from '../more/docUi';
+import { ErrorBox } from '../homework/homeworkUi';
 
 interface MarkStudent {
   id: number; // student_detail_id
@@ -65,79 +61,93 @@ const mapStatus = (a: AttendanceStudent['attendance']): AttendanceStatus => {
   return 'present'; // present / not_marked default to present
 };
 
+const toMarkStudent = (st: AttendanceStudent): MarkStudent => ({
+  id: st.student_id,
+  rollNo: String(st.roll_no ?? ''),
+  name: st.full_name,
+  photo: st.photo ?? null,
+  status: mapStatus(st.attendance),
+});
+
 const countByStatus = (students: MarkStudent[]) =>
   students.reduce(
-    (acc, s) => {
-      acc[s.status]++;
+    (acc, st) => {
+      acc[st.status]++;
       return acc;
     },
     { present: 0, absent: 0, holiday: 0 } as Record<AttendanceStatus, number>,
   );
 
-// ── Student avatar: photo with first-letter fallback ──
+// ── Student photo with first-letter fallback ──
 const Avatar = ({ name, photo }: { name: string; photo: string | null }) => {
   const uri = resolveFileUrl(photo);
   const [failed, setFailed] = useState(false);
   if (uri && !failed) {
-    return (
-      <Image
-        source={{ uri }}
-        style={styles.avatarImg}
-        onError={() => setFailed(true)}
-      />
-    );
+    return <Image source={{ uri }} style={s.avatar} onError={() => setFailed(true)} />;
   }
   return (
-    <View style={styles.avatar}>
-      <Text style={styles.avatarText}>
-        {(name || '?').charAt(0).toUpperCase()}
-      </Text>
+    <View style={[s.avatar, s.avatarFallback]}>
+      <Text style={s.avatarInitial}>{(name || '?').charAt(0).toUpperCase()}</Text>
     </View>
   );
 };
 
-// ── Per-student P / A / H toggle ──
-const StatusButtons = ({
-  status,
+// ── One student: roll no, photo, name, then P / A / H ──
+const StudentRow = ({
+  student,
+  last,
   onChange,
 }: {
-  status: AttendanceStatus;
-  onChange: (s: AttendanceStatus) => void;
+  student: MarkStudent;
+  last: boolean;
+  onChange: (status: AttendanceStatus) => void;
 }) => (
-  <View style={styles.statusBtns}>
-    {STATUS_ORDER.map(st => {
-      const active = status === st;
-      const cfg = STATUS_CONFIG[st];
-      return (
-        <TouchableOpacity
-          key={st}
-          onPress={() => onChange(st)}
-          activeOpacity={0.8}
-          style={[
-            styles.statusBtn,
-            {
-              backgroundColor: active ? cfg.bg : theme.colors.background,
-              borderColor: active ? cfg.color : theme.colors.border,
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.statusBtnText,
-              { color: active ? cfg.color : theme.colors.textMuted },
-            ]}
+  <View style={[s.row, !last && s.rowDivider]}>
+    <Text style={s.roll}>{student.rollNo || '—'}</Text>
+    <Avatar name={student.name} photo={student.photo} />
+    <Text style={s.name} numberOfLines={1}>
+      {student.name}
+    </Text>
+    <View style={s.toggles}>
+      {STATUS_ORDER.map(st => {
+        const active = student.status === st;
+        const cfg = STATUS_CONFIG[st];
+        return (
+          <TouchableOpacity
+            key={st}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6 }}
+            onPress={() => onChange(st)}
+            style={[s.toggle, active && { backgroundColor: cfg.color, borderColor: cfg.color }]}
           >
-            {cfg.short}
-          </Text>
-        </TouchableOpacity>
-      );
-    })}
+            <Text style={[s.toggleText, active && s.toggleTextActive]}>{cfg.short}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  </View>
+);
+
+const ListSkeleton = () => (
+  <View style={s.list}>
+    <View style={s.skHead}>
+      <Skeleton width="35%" height={16} />
+      <Skeleton width="60%" height={12} />
+    </View>
+    {[0, 1, 2, 3, 4, 5].map(i => (
+      <View key={i} style={[s.row, s.rowDivider]}>
+        <Skeleton width={34} height={34} radius={17} />
+        <View style={s.fill}>
+          <Skeleton width="60%" height={13} />
+        </View>
+        <Skeleton width={114} height={34} radius={17} />
+      </View>
+    ))}
   </View>
 );
 
 const MarkAttendanceScreen = () => {
   const navigation = useNavigation<any>();
-  const [step, setStep] = useState<Step>('setup');
   const [selectedDate, setSelectedDate] = useState<string>(
     RECENT_DATES[RECENT_DATES.length - 1].iso,
   );
@@ -145,9 +155,8 @@ const MarkAttendanceScreen = () => {
   const [classes, setClasses] = useState<AttendanceClass[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
   const [students, setStudents] = useState<MarkStudent[]>([]);
-  const [alreadyMarked, setAlreadyMarked] = useState(false);
 
-  const [loadingClasses, setLoadingClasses] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -155,6 +164,7 @@ const MarkAttendanceScreen = () => {
   const [holidayConfirm, setHolidayConfirm] = useState(false);
   const [submitConfirm, setSubmitConfirm] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const counts = countByStatus(students);
 
@@ -162,10 +172,20 @@ const MarkAttendanceScreen = () => {
     () => classes.find(c => c.assignment_id === selectedClassId) ?? null,
     [classes, selectedClassId],
   );
+  const classLabel = selectedClass?.class_info.class_display ?? '';
+
+  // Already marked when any student carries a real (non not_marked) status.
+  const alreadyMarked = useMemo(
+    () =>
+      !!selectedClass?.students.some(
+        st => st.attendance?.status && st.attendance.status !== 'not_marked',
+      ),
+    [selectedClass],
+  );
 
   // ── Load the teacher's classes + students for the chosen date ──
-  const loadClasses = useCallback(async (date: string) => {
-    setLoadingClasses(true);
+  const loadClasses = useCallback(async (date: string, quiet = false) => {
+    if (!quiet) setLoading(true);
     setError(null);
     try {
       const res = await getStudentsForAttendance(date);
@@ -181,7 +201,7 @@ const MarkAttendanceScreen = () => {
       setClasses([]);
       setSelectedClassId(null);
     } finally {
-      setLoadingClasses(false);
+      setLoading(false);
     }
   }, []);
 
@@ -189,32 +209,32 @@ const MarkAttendanceScreen = () => {
     loadClasses(selectedDate);
   }, [selectedDate, loadClasses]);
 
-  const { refreshing, onRefresh } = useRefresh(() => loadClasses(selectedDate));
+  // The chosen class's students, freshly copied to mark whenever the class or
+  // the day's data changes.
+  useEffect(() => {
+    setStudents((selectedClass?.students ?? []).map(toMarkStudent));
+  }, [selectedClass]);
+
+  useEffect(() => () => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current);
+  }, []);
+
+  const { refreshing, onRefresh } = useRefresh(() => loadClasses(selectedDate, true));
 
   // ── Actions ──
   const setStatus = (id: number, status: AttendanceStatus) =>
-    setStudents(prev => prev.map(s => (s.id === id ? { ...s, status } : s)));
+    setStudents(prev => prev.map(st => (st.id === id ? { ...st, status } : st)));
 
   const markAll = (status: AttendanceStatus) =>
-    setStudents(prev => prev.map(s => ({ ...s, status })));
+    setStudents(prev => prev.map(st => ({ ...st, status })));
 
-  const handleContinue = () => {
-    if (!selectedClass) return;
-    // Already-marked when any student carries a real (non not_marked) status.
-    const marked = selectedClass.students.some(
-      st => st.attendance?.status && st.attendance.status !== 'not_marked',
-    );
-    setStudents(
-      selectedClass.students.map(st => ({
-        id: st.student_id,
-        rollNo: String(st.roll_no ?? ''),
-        name: st.full_name,
-        photo: st.photo ?? null,
-        status: mapStatus(st.attendance),
-      })),
-    );
-    setAlreadyMarked(marked);
-    setStep('mark');
+  // Dismiss the success popup and return to the dashboard.
+  const goToDashboard = () => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current);
+    leaveTimer.current = null;
+    setSuccessMsg(null);
+    loadClasses(selectedDate, true);
+    navigation.navigate('MainTabs');
   };
 
   const doSubmit = async () => {
@@ -222,19 +242,17 @@ const MarkAttendanceScreen = () => {
     if (!students.length) return;
     setSubmitting(true);
     try {
-      const attendances = students.map(s => ({
-        student_detail_id: s.id,
-        status: STATUS_CODE[s.status],
+      const attendances = students.map(st => ({
+        student_detail_id: st.id,
+        status: STATUS_CODE[st.status],
         remarks: null,
       }));
       await submitAttendance(selectedDate, attendances);
       setSuccessMsg(
-        `${selectedClass?.class_info.class_display ?? ''} · ${formatLong(
-          selectedDate,
-        )}\nPresent ${counts.present} · Absent ${counts.absent} · Holiday ${counts.holiday}`,
+        `${classLabel} · ${formatLong(selectedDate)}\nPresent ${counts.present} · Absent ${counts.absent} · Holiday ${counts.holiday}`,
       );
       // Briefly show the success popup, then head back to the dashboard.
-      setTimeout(goToDashboard, 1500);
+      leaveTimer.current = setTimeout(goToDashboard, 1500);
     } catch (e: any) {
       Alert.alert('Submit failed', attendanceErrorMessage(e));
     } finally {
@@ -242,388 +260,178 @@ const MarkAttendanceScreen = () => {
     }
   };
 
-  // Reset everything and return to the setup screen.
-  const resetToSetup = () => {
-    setStep('setup');
-    setStudents([]);
-    setAlreadyMarked(false);
-    loadClasses(selectedDate);
-  };
+  // The confirm stands in for a review: the totals, and who is marked absent.
+  const absentees = students.filter(st => st.status === 'absent').map(st => st.name);
+  const confirmMessage = [
+    `${classLabel} · ${formatLong(selectedDate)}`,
+    `Present ${counts.present} · Absent ${counts.absent} · Holiday ${counts.holiday}`,
+    absentees.length > 0 && absentees.length <= 8 ? `Absent: ${absentees.join(', ')}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
 
-  // Dismiss the success popup and return to the dashboard.
-  const goToDashboard = () => {
-    setSuccessMsg(null);
-    setStep('setup');
-    setStudents([]);
-    setAlreadyMarked(false);
-    navigation.navigate('MainTabs');
-  };
+  // ── Class pills, the class, its totals and "mark all" ──
+  const renderListHead = () => (
+    <View style={s.head}>
+      {classes.length > 1 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          // A horizontal ScrollView grows to fill a column by default.
+          style={s.classBar}
+          contentContainerStyle={s.classStrip}
+        >
+          {classes.map(c => {
+            const active = c.assignment_id === selectedClassId;
+            return (
+              <TouchableOpacity
+                key={c.assignment_id}
+                activeOpacity={0.7}
+                onPress={() => setSelectedClassId(c.assignment_id)}
+                style={[s.classPill, active && s.classPillActive]}
+              >
+                <Text style={[s.classPillText, active && s.classPillTextActive]}>
+                  {c.class_info.class_display}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
 
-  // ── Info bar shown on mark / preview ──
-  const InfoBar = () => (
-    <View style={styles.infoBar}>
-      <View style={styles.infoLeft}>
-        <View style={styles.infoIcon}>
-          <VectorIcon
-            iconSet="Ionicons"
-            iconName="calendar-outline"
-            size={16}
-            color={theme.colors.primary}
-          />
-        </View>
-        <View>
-          <Text style={styles.infoDate}>{formatLong(selectedDate)}</Text>
-          <Text style={styles.infoClass}>
-            {selectedClass?.class_info.class_display ?? ''}
-          </Text>
-        </View>
-      </View>
-      <View style={[styles.editChip, { backgroundColor: theme.colors.primaryLight }]}>
-        <VectorIcon
-          iconSet="Ionicons"
-          iconName="people-outline"
-          size={11}
-          color={theme.colors.primary}
-        />
-        <Text style={[styles.editChipText, { color: theme.colors.primary }]}>
-          {students.length} students
+      <View style={s.summary}>
+        <Text style={s.className}>{classLabel}</Text>
+        <Text style={s.classMeta}>
+          {formatLong(selectedDate)} · {students.length} {students.length === 1 ? 'student' : 'students'}
+          {alreadyMarked ? ' · already marked' : ''}
         </Text>
+
+        <View style={s.counts}>
+          {STATUS_ORDER.map(st => (
+            <View key={st} style={s.count}>
+              <View style={[s.countDot, { backgroundColor: STATUS_CONFIG[st].color }]} />
+              <Text style={s.countText}>
+                {STATUS_CONFIG[st].full} <Text style={s.countNum}>{counts[st]}</Text>
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        {students.length > 0 && (
+          <View style={s.markAll}>
+            <Text style={s.markAllLabel}>Mark all</Text>
+            {STATUS_ORDER.map(st => (
+              <TouchableOpacity
+                key={st}
+                hitSlop={8}
+                activeOpacity={0.6}
+                onPress={() => (st === 'holiday' ? setHolidayConfirm(true) : markAll(st))}
+              >
+                <Text style={s.markAllLink}>{STATUS_CONFIG[st].full}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
     </View>
   );
 
-  // ── Setup ──
-  const renderSetup = () => (
-    <ScrollView
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.setupBody}
-      refreshControl={
-        <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      <View style={styles.noteBar}>
-        <VectorIcon
-          iconSet="Ionicons"
-          iconName="information-circle-outline"
-          size={16}
-          color={theme.colors.primary}
-        />
-        <Text style={styles.noteText}>
-          You can mark the last 3 working days. Sundays are auto-holidays.
-        </Text>
-      </View>
-
-      {/* Date card */}
-      <View style={styles.setupCard}>
-        <View style={[styles.cardAccent, { backgroundColor: theme.colors.primary }]} />
-        <View style={styles.setupCardInner}>
-          <Text style={styles.setupCardTitle}>Select Date</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.dateStrip}
-          >
-            {RECENT_DATES.map((d: DateItem) => {
-              const active = d.iso === selectedDate;
-              return (
-                <TouchableOpacity
-                  key={d.iso}
-                  activeOpacity={0.85}
-                  onPress={() => setSelectedDate(d.iso)}
-                  style={[styles.dateCard, active && styles.dateCardActive]}
-                >
-                  <Text
-                    style={[styles.dateWeekday, active && styles.dateTextActive]}
-                  >
-                    {d.weekday}
-                  </Text>
-                  <Text style={[styles.dateDay, active && styles.dateTextActive]}>
-                    {d.day}
-                  </Text>
-                  <Text style={[styles.dateMonth, active && styles.dateTextActive]}>
-                    {d.isToday ? 'Today' : d.month}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-      </View>
-
-      {/* Class card */}
-      <View style={styles.setupCard}>
-        <View style={[styles.cardAccent, { backgroundColor: theme.colors.success }]} />
-        <View style={styles.setupCardInner}>
-          <Text style={styles.setupCardTitle}>Class & Section</Text>
-
-          {loadingClasses ? (
-            <View style={styles.centerBox}>
-              <ActivityIndicator color={theme.colors.primary} />
-            </View>
-          ) : error ? (
-            <View style={styles.errorBox}>
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="cloud-offline-outline"
-                size={26}
-                color={theme.colors.danger}
-              />
-              <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity
-                style={styles.retryBtn}
-                onPress={() => loadClasses(selectedDate)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.retryText}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          ) : classes.length === 0 ? (
-            <View style={styles.errorBox}>
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="people-outline"
-                size={26}
-                color={theme.colors.textMuted}
-              />
-              <Text style={styles.errorText}>
-                No classes are assigned to you. Please contact the administrator.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.dropdown}>
-              {classes.map(c => {
-                const active = c.assignment_id === selectedClassId;
-                return (
-                  <TouchableOpacity
-                    key={c.assignment_id}
-                    style={[
-                      styles.dropdownItem,
-                      active && styles.dropdownItemActive,
-                    ]}
-                    activeOpacity={0.8}
-                    onPress={() => setSelectedClassId(c.assignment_id)}
-                  >
-                    <View style={styles.classRowLeft}>
-                      <View style={styles.infoIcon}>
-                        <VectorIcon
-                          iconSet="Ionicons"
-                          iconName="people-outline"
-                          size={16}
-                          color={theme.colors.primary}
-                        />
-                      </View>
-                      <View>
-                        <Text
-                          style={[
-                            styles.dropdownText,
-                            active && styles.dropdownTextActive,
-                          ]}
-                        >
-                          {c.class_info.class_display}
-                        </Text>
-                        <Text style={styles.classMeta}>
-                          {c.total_students} students
-                        </Text>
-                      </View>
-                    </View>
-                    {active && (
-                      <VectorIcon
-                        iconSet="Ionicons"
-                        iconName="checkmark-circle"
-                        size={18}
-                        color={theme.colors.primary}
-                      />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-        </View>
-      </View>
-
-      <TouchableOpacity
-        style={[
-          styles.primaryBtn,
-          (!selectedClass || loadingClasses) && styles.primaryBtnDisabled,
-        ]}
-        activeOpacity={0.9}
-        disabled={!selectedClass || loadingClasses}
-        onPress={handleContinue}
-      >
-        <Text style={styles.primaryBtnText}>Load Students</Text>
-      </TouchableOpacity>
-    </ScrollView>
-  );
-
-  // ── Mark ──
-  const renderMark = () => (
-    <FlatList
-      data={students}
-      keyExtractor={i => String(i.id)}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.list}
-      renderItem={({ item }) => (
-        <View style={styles.row}>
-          <View style={styles.rowLeft}>
-            <Text style={styles.rollNo}>{item.rollNo}</Text>
-            <Avatar name={item.name} photo={item.photo} />
-            <Text style={styles.studentName} numberOfLines={1}>
-              {item.name}
-            </Text>
-          </View>
-          <StatusButtons
-            status={item.status}
-            onChange={s => setStatus(item.id, s)}
+  const renderBody = () => {
+    if (loading) return <ListSkeleton />;
+    if (error) return <ErrorBox message={error} onRetry={() => loadClasses(selectedDate)} />;
+    if (classes.length === 0) {
+      return (
+        <ScrollView
+          contentContainerStyle={s.fillGrow}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          <DocNoData
+            icon="people-outline"
+            title="No class assigned"
+            subtitle="No classes are assigned to you for attendance. Please contact the administrator."
           />
-        </View>
-      )}
-      ListHeaderComponent={
-        <>
-          <InfoBar />
-          {alreadyMarked && (
-            <View style={styles.editBanner}>
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName="create-outline"
-                size={15}
-                color={theme.colors.primary}
-              />
-              <Text style={styles.editBannerText}>
-                Attendance already exists for this date — edit and re-submit.
-              </Text>
-            </View>
-          )}
-          <View style={styles.markAllRow}>
-            <Text style={styles.markAllLabel}>Mark all:</Text>
-            {STATUS_ORDER.map(st => (
+        </ScrollView>
+      );
+    }
+
+    return (
+      <FlatList
+        data={students}
+        keyExtractor={i => String(i.id)}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.list}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListHeaderComponent={renderListHead()}
+        renderItem={({ item, index }) => (
+          <StudentRow
+            student={item}
+            last={index === students.length - 1}
+            onChange={st => setStatus(item.id, st)}
+          />
+        )}
+        ListEmptyComponent={<Text style={s.empty}>No students in this class.</Text>}
+      />
+    );
+  };
+
+  const canSubmit = !loading && !error && !!selectedClass && students.length > 0;
+
+  return (
+    <View style={s.root}>
+      <DocHeader title="Mark Attendance" />
+
+      {/* The markable days: chosen one filled, today outlined */}
+      <View style={s.top}>
+        <View style={s.days}>
+          {RECENT_DATES.map(d => {
+            const active = d.iso === selectedDate;
+            const today = !active && d.isToday;
+            return (
               <TouchableOpacity
-                key={st}
-                style={[
-                  styles.markAllBtn,
-                  {
-                    backgroundColor: STATUS_CONFIG[st].bg,
-                    borderColor: STATUS_CONFIG[st].color,
-                  },
-                ]}
-                onPress={() =>
-                  st === 'holiday' ? setHolidayConfirm(true) : markAll(st)
-                }
+                key={d.iso}
+                activeOpacity={0.7}
+                onPress={() => setSelectedDate(d.iso)}
+                style={[s.day, active && s.dayActive, today && s.dayToday]}
               >
-                <Text
-                  style={[styles.markAllBtnText, { color: STATUS_CONFIG[st].color }]}
-                >
-                  {STATUS_CONFIG[st].full}
+                <Text style={[s.dayName, active && s.dayTextActive, today && s.dayTextToday]}>
+                  {d.weekday}
+                </Text>
+                <Text style={[s.dayDate, active && s.dayTextActive, today && s.dayTextToday]}>
+                  {Number(d.day)}
                 </Text>
               </TouchableOpacity>
-            ))}
-          </View>
-          <View style={styles.listHeader}>
-            <Text style={styles.listHeaderText}>Student</Text>
-            <Text style={styles.listHeaderText}>P / A / H</Text>
-          </View>
-        </>
-      }
-      ListEmptyComponent={
-        <Text style={styles.empty}>No students in this class.</Text>
-      }
-      ListFooterComponent={
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          activeOpacity={0.9}
-          onPress={() => setStep('preview')}
-        >
-          <Text style={styles.primaryBtnText}>Review</Text>
-        </TouchableOpacity>
-      }
-    />
-  );
+            );
+          })}
+        </View>
+        <Text style={s.note}>You can mark the last 3 working days. Sundays are holidays.</Text>
+      </View>
 
-  // ── Preview (clean review, no analytics) ──
-  const renderPreview = () => (
-    <FlatList
-      data={students}
-      keyExtractor={i => String(i.id)}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.list}
-      renderItem={({ item }) => {
-        const cfg = STATUS_CONFIG[item.status];
-        return (
-          <View style={styles.row}>
-            <View style={styles.rowLeft}>
-              <Text style={styles.rollNo}>{item.rollNo}</Text>
-              <Avatar name={item.name} photo={item.photo} />
-              <Text style={styles.studentName} numberOfLines={1}>
-                {item.name}
-              </Text>
-            </View>
-            <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
-              <View style={[styles.statusDot, { backgroundColor: cfg.color }]} />
-              <Text style={[styles.statusBadgeText, { color: cfg.color }]}>
-                {cfg.full}
-              </Text>
-            </View>
-          </View>
-        );
-      }}
-      ListHeaderComponent={
-        <>
-          <InfoBar />
-          <Text style={styles.previewHint}>
-            Review the attendance below, then submit.
-          </Text>
-        </>
-      }
-      ListEmptyComponent={
-        <Text style={styles.empty}>No students to review.</Text>
-      }
-      ListFooterComponent={
-        <View style={styles.footerCol}>
+      <View style={s.fill}>{renderBody()}</View>
+
+      {canSubmit && (
+        <View style={s.bar}>
           <TouchableOpacity
-            style={[styles.primaryBtn, submitting && styles.primaryBtnDisabled]}
-            activeOpacity={0.9}
+            style={[s.submitBtn, submitting && s.submitBtnBusy]}
+            activeOpacity={0.85}
             disabled={submitting}
             onPress={() => setSubmitConfirm(true)}
           >
             {submitting ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color={theme.colors.white} />
             ) : (
-              <Text style={styles.primaryBtnText}>
-                {alreadyMarked ? 'Update Attendance' : 'Submit Attendance'}
+              <Text style={s.submitText}>
+                {alreadyMarked ? 'Update attendance' : 'Submit attendance'}
               </Text>
             )}
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryBtn}
-            activeOpacity={0.85}
-            onPress={resetToSetup}
-          >
-            <Text style={styles.secondaryBtnText}>Back</Text>
-          </TouchableOpacity>
         </View>
-      }
-    />
-  );
+      )}
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.safeArea}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <Header title="Mark Attendance" />
-
-      {step === 'setup' && renderSetup()}
-      {step === 'mark' && renderMark()}
-      {step === 'preview' && renderPreview()}
-
-      {/* Mark-all-holiday confirmation (logout style) */}
+      {/* Mark-all-holiday confirmation */}
       <ConfirmDialog
         visible={holidayConfirm}
         title="Mark all as Holiday?"
-        message={`Every student in ${
-          selectedClass?.class_info.class_display ?? 'this class'
-        } will be set to Holiday for ${formatLong(selectedDate)}.`}
+        message={`Every student in ${classLabel || 'this class'} will be set to Holiday for ${formatLong(selectedDate)}.`}
         confirmText="Mark Holiday"
         confirmColor={STATUS_CONFIG.holiday.color}
         iconName="sunny-outline"
@@ -636,13 +444,11 @@ const MarkAttendanceScreen = () => {
         onCancel={() => setHolidayConfirm(false)}
       />
 
-      {/* Submit confirmation (logout style) */}
+      {/* Submit confirmation */}
       <ConfirmDialog
         visible={submitConfirm}
         title={alreadyMarked ? 'Update attendance?' : 'Submit attendance?'}
-        message={`${formatLong(selectedDate)}\nPresent ${counts.present} · Absent ${
-          counts.absent
-        } · Holiday ${counts.holiday}`}
+        message={confirmMessage}
         confirmText={alreadyMarked ? 'Update' : 'Submit'}
         confirmColor={theme.colors.primary}
         iconName="checkmark-done-outline"
@@ -659,289 +465,122 @@ const MarkAttendanceScreen = () => {
         buttonText="Done"
         onClose={goToDashboard}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
 export default MarkAttendanceScreen;
 
-const __mk_styles = () => StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: theme.colors.background },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  fill: { flex: 1 },
+  fillGrow: { flexGrow: 1 },
 
-  // Setup
-  setupBody: { padding: theme.spacing.lg, paddingBottom: 40 },
-
-  // Announcement-style note banner
-  noteBar: {
+  // Days
+  top: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: theme.colors.primaryLight,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: theme.spacing.md,
-  },
-  noteText: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.colors.primary,
-  },
-
-  // Accent-bar cards (attendance template)
-  setupCard: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    overflow: 'hidden',
-    marginBottom: theme.spacing.md,
-    elevation: 1,
-  },
-  cardAccent: { height: 4, width: '100%' },
-  setupCardInner: { padding: theme.spacing.md },
-  setupCardTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: theme.colors.textPrimary,
-    marginBottom: 10,
-  },
-  dateStrip: { gap: 10, paddingBottom: 4 },
-  dateCard: {
-    width: 62,
-    paddingVertical: 12,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    alignItems: 'center',
-    gap: 2,
-  },
-  dateCardActive: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  dateWeekday: { fontSize: 11, fontWeight: '600', color: theme.colors.textMuted },
-  dateDay: { fontSize: 20, fontWeight: '900', color: theme.colors.textPrimary },
-  dateMonth: { fontSize: 10, fontWeight: '700', color: theme.colors.textSecondary },
-  dateTextActive: { color: '#fff' },
-
-  centerBox: { paddingVertical: 30, alignItems: 'center' },
-  errorBox: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-  },
-  errorText: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  retryBtn: {
-    borderWidth: 1.5,
-    borderColor: theme.colors.primary,
-    borderRadius: theme.radius.full,
+    gap: 14,
     paddingHorizontal: 20,
-    paddingVertical: 8,
-    marginTop: 2,
-  },
-  retryText: { fontSize: 13, fontWeight: '700', color: theme.colors.primary },
-
-  dropdown: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    overflow: 'hidden',
-  },
-  dropdownItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: theme.spacing.md,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
-  dropdownItemActive: { backgroundColor: theme.colors.primaryLight },
-  classRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  classMeta: { fontSize: 11, color: theme.colors.textMuted, marginTop: 1 },
-  dropdownText: { fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary },
-  dropdownTextActive: { color: theme.colors.primary, fontWeight: '700' },
-
-  // Info bar
-  infoBar: {
-    flexDirection: 'row',
+  days: { flexDirection: 'row', gap: 8 },
+  day: {
+    width: 48,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: theme.colors.card,
+    paddingVertical: 8,
     borderRadius: theme.radius.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    padding: 12,
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.sm,
+    backgroundColor: theme.colors.card,
   },
-  infoLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  infoIcon: {
+  dayActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  dayToday: { borderColor: theme.colors.primary },
+  dayName: { fontSize: 11, fontWeight: '500', color: theme.colors.textMuted },
+  dayDate: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginTop: 2 },
+  dayTextActive: { color: theme.colors.white },
+  dayTextToday: { color: theme.colors.primary },
+  note: { flex: 1, fontSize: 12, lineHeight: 17, color: theme.colors.textMuted },
+
+  list: { paddingHorizontal: 20, paddingBottom: 24 },
+
+  // Class pills, the class, totals, mark all
+  head: { paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  classBar: { flexGrow: 0, marginHorizontal: -20 },
+  classStrip: { paddingHorizontal: 20, paddingTop: 14, gap: 8 },
+  classPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  classPillActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  classPillText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
+  classPillTextActive: { color: theme.colors.white },
+  summary: { paddingTop: 16 },
+  className: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
+  classMeta: { fontSize: 12, color: theme.colors.textMuted, marginTop: 3 },
+  counts: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 12 },
+  count: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  countDot: { width: 8, height: 8, borderRadius: 4 },
+  countText: { fontSize: 13, color: theme.colors.textSecondary },
+  countNum: { fontWeight: '600', color: theme.colors.textPrimary },
+  markAll: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 12 },
+  markAllLabel: { fontSize: 13, color: theme.colors.textMuted },
+  markAllLink: { fontSize: 13, fontWeight: '500', color: theme.colors.primary },
+
+  // Student row
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+  rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
+  roll: { width: 26, fontSize: 13, color: theme.colors.textMuted },
+  avatar: { width: 34, height: 34, borderRadius: 17 },
+  avatarFallback: {
+    backgroundColor: theme.colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: { fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary },
+  name: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
+  toggles: { flexDirection: 'row', gap: 6 },
+  toggle: {
     width: 34,
     height: 34,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoDate: { fontSize: 13, fontWeight: '800', color: theme.colors.textPrimary },
-  infoClass: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 1 },
-  editChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: theme.radius.full,
-  },
-  editChipText: { fontSize: 10, fontWeight: '700' },
-
-  editBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: theme.colors.primaryLight,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    marginBottom: theme.spacing.sm,
-  },
-  editBannerText: { flex: 1, fontSize: 12, fontWeight: '600', color: theme.colors.primary },
-
-  // Lists
-  list: { paddingHorizontal: theme.spacing.lg, paddingBottom: 40 },
-  markAllRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: theme.spacing.md,
-  },
-  markAllLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
-  },
-  markAllBtn: {
-    paddingHorizontal: 11,
-    paddingVertical: 5,
-    borderRadius: theme.radius.full,
+    borderRadius: 17,
     borderWidth: 1,
-  },
-  markAllBtnText: { fontSize: 11, fontWeight: '700' },
-
-  listHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    marginBottom: 4,
-  },
-  listHeaderText: { fontSize: 12, fontWeight: '700', color: theme.colors.textMuted },
-
-  previewHint: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-    fontWeight: '500',
-    marginBottom: theme.spacing.sm,
-  },
-
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-    gap: 10,
-  },
-  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  rollNo: { fontSize: 12, color: theme.colors.textMuted, width: 22 },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: theme.colors.primaryLight,
+    borderColor: theme.colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarImg: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: theme.colors.primaryLight,
-  },
-  avatarText: { fontSize: 14, fontWeight: '700', color: theme.colors.primary },
-  studentName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.colors.textPrimary,
-    flex: 1,
-  },
+  toggleText: { fontSize: 13, fontWeight: '600', color: theme.colors.textMuted },
+  toggleTextActive: { color: theme.colors.white },
 
-  statusBtns: { flexDirection: 'row', gap: 6 },
-  statusBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
+  empty: { textAlign: 'center', fontSize: 14, color: theme.colors.textMuted, paddingVertical: 30 },
+
+  // Submit
+  bar: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.card,
   },
-  statusBtnText: { fontSize: 12, fontWeight: '700' },
-
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: theme.radius.full,
-  },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusBadgeText: { fontSize: 11, fontWeight: '700' },
-
-  empty: { textAlign: 'center', color: theme.colors.textMuted, paddingVertical: 30 },
-
-  // Footer / buttons (login pill style)
-  footerCol: { marginTop: theme.spacing.lg, gap: 10 },
-  primaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+  submitBtn: {
+    height: 48,
+    borderRadius: theme.radius.md,
     backgroundColor: theme.colors.primary,
-    paddingVertical: 14,
-    borderRadius: 99,
-    marginTop: theme.spacing.lg,
-  },
-  primaryBtnDisabled: { backgroundColor: '#B0B0B0' },
-  primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-
-  secondaryBtn: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 13,
-    borderRadius: 99,
-    borderWidth: 1.5,
-    borderColor: theme.colors.primary,
   },
-  secondaryBtnText: { color: theme.colors.primary, fontWeight: '700', fontSize: 15 },
+  submitBtnBusy: { opacity: 0.7 },
+  submitText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
+
+  // Loading
+  skHead: { gap: 8, paddingTop: 16, paddingBottom: 12 },
 });
 
-
 // Themed stylesheets — rebuilt on light/dark toggle.
-let styles = __mk_styles();
-onThemeChange(() => { styles = __mk_styles(); });
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });
