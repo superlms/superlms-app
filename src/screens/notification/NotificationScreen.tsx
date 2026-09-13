@@ -15,7 +15,6 @@ import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { theme, onThemeChange } from '../../utils/theme';
 import {
-  CATEGORY_CONFIG,
   NotifCategory,
   useNotifications,
   type NotificationItem,
@@ -43,9 +42,9 @@ const READ_FILTERS: { key: ReadFilter; label: string }[] = [
   { key: 'read', label: 'Read' },
 ];
 
-// The filled glyph reads better than the outline inside the small circle.
-const iconFor = (item: NotificationItem) =>
-  (CATEGORY_CONFIG[item.category] ?? CATEGORY_CONFIG.General).icon.replace(/-outline$/, '');
+// Every notification shows the bell, whatever its kind; the kind is named under
+// the title. The filled glyph reads better than the outline in the small circle.
+const NOTIFICATION_ICON = 'notifications';
 
 const NotificationScreen = ({ navigation }: any) => {
   const { items, ready, unreadCount, markRead, markAllRead, removeMany } = useNotifications();
@@ -253,7 +252,7 @@ const NotificationScreen = ({ navigation }: any) => {
             renderSectionHeader={({ section }) => <DayHeading title={section.title} />}
             renderItem={({ item, index, section }) => (
               <InboxRow
-                icon={iconFor(item)}
+                icon={NOTIFICATION_ICON}
                 title={item.title}
                 body={item.body}
                 kind={item.category}
