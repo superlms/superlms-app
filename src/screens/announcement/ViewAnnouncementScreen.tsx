@@ -11,15 +11,18 @@ import {
 } from 'react-native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
+import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
-import type { Announcement } from './announcementData';
+import { mapApiItem, type Announcement } from './announcementData';
 import { markAnnouncementRead } from './announcementReads';
 import apiClient from '../../api/apiClient';
 import constant from '../../utils/constant';
 import { DocHeader, DocSection, DocBody, docStyles } from '../more/docUi';
 import { INK, QUIET } from '../notification/inboxUi';
+
+const TITLE = 'View Announcement';
 
 // Files come from the same host as the API but outside the /api/v1 prefix
 const FILE_ORIGIN = constant.API_BASE_URL.replace(/\/api\/v\d+\/?$/, '');
@@ -50,9 +53,64 @@ const AttachmentChip = ({
   </TouchableOpacity>
 );
 
+// ── Loading ──────────────────────────────────────────────────────────────────
+// The page line for line: the date, the title, the Description heading and its
+// text, the rule, then Posted By with its avatar row — each box at the height of
+// the text it stands in for, so nothing moves when the announcement arrives.
+const BODY_W = ['100%', '94%', '97%', '58%'];
+
+const DetailSkeleton = () => (
+  <View style={docStyles.scroll}>
+    <View>
+      <View style={[s.skLine, s.skDate]}>
+        <Skeleton width={132} height={10} />
+      </View>
+      <View style={[s.skLine, s.skTitle]}>
+        <Skeleton width="72%" height={18} />
+      </View>
+    </View>
+
+    <View>
+      <View style={[s.skLine, s.skSection]}>
+        <Skeleton width={100} height={14} />
+      </View>
+      {BODY_W.map((w, i) => (
+        <View key={i} style={[s.skLine, s.skBody]}>
+          <Skeleton width={w} height={12} />
+        </View>
+      ))}
+    </View>
+
+    <View style={s.divider} />
+
+    <View>
+      <View style={[s.skLine, s.skSection]}>
+        <Skeleton width={84} height={14} />
+      </View>
+      <View style={s.creatorRow}>
+        <Skeleton width={40} height={40} radius={20} />
+        <View style={s.creatorInfo}>
+          <View style={[s.skLine, s.skName]}>
+            <Skeleton width={56} height={12} />
+          </View>
+          <View style={[s.skLine, s.skEmail]}>
+            <Skeleton width={150} height={10} />
+          </View>
+        </View>
+      </View>
+    </View>
+  </View>
+);
+
 const ViewAnnouncementScreen = ({ navigation, route }: any) => {
-  const initialItem: Announcement = route.params?.item;
-  const [item, setItem] = useState<Announcement>(initialItem);
+  // From the list the announcement arrives whole and shows at once. Opened by
+  // id alone (a notification, a link) it is fetched, with the skeleton meanwhile.
+  const passed: Announcement | undefined = route.params?.item;
+  const rawId = passed?.id ?? route.params?.id ?? route.params?.announcement_id;
+  const id: string | undefined = rawId != null ? String(rawId) : undefined;
+
+  const [item, setItem] = useState<Announcement | undefined>(passed?.title ? passed : undefined);
+  const [loading, setLoading] = useState(!passed?.title && !!id);
 
   const dateLabel = item?.date
     ? moment(item.date).format('DD MMM YYYY, hh:mm A')
@@ -62,45 +120,48 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
   const pdfUrl = resolveFileUrl(item?.pdfUrl);
   const creatorAvatar = resolveFileUrl(item?.creatorAvatar);
 
-  // Fetch full announcement details by ID. The item passed from the list is
-  // shown straight away; this just refreshes it in place.
+  // Fetch the full announcement by id; whatever was passed in is kept for any
+  // field the server leaves out.
   const fetchAnnouncementDetails = async () => {
-    if (!item?.id) return;
+    if (!id) return;
 
     try {
-      const response = await apiClient.get(`/announcement/${item.id}`);
-      const announcementData = response.data?.data || response.data;
+      const response = await apiClient.get(`/announcement/${id}`);
+      const d = response.data?.data || response.data;
 
-      if (announcementData && announcementData.id) {
-        setItem(prev => ({
-          ...prev,
-          title: announcementData.announcement_name || prev.title,
-          content: announcementData.announcement_content || prev.content,
-          date: announcementData.created_at || prev.date,
-          imageUrl: announcementData.announcement_image || prev.imageUrl,
-          pdfUrl: announcementData.announcement_pdf || prev.pdfUrl,
-          hasImage: !!(announcementData.announcement_image || prev.imageUrl),
-          hasPdf: !!(announcementData.announcement_pdf || prev.pdfUrl),
-          creatorName: announcementData.creator_name || prev.creatorName,
-          creatorEmail: announcementData.creator_email || prev.creatorEmail,
-          creatorAvatar: announcementData.creator_avatar || prev.creatorAvatar,
-        }));
+      if (d && d.id) {
+        setItem(prev =>
+          prev
+            ? {
+                ...prev,
+                title: d.announcement_name || prev.title,
+                content: d.announcement_content || prev.content,
+                date: d.created_at || prev.date,
+                imageUrl: d.announcement_image || prev.imageUrl,
+                pdfUrl: d.announcement_pdf || prev.pdfUrl,
+                hasImage: !!(d.announcement_image || prev.imageUrl),
+                hasPdf: !!(d.announcement_pdf || prev.pdfUrl),
+                creatorName: d.creator_name || prev.creatorName,
+                creatorEmail: d.creator_email || prev.creatorEmail,
+                creatorAvatar: d.creator_avatar || prev.creatorAvatar,
+              }
+            : mapApiItem(d),
+        );
       }
     } catch (err: any) {
-      // Silently fall back to the item passed via navigation
-      console.log(
-        '[ViewAnnouncement] Fetch failed, using passed item:',
-        err?.response?.status ?? err?.message,
-      );
+      // Fall back to the item passed via navigation, if any
+      console.log('[ViewAnnouncement] Fetch failed:', err?.response?.status ?? err?.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     // Opening it is reading it: the green dot in the list goes.
-    if (initialItem?.id) markAnnouncementRead(initialItem.id);
+    if (id) markAnnouncementRead(id);
     fetchAnnouncementDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialItem?.id]);
+  }, [id]);
 
   const { refreshing, onRefresh } = useRefresh(fetchAnnouncementDetails);
 
@@ -113,10 +174,19 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
     }
   };
 
+  if (loading) {
+    return (
+      <View style={docStyles.root}>
+        <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+        <DetailSkeleton />
+      </View>
+    );
+  }
+
   if (!item) {
     return (
       <View style={docStyles.root}>
-        <DocHeader title="View Announcement" onBackPress={() => navigation.goBack()} />
+        <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
         <View style={s.centeredBox}>
           <Text style={s.mutedText}>Announcement not found</Text>
         </View>
@@ -126,7 +196,7 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
 
   return (
     <View style={docStyles.root}>
-      <DocHeader title="View Announcement" onBackPress={() => navigation.goBack()} />
+      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -222,6 +292,16 @@ const __mk_s = () => StyleSheet.create({
   creatorInfo: { flex: 1 },
   creatorName: { fontSize: 15, fontWeight: '500', color: INK },
   creatorEmail: { fontSize: 13, color: QUIET, marginTop: 2 },
+
+  // Skeleton boxes, at the heights of the real lines: date 12px, title 20/27,
+  // section heading 17px, body 15/24, name 15px, email 13px.
+  skLine: { justifyContent: 'center' },
+  skDate: { height: 16, marginBottom: 6 },
+  skTitle: { height: 27 },
+  skSection: { height: 23, marginBottom: 8 },
+  skBody: { height: 24 },
+  skName: { height: 20 },
+  skEmail: { height: 18, marginTop: 2 },
 });
 
 
