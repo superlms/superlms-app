@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
+import { Skeleton } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
 
 /**
@@ -56,6 +57,41 @@ export const MenuRow = ({
   );
 };
 
+// ── One row's skeleton ───────────────────────────────────────────────────────
+// The icon, the title and description lines at their real heights, and the
+// right-hand control: a switch's track or a chevron.
+const TITLE_W = ['46%', '58%', '52%', '40%'];
+const DESC_W = ['66%', '72%', '60%', '70%'];
+
+export const MenuRowSkeleton = ({
+  index,
+  trailing = 'chevron',
+  isLast,
+}: {
+  index: number;
+  trailing?: 'switch' | 'chevron';
+  isLast?: boolean;
+}) => (
+  <View style={[s.row, !isLast && s.rowDivider]}>
+    <View style={s.iconCol}>
+      <Skeleton width={22} height={22} radius={6} />
+    </View>
+    <View style={s.body}>
+      <View style={s.skTitle}>
+        <Skeleton width={TITLE_W[index % TITLE_W.length]} height={12} />
+      </View>
+      <View style={s.skDesc}>
+        <Skeleton width={DESC_W[index % DESC_W.length]} height={10} />
+      </View>
+    </View>
+    {trailing === 'switch' ? (
+      <Skeleton width={40} height={22} radius={11} />
+    ) : (
+      <Skeleton width={10} height={14} radius={3} />
+    )}
+  </View>
+);
+
 const __mk_s = () => StyleSheet.create({
   // The page's list: the same margins as the Exams list.
   list: { paddingHorizontal: 20, paddingTop: 2, paddingBottom: 40 },
@@ -67,6 +103,10 @@ const __mk_s = () => StyleSheet.create({
   body: { flex: 1, gap: 3 },
   title: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   description: { fontSize: 13, lineHeight: 18, color: theme.colors.textSecondary },
+
+  // Skeleton lines, at the heights of the title (15px) and description (13/18)
+  skTitle: { height: 20, justifyContent: 'center' },
+  skDesc: { height: 18, justifyContent: 'center' },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

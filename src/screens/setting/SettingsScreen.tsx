@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -13,18 +13,22 @@ import { useRefresh } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import { Biometrics } from '../../utils/biometrics';
 import { DocHeader } from '../more/docUi';
-import { MenuRow, menuStyles } from '../more/menuUi';
+import { MenuRow, MenuRowSkeleton, menuStyles } from '../more/menuUi';
 
 const NOTIFICATIONS_KEY = 'notifications_enabled';
 
+// The rows in page order, for the skeleton: two switches, then a sub-screen.
+const SKELETON_ROWS: ('switch' | 'chevron')[] = ['switch', 'switch', 'chevron'];
+
 /**
  * Settings — a plain list like Exams and the More hub: each entry an icon, its
- * name and a line on what it does, with a Switch (toggles) or a chevron
- * (sub-screens) on the right.
+ * name and a few words on what it does (kept to one line), with a Switch
+ * (toggles) or a chevron (sub-screens) on the right.
  */
 
 const SettingsScreen = () => {
   const navigation = useNavigation<any>();
+  const [loading, setLoading] = useState(true);
 
   // ── Biometric unlock ────────────────────────────────────────────────────────
   const [bioEnabled, setBioEnabled] = useState(false);
@@ -34,8 +38,11 @@ const SettingsScreen = () => {
   // ── Notifications (local toggle for now, persisted in AsyncStorage) ─────────
   const [notifEnabled, setNotifEnabled] = useState(true);
 
-  useEffect(() => {
-    (async () => {
+  // Read the current settings off the device; the skeleton shows meanwhile, on
+  // opening and while pulling to refresh.
+  const loadSettings = useCallback(async () => {
+    setLoading(true);
+    try {
       const [bio, sensor, notif] = await Promise.all([
         Biometrics.isEnabled(),
         Biometrics.check(),
@@ -45,10 +52,18 @@ const SettingsScreen = () => {
       setBioAvailable(sensor.available);
       // Default ON when the user has never toggled it.
       setNotifEnabled(notif === null ? true : notif === '1');
-    })();
+    } catch (e: any) {
+      console.log('[Settings] Could not read settings:', e?.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const { refreshing, onRefresh } = useRefresh(() => {});
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
+  const { refreshing, onRefresh } = useRefresh(loadSettings);
 
   const onBioToggle = async (next: boolean) => {
     if (bioBusy) return;
@@ -96,46 +111,56 @@ const SettingsScreen = () => {
   return (
     <View style={s.root}>
       <DocHeader title="Settings" onBackPress={() => navigation.goBack()} />
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={menuStyles.list}
-        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        <MenuRow
-          icon="notifications-outline"
-          title="Notifications"
-          description="Homework, exam and fee alerts"
-          trailing={
-            <Switch value={notifEnabled} onValueChange={onNotifToggle} {...switchColors} />
-          }
-        />
 
-        <MenuRow
-          icon="finger-print-outline"
-          title="Biometric Unlock"
-          description={
-            bioAvailable
-              ? 'Unlock with fingerprint or face'
-              : 'Not set up on this device'
-          }
-          trailing={
-            <Switch
-              value={bioEnabled}
-              onValueChange={onBioToggle}
-              disabled={bioBusy || (!bioAvailable && !bioEnabled)}
-              {...switchColors}
+      {loading ? (
+        <View style={menuStyles.list}>
+          {SKELETON_ROWS.map((trailing, i) => (
+            <MenuRowSkeleton
+              key={i}
+              index={i}
+              trailing={trailing}
+              isLast={i === SKELETON_ROWS.length - 1}
             />
-          }
-        />
+          ))}
+        </View>
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={menuStyles.list}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          <MenuRow
+            icon="notifications-outline"
+            title="Notifications"
+            description="Homework & exam alerts"
+            trailing={
+              <Switch value={notifEnabled} onValueChange={onNotifToggle} {...switchColors} />
+            }
+          />
 
-        <MenuRow
-          icon="lock-closed-outline"
-          title="Change Password"
-          description="Update your sign-in password"
-          onPress={() => navigation.navigate('ChangePassword')}
-          isLast
-        />
-      </ScrollView>
+          <MenuRow
+            icon="finger-print-outline"
+            title="Biometric Unlock"
+            description={bioAvailable ? 'Fingerprint or face' : 'Not set up on this phone'}
+            trailing={
+              <Switch
+                value={bioEnabled}
+                onValueChange={onBioToggle}
+                disabled={bioBusy || (!bioAvailable && !bioEnabled)}
+                {...switchColors}
+              />
+            }
+          />
+
+          <MenuRow
+            icon="lock-closed-outline"
+            title="Change Password"
+            description="Update your password"
+            onPress={() => navigation.navigate('ChangePassword')}
+            isLast
+          />
+        </ScrollView>
+      )}
     </View>
   );
 };
