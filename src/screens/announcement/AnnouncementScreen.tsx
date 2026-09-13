@@ -1,13 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Skeleton } from '../../components/Skeleton';
+import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
@@ -15,8 +9,17 @@ import { theme, onThemeChange } from '../../utils/theme';
 import apiClient from '../../api/apiClient';
 import { FILTERS, mapApiItem } from './announcementData';
 import type { Announcement, FilterKey } from './announcementData';
-import AnnouncementRow from './AnnouncementRow';
 import { DocHeader, DocNoData } from '../more/docUi';
+import {
+  BODY,
+  DayHeading,
+  FilterPills,
+  InboxRow,
+  InboxSkeleton,
+  groupByDay,
+  inboxStyles as ui,
+  timeLabel,
+} from '../notification/inboxUi';
 
 // ── Role → allowed tags ───────────────────────────────────────────────────────
 const ROLE_TAGS: Record<string, Array<Announcement['tag']>> = {
@@ -24,6 +27,12 @@ const ROLE_TAGS: Record<string, Array<Announcement['tag']>> = {
   teacher: ['All', 'Teacher'],
   admin: ['All', 'Teacher', 'Student', 'Admin'],
 };
+
+// When it was posted, as epoch ms (0 when the server sent no date).
+const postedAt = (a: Announcement) => (a.date ? moment(a.date).valueOf() : 0);
+
+const inWindow = (a: Announcement, days: number) =>
+  days === 0 ? a.daysAgo === 0 : a.daysAgo <= days;
 
 const AnnouncementScreen = ({ navigation }: any) => {
   const [role, setRole] = useState<string>('student');
@@ -37,10 +46,13 @@ const AnnouncementScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterKey>('15 Days');
+  const loadedOnce = useRef(false);
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
+  // The skeleton shows only until the first load; pulling to refresh or coming
+  // back from an announcement updates the list in place.
   const fetchAnnouncements = useCallback(async () => {
-    setLoading(true);
+    if (!loadedOnce.current) setLoading(true);
     setError(null);
 
     try {
@@ -50,6 +62,7 @@ const AnnouncementScreen = ({ navigation }: any) => {
 
       const items = data?.data ?? data?.announcements ?? [];
       setAnnouncements(items.map(mapApiItem));
+      loadedOnce.current = true;
     } catch (err: any) {
       console.error('[Announcement] ❌', err?.response?.data);
       const msg = err?.response?.data?.message ?? err?.message ?? 'Something went wrong';
@@ -63,98 +76,81 @@ const AnnouncementScreen = ({ navigation }: any) => {
 
   useFocusLoad(fetchAnnouncements);
 
-  // ── Filter by date window + role ────────────────────────────────────────────
+  // ── Role, then date window ──────────────────────────────────────────────────
   const allowedTags = ROLE_TAGS[role.toLowerCase()] ?? ROLE_TAGS.student;
 
-  const filtered = useMemo(() => {
-    const window = FILTERS.find(x => x.label === activeFilter)!;
-    return announcements.filter(d => {
-      const withinDays = window.days === 0 ? d.daysAgo === 0 : d.daysAgo <= window.days;
-      const roleMatch = allowedTags.includes(d.tag);
-      return withinDays && roleMatch;
-    });
-  }, [activeFilter, announcements, allowedTags]);
+  const forRole = useMemo(
+    () => announcements.filter(a => allowedTags.includes(a.tag)),
+    [announcements, allowedTags],
+  );
 
-  const handleRowPress = (item: Announcement) => {
-    navigation.navigate('ViewAnnouncement', { item });
-  };
+  const pillOptions = FILTERS.map(f => ({
+    key: f.label,
+    label: f.label,
+    count: forRole.filter(a => inWindow(a, f.days)).length,
+  }));
+
+  const sections = useMemo(() => {
+    const window = FILTERS.find(x => x.label === activeFilter)!;
+    return groupByDay(forRole.filter(a => inWindow(a, window.days)), postedAt);
+  }, [activeFilter, forRole]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <View style={s.root}>
       <DocHeader title="Announcement" onBackPress={() => navigation.goBack()} />
 
-      {/* Date window — a segmented control pinned under the header */}
-      <View style={s.filterBar}>
-        <View style={s.segment}>
-          {FILTERS.map(f => {
-            const active = activeFilter === f.label;
-            return (
-              <TouchableOpacity
-                key={f.label}
-                activeOpacity={0.7}
-                onPress={() => setActiveFilter(f.label)}
-                style={[s.segmentItem, active && s.segmentItemActive]}
-              >
-                <Text style={[s.segmentText, active && s.segmentTextActive]}>
-                  {f.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-      <View style={s.fullDivider} />
-
-      {/* Body */}
       {loading ? (
-        <View style={s.list}>
-          {[0, 1, 2, 3, 4].map(i => (
-            <View key={i} style={[s.skeletonRow, i < 4 && s.rowDivider]}>
-              <Skeleton width={18} height={18} radius={9} />
-              <View style={s.skeletonBody}>
-                <View style={s.skeletonLine}>
-                  <Skeleton width="55%" height={14} />
-                  <Skeleton width={44} height={10} />
-                </View>
-                <Skeleton width="80%" height={12} />
-              </View>
-            </View>
-          ))}
-        </View>
+        <InboxSkeleton pills={FILTERS.length} />
       ) : error ? (
         <View style={s.centeredBox}>
           <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
           <Text style={s.errorText}>{error}</Text>
           <TouchableOpacity onPress={fetchAnnouncements} hitSlop={10}>
-            <Text style={s.linkText}>Try again</Text>
+            <Text style={ui.linkText}>Try again</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={s.list}
-          refreshControl={
-            <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        >
-          {filtered.length === 0 ? (
-            <DocNoData
-              icon="megaphone-outline"
-              title="No announcements"
-              subtitle="Nothing posted in this period."
-            />
-          ) : (
-            filtered.map((item, i) => (
-              <AnnouncementRow
-                key={item.id}
-                item={item}
-                isLast={i === filtered.length - 1}
-                onPress={handleRowPress}
+        <>
+          {/* Date window, each with how many it holds */}
+          <View style={ui.metaBar}>
+            <FilterPills options={pillOptions} active={activeFilter} onChange={setActiveFilter} />
+          </View>
+          <View style={ui.fullDivider} />
+
+          <SectionList
+            sections={sections}
+            keyExtractor={a => a.id}
+            stickySectionHeadersEnabled={false}
+            contentContainerStyle={ui.list}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            ListEmptyComponent={
+              <DocNoData
+                icon="megaphone-outline"
+                title="No announcements"
+                subtitle="Nothing posted in this period."
               />
-            ))
-          )}
-        </ScrollView>
+            }
+            renderSectionHeader={({ section }) => <DayHeading title={section.title} />}
+            renderItem={({ item, index, section }) => {
+              const at = postedAt(item);
+              return (
+                <InboxRow
+                  icon="megaphone"
+                  title={item.title}
+                  body={item.content}
+                  kind={item.tag === 'All' ? 'Everyone' : item.tag}
+                  time={at ? timeLabel(at) : undefined}
+                  highlight={item.isNew}
+                  attachment={item.hasImage || item.hasPdf}
+                  isLast={index === section.data.length - 1}
+                  onPress={() => navigation.navigate('ViewAnnouncement', { item })}
+                />
+              );
+            }}
+          />
+        </>
       )}
     </View>
   );
@@ -165,49 +161,9 @@ export default AnnouncementScreen;
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
 
-  // Filter bar
-  filterBar: { paddingHorizontal: 20, paddingVertical: 12 },
-  segment: {
-    flexDirection: 'row',
-    padding: 3,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.background,
-  },
-  segmentItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 7,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  segmentItemActive: {
-    backgroundColor: theme.colors.card,
-    borderColor: theme.colors.border,
-  },
-  segmentText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
-  segmentTextActive: { color: theme.colors.primary, fontWeight: '600' },
-  fullDivider: { height: 1, backgroundColor: theme.colors.border },
-
-  // List
-  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
-  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  skeletonRow: { flexDirection: 'row', gap: 12, paddingVertical: 14 },
-  skeletonBody: { flex: 1, gap: 8 },
-  skeletonLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
-  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
-  linkText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
+  errorText: { fontSize: 14, color: BODY, textAlign: 'center', lineHeight: 20 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

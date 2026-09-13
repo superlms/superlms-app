@@ -1,4 +1,5 @@
 // announcementData.ts
+import moment from 'moment';
 
 export type Announcement = {
   id: string;
@@ -34,11 +35,13 @@ export const TAG_META = {
 };
 
 export const mapApiItem = (apiItem: any): Announcement => {
-  // Calculate days ago
-  const createdDate = new Date(apiItem.created_at);
-  const today = new Date();
-  const diffTime = Math.abs(today.getTime() - createdDate.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  // Whole calendar days since it was posted: 0 = today, 1 = yesterday. (Rounding
+  // the raw gap up counted anything posted today as a day old, so the "Today"
+  // window never showed it.)
+  const diffDays = Math.max(
+    0,
+    moment().startOf('day').diff(moment(apiItem.created_at).startOf('day'), 'days'),
+  );
   
   // Map the type from API to tag
   let tag: Announcement['tag'] = 'All';

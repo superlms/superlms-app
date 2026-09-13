@@ -18,6 +18,7 @@ import type { Announcement } from './announcementData';
 import apiClient from '../../api/apiClient';
 import constant from '../../utils/constant';
 import { DocHeader, DocSection, DocBody, docStyles } from '../more/docUi';
+import { INK, QUIET } from '../notification/inboxUi';
 
 // Files come from the same host as the API but outside the /api/v1 prefix
 const FILE_ORIGIN = constant.API_BASE_URL.replace(/\/api\/v\d+\/?$/, '');
@@ -136,7 +137,7 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
         <View>
           <View style={s.metaRow}>
             <Text style={s.metaText}>
-              {item.tag} · {timeLabel}
+              {item.tag === 'All' ? 'Everyone' : item.tag} · {timeLabel}
             </Text>
             {item.isNew && (
               <View style={s.newPill}>
@@ -201,7 +202,7 @@ const __mk_s = () => StyleSheet.create({
 
   // Meta + title
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  metaText: { fontSize: 13, color: theme.colors.textMuted },
+  metaText: { fontSize: 13, color: QUIET },
   newPill: {
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -209,8 +210,8 @@ const __mk_s = () => StyleSheet.create({
     backgroundColor: theme.colors.primaryLight,
   },
   newPillText: { fontSize: 11, fontWeight: '600', color: theme.colors.primary },
-  title: { fontSize: 20, fontWeight: '700', color: theme.colors.textPrimary, lineHeight: 27 },
-  dateText: { fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
+  title: { fontSize: 20, fontWeight: '700', color: INK, lineHeight: 27 },
+  dateText: { fontSize: 12, color: QUIET, marginTop: 4 },
 
   // Attachment chips
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
@@ -237,8 +238,8 @@ const __mk_s = () => StyleSheet.create({
   creatorAvatarFallback: { alignItems: 'center', justifyContent: 'center' },
   creatorInitial: { fontSize: 15, fontWeight: '600', color: theme.colors.textSecondary },
   creatorInfo: { flex: 1 },
-  creatorName: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  creatorEmail: { fontSize: 13, color: theme.colors.textMuted, marginTop: 2 },
+  creatorName: { fontSize: 15, fontWeight: '500', color: INK },
+  creatorEmail: { fontSize: 13, color: QUIET, marginTop: 2 },
 });
 
 

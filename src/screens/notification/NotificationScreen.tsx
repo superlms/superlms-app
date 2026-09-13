@@ -10,7 +10,6 @@ import {
   View,
 } from 'react-native';
 import { usePreventRemove } from '@react-navigation/native';
-import moment from 'moment';
 import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
@@ -24,6 +23,17 @@ import {
 } from '../../notifications';
 import { navigateToScreen } from '../../navigation/navigationRef';
 import { DocNoData } from '../more/docUi';
+import {
+  BODY,
+  INK,
+  DayHeading,
+  FilterPills,
+  InboxRow,
+  InboxSkeleton,
+  groupByDay,
+  inboxStyles as ui,
+  timeLabel,
+} from './inboxUi';
 
 const TITLE = 'Notifications';
 
@@ -34,129 +44,12 @@ const READ_FILTERS: { key: ReadFilter; label: string }[] = [
   { key: 'read', label: 'Read' },
 ];
 
-// A step darker than the theme's text colours, so the inbox reads crisply.
-const INK = '#0F172A';   // titles
-const BODY = '#475569';  // previews, tabs, day headings
-const QUIET = '#64748B'; // times, counts, categories
-
-// "3 mins ago" / "2 hrs ago" from an epoch-ms timestamp.
-const relativeTime = (ts: number): string => {
-  const diff = Date.now() - ts;
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return 'Just now';
-  if (min < 60) return `${min} min${min > 1 ? 's' : ''} ago`;
-  const hr = Math.floor(min / 60);
-  return `${hr} hr${hr > 1 ? 's' : ''} ago`;
-};
-
-// Today's notifications say how long ago; older ones, the time of day — the day
-// itself is in the heading above them.
-const timeLabel = (ts: number) =>
-  moment(ts).isSame(moment(), 'day') ? relativeTime(ts) : moment(ts).format('h:mm A');
-
-const dayHeading = (ts: number) => {
-  const d = moment(ts);
-  if (d.isSame(moment(), 'day')) return 'Today';
-  if (d.isSame(moment().subtract(1, 'day'), 'day')) return 'Yesterday';
-  return d.isSame(moment(), 'year') ? d.format('ddd, D MMM') : d.format('D MMM YYYY');
-};
-
-interface DaySection {
-  title: string;
-  data: NotificationItem[];
-}
-
-// Newest first, gathered under a heading per day.
-const byDay = (items: NotificationItem[]): DaySection[] => {
-  const sections: DaySection[] = [];
-  [...items]
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .forEach(item => {
-      const title = dayHeading(item.createdAt);
-      const last = sections[sections.length - 1];
-      if (last && last.title === title) last.data.push(item);
-      else sections.push({ title, data: [item] });
-    });
-  return sections;
-};
-
-// ── One notification ─────────────────────────────────────────────────────────
-// A round icon centred on the row (tinted while unread), then the title, the
-// description running all the way to the right edge, and the kind with its
-// time on the last line. While picking rows, the icon's slot holds a small
-// tick instead, so the text never shifts.
-//   (🎓)  Exam Schedule Released
-//         The mid-term timetable has been published for all the classes.
-//         Exam · 2 hrs ago
-const NotificationRow = ({
-  item,
-  isLast,
-  selectionMode,
-  selected,
-  onPress,
-  onLongPress,
-}: {
-  item: NotificationItem;
-  isLast: boolean;
-  selectionMode: boolean;
-  selected: boolean;
-  onPress: () => void;
-  onLongPress: () => void;
-}) => {
-  const cfg = CATEGORY_CONFIG[item.category] ?? CATEGORY_CONFIG.General;
-  const unread = !item.read;
-  // The filled glyph reads better than the outline inside the small circle.
-  const icon = cfg.icon.replace(/-outline$/, '');
-
-  return (
-    <TouchableOpacity
-      style={[s.row, !isLast && s.rowDivider, selected && s.rowSelected]}
-      activeOpacity={0.6}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      delayLongPress={300}
-    >
-      <View style={s.leadSlot}>
-        {selectionMode ? (
-          <View style={[s.check, selected ? s.checkOn : s.checkOff]}>
-            {selected && (
-              <VectorIcon iconSet="Ionicons" iconName="checkmark" size={13} color={theme.colors.white} />
-            )}
-          </View>
-        ) : (
-          <View style={[s.lead, unread ? s.leadUnread : s.leadRead]}>
-            <VectorIcon
-              iconSet="Ionicons"
-              iconName={icon}
-              size={17}
-              color={unread ? theme.colors.primary : BODY}
-            />
-          </View>
-        )}
-      </View>
-
-      <View style={s.body}>
-        <Text style={[s.title, unread && s.titleUnread]} numberOfLines={1}>
-          {item.title}
-        </Text>
-
-        {!!item.body && (
-          <Text style={s.preview} numberOfLines={1}>
-            {item.body}
-          </Text>
-        )}
-
-        <Text style={s.meta} numberOfLines={1}>
-          {item.category} ·{' '}
-          <Text style={unread ? s.timeUnread : undefined}>{timeLabel(item.createdAt)}</Text>
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-};
+// The filled glyph reads better than the outline inside the small circle.
+const iconFor = (item: NotificationItem) =>
+  (CATEGORY_CONFIG[item.category] ?? CATEGORY_CONFIG.General).icon.replace(/-outline$/, '');
 
 const NotificationScreen = ({ navigation }: any) => {
-  const { items, unreadCount, markRead, markAllRead, removeMany } = useNotifications();
+  const { items, ready, unreadCount, markRead, markAllRead, removeMany } = useNotifications();
   const [activeFilter, setActiveFilter] = useState<NotifCategory | 'All'>('All');
   const [readFilter, setReadFilter] = useState<ReadFilter>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -185,7 +78,7 @@ const NotificationScreen = ({ navigation }: any) => {
         : inCategory.filter(i => (readFilter === 'unread' ? !i.read : i.read)),
     [inCategory, readFilter],
   );
-  const sections = useMemo(() => byDay(filtered), [filtered]);
+  const sections = useMemo(() => groupByDay(filtered, i => i.createdAt), [filtered]);
 
   // Pull-to-refresh has nothing to fetch yet (local store); kept for parity and
   // so push-synced inboxes (Phase 2) can hook a real loader here.
@@ -251,124 +144,118 @@ const NotificationScreen = ({ navigation }: any) => {
         }
       />
 
-      {/* While picking, a tap on any empty part of the screen lets go of the
-          selection; rows and links keep their own taps. */}
-      <Pressable
-        style={s.fill}
-        accessible={false}
-        disabled={!selectionMode}
-        onPress={clearSelection}
-      >
-        {/* What is waiting, and what can be done with the lot */}
-        <View style={s.metaBar}>
-          {selectionMode ? (
-            <Text style={s.metaBarText}>
-              {selectedIds.length} of {filtered.length} selected
-            </Text>
-          ) : (
-            // All / Unread / Read, each with its total
-            <View style={s.readFilters}>
-              {READ_FILTERS.map(f => {
-                const active = readFilter === f.key;
+      {!ready ? (
+        // The saved inbox is still being read off the device
+        <InboxSkeleton pills={READ_FILTERS.length} trailing />
+      ) : (
+        /* While picking, a tap on any empty part of the screen lets go of the
+           selection; rows and links keep their own taps. */
+        <Pressable
+          style={s.fill}
+          accessible={false}
+          disabled={!selectionMode}
+          onPress={clearSelection}
+        >
+          {/* All / Unread / Read with their totals, and what applies to the lot */}
+          <View style={ui.metaBar}>
+            {selectionMode ? (
+              <Text style={ui.metaBarText}>
+                {selectedIds.length} of {filtered.length} selected
+              </Text>
+            ) : (
+              <FilterPills
+                options={READ_FILTERS.map(f => ({ ...f, count: readCounts[f.key] }))}
+                active={readFilter}
+                onChange={chooseReadFilter}
+              />
+            )}
+
+            {selectionMode ? (
+              <TouchableOpacity onPress={toggleSelectAll} activeOpacity={0.6} hitSlop={8}>
+                <Text style={ui.linkText}>{allSelected ? 'Clear all' : 'Select all'}</Text>
+              </TouchableOpacity>
+            ) : unreadCount > 0 ? (
+              <TouchableOpacity onPress={markAllRead} activeOpacity={0.6} hitSlop={8}>
+                <Text style={ui.linkText}>Mark all read</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={ui.metaBarText}>All caught up</Text>
+            )}
+          </View>
+
+          {/* Category tabs, only once there is more than one kind to choose from */}
+          {categories.length > 2 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              // A horizontal ScrollView grows to fill a column by default.
+              style={s.tabsBar}
+              contentContainerStyle={s.tabs}
+            >
+              {categories.map(f => {
+                const active = activeFilter === f;
                 return (
                   <TouchableOpacity
-                    key={f.key}
-                    activeOpacity={0.7}
-                    onPress={() => chooseReadFilter(f.key)}
-                    style={[s.readPill, active && s.readPillActive]}
+                    key={f}
+                    activeOpacity={0.6}
+                    onPress={() => chooseFilter(f)}
+                    style={[s.tab, active && s.tabActive]}
                   >
-                    <Text style={[s.readPillText, active && s.readPillTextActive]}>
-                      {f.label}{' '}
-                      <Text style={[s.readPillCount, active && s.readPillTextActive]}>
-                        {readCounts[f.key]}
-                      </Text>
-                    </Text>
+                    <Text style={[s.tabText, active && s.tabTextActive]}>{f}</Text>
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
           )}
+          <View style={ui.fullDivider} />
 
-          {selectionMode ? (
-            <TouchableOpacity onPress={toggleSelectAll} activeOpacity={0.6} hitSlop={8}>
-              <Text style={s.linkText}>{allSelected ? 'Clear all' : 'Select all'}</Text>
-            </TouchableOpacity>
-          ) : unreadCount > 0 ? (
-            <TouchableOpacity onPress={markAllRead} activeOpacity={0.6} hitSlop={8}>
-              <Text style={s.linkText}>Mark all read</Text>
-            </TouchableOpacity>
-          ) : (
-            <Text style={s.metaBarText}>All caught up</Text>
-          )}
-        </View>
-
-        {/* Category tabs, only once there is more than one kind to choose from */}
-        {categories.length > 2 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            // A horizontal ScrollView grows to fill a column by default.
-            style={s.tabsBar}
-            contentContainerStyle={s.tabs}
-          >
-            {categories.map(f => {
-              const active = activeFilter === f;
-              return (
-                <TouchableOpacity
-                  key={f}
-                  activeOpacity={0.6}
-                  onPress={() => chooseFilter(f)}
-                  style={[s.tab, active && s.tabActive]}
-                >
-                  <Text style={[s.tabText, active && s.tabTextActive]}>{f}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        )}
-        <View style={s.fullDivider} />
-
-        <SectionList
-          sections={sections}
-          keyExtractor={i => i.id}
-          stickySectionHeadersEnabled={false}
-          contentContainerStyle={s.list}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          ListEmptyComponent={
-            readFilter === 'unread' && readCounts.all > 0 ? (
-              <DocNoData
-                icon="checkmark-done-outline"
-                title="All caught up"
-                subtitle="You have read every notification here."
+          <SectionList
+            sections={sections}
+            keyExtractor={i => i.id}
+            stickySectionHeadersEnabled={false}
+            contentContainerStyle={ui.list}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            ListEmptyComponent={
+              readFilter === 'unread' && readCounts.all > 0 ? (
+                <DocNoData
+                  icon="checkmark-done-outline"
+                  title="All caught up"
+                  subtitle="You have read every notification here."
+                />
+              ) : readFilter === 'read' && readCounts.all > 0 ? (
+                <DocNoData
+                  icon="mail-unread-outline"
+                  title="Nothing read yet"
+                  subtitle="Notifications you open will appear here."
+                />
+              ) : (
+                <DocNoData
+                  icon="notifications-off-outline"
+                  title="No notifications"
+                  subtitle="Anything the school sends you will appear here."
+                />
+              )
+            }
+            renderSectionHeader={({ section }) => <DayHeading title={section.title} />}
+            renderItem={({ item, index, section }) => (
+              <InboxRow
+                icon={iconFor(item)}
+                title={item.title}
+                body={item.body}
+                kind={item.category}
+                time={timeLabel(item.createdAt)}
+                highlight={!item.read}
+                isLast={index === section.data.length - 1}
+                selectionMode={selectionMode}
+                selected={selectedIds.includes(item.id)}
+                onPress={() => (selectionMode ? toggleSelect(item.id) : open(item))}
+                onLongPress={() => toggleSelect(item.id)}
               />
-            ) : readFilter === 'read' && readCounts.all > 0 ? (
-              <DocNoData
-                icon="mail-unread-outline"
-                title="Nothing read yet"
-                subtitle="Notifications you open will appear here."
-              />
-            ) : (
-              <DocNoData
-                icon="notifications-off-outline"
-                title="No notifications"
-                subtitle="Anything the school sends you will appear here."
-              />
-            )
-          }
-          renderSectionHeader={({ section }) => <Text style={s.dayHead}>{section.title}</Text>}
-          renderItem={({ item, index, section }) => (
-            <NotificationRow
-              item={item}
-              isLast={index === section.data.length - 1}
-              selectionMode={selectionMode}
-              selected={selectedIds.includes(item.id)}
-              onPress={() => (selectionMode ? toggleSelect(item.id) : open(item))}
-              onLongPress={() => toggleSelect(item.id)}
-            />
-          )}
-        />
-      </Pressable>
+            )}
+          />
+        </Pressable>
+      )}
 
       {/* Delete confirmation */}
       <Modal
@@ -420,33 +307,6 @@ const __mk_s = () => StyleSheet.create({
 
   headBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
 
-  // Count, and whatever applies to the whole list
-  metaBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 12,
-  },
-  metaBarText: { fontSize: 13, color: QUIET },
-  linkText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
-
-  // Read selector: All / Unread / Read, each with its total
-  readFilters: { flexDirection: 'row', gap: 6 },
-  readPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-  },
-  readPillActive: { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primaryLight },
-  readPillText: { fontSize: 12, fontWeight: '500', color: BODY },
-  readPillCount: { fontWeight: '700', color: INK },
-  readPillTextActive: { color: theme.colors.primary },
-
   // Category tabs
   tabsBar: { flexGrow: 0 },
   tabs: { paddingHorizontal: 20, gap: 20 },
@@ -454,38 +314,6 @@ const __mk_s = () => StyleSheet.create({
   tabActive: { borderBottomColor: theme.colors.primary },
   tabText: { fontSize: 14, fontWeight: '500', color: BODY },
   tabTextActive: { color: theme.colors.primary, fontWeight: '600' },
-
-  fullDivider: { height: 1, backgroundColor: theme.colors.border },
-
-  // List — grows to the full height so the empty part below it takes taps.
-  list: { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 30 },
-  dayHead: { paddingTop: 18, paddingBottom: 2, fontSize: 13, fontWeight: '600', color: BODY },
-
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
-  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  // Full-bleed highlight: the row's own padding stops at the page margin.
-  rowSelected: {
-    backgroundColor: theme.colors.background,
-    marginHorizontal: -20,
-    paddingHorizontal: 20,
-  },
-
-  // Leading slot: the kind's icon in a circle, or a small tick while picking
-  leadSlot: { width: 36, alignItems: 'center', justifyContent: 'center' },
-  lead: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  leadRead: { backgroundColor: theme.colors.background },
-  leadUnread: { backgroundColor: theme.colors.primaryLight },
-  check: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  checkOff: { borderWidth: 1.5, borderColor: theme.colors.border },
-  checkOn: { backgroundColor: theme.colors.primary },
-
-  body: { flex: 1, gap: 2 },
-  title: { fontSize: 15, fontWeight: '500', color: INK },
-  titleUnread: { fontWeight: '700' },
-  preview: { fontSize: 13, lineHeight: 18, color: BODY },
-  // Kind and time share the last line, in small type.
-  meta: { fontSize: 11, color: QUIET, marginTop: 1 },
-  timeUnread: { color: theme.colors.primary, fontWeight: '500' },
 
   // Confirm modal
   modalOverlay: {

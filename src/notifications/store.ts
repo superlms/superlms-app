@@ -32,6 +32,9 @@ class NotificationStore {
   private items: NotificationItem[] = [];
   private listeners = new Set<Listener>();
   private hydrated = false;
+  // True once the saved inbox has been read off the device (or failed to be),
+  // so the inbox screen knows when to swap its skeleton for the list.
+  private loaded = false;
 
   /** Load persisted notifications once at app start. */
   async hydrate(): Promise<void> {
@@ -44,7 +47,12 @@ class NotificationStore {
         if (Array.isArray(parsed)) this.items = parsed;
       }
     } catch {}
+    this.loaded = true;
     this.emit();
+  }
+
+  isLoaded(): boolean {
+    return this.loaded;
   }
 
   getAll(): NotificationItem[] {
@@ -129,15 +137,24 @@ export const notificationStore = new NotificationStore();
 /** Live list of notifications + actions for the inbox screen. */
 export function useNotifications() {
   const [items, setItems] = useState<NotificationItem[]>(notificationStore.getAll());
+  const [ready, setReady] = useState(notificationStore.isLoaded());
 
   useEffect(() => {
-    const sync = () => setItems([...notificationStore.getAll()]);
+    const sync = () => {
+      setItems([...notificationStore.getAll()]);
+      setReady(notificationStore.isLoaded());
+    };
     sync();
-    return notificationStore.subscribe(sync);
+    const unsubscribe = notificationStore.subscribe(sync);
+    // Normally already done at app start; a no-op then.
+    notificationStore.hydrate();
+    return unsubscribe;
   }, []);
 
   return {
     items,
+    /** False while the saved inbox is still being read off the device. */
+    ready,
     unreadCount: items.reduce((n, i) => (i.read ? n : n + 1), 0),
     markRead: (id: string) => notificationStore.markRead(id),
     markAllRead: () => notificationStore.markAllRead(),
