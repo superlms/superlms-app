@@ -285,11 +285,11 @@ const __mk_s = () => StyleSheet.create({
   // Form — grows to the full height so the class menu's backdrop covers it.
   form: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 28, gap: 22 },
   label: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 8 },
-  // White field, outlined in the grey the fields used to be filled with.
+  // White field with a light grey outline.
   field: {
     backgroundColor: theme.colors.card,
     borderWidth: 1,
-    borderColor: theme.colors.background,
+    borderColor: theme.colors.border,
     borderRadius: theme.radius.md,
     paddingHorizontal: 14,
     paddingVertical: 12,
