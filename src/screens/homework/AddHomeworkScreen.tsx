@@ -4,6 +4,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -38,6 +39,14 @@ const tripleLabel = (t: ClassSubject) => {
 const sameTriple = (a: ClassSubject | null, b: ClassSubject) =>
   !!a && a.standard_id === b.standard_id && a.section_id === b.section_id && a.subject_id === b.subject_id;
 
+// Short type for the attachment chip: the extension ("JPG", "MP4"), or the
+// kind of media when the name has no usable one.
+const fileType = (f: PickedFile) => {
+  const ext = f.name.includes('.') ? f.name.split('.').pop() ?? '' : '';
+  if (ext && ext.length <= 4) return ext.toUpperCase();
+  return (f.type?.split('/')[0] || 'file').toUpperCase();
+};
+
 const AddHomeworkScreen = ({ navigation }: any) => {
   const [triples, setTriples] = useState<ClassSubject[]>([]);
   const [loadingTriples, setLoadingTriples] = useState(true);
@@ -45,6 +54,9 @@ const AddHomeworkScreen = ({ navigation }: any) => {
 
   const [selected, setSelected] = useState<ClassSubject | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Where the class field sits in the form, so its menu can open over it.
+  const [pickerY, setPickerY] = useState(0);
+  const [pickerFieldY, setPickerFieldY] = useState(0);
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
   const [file, setFile] = useState<PickedFile | null>(null);
@@ -105,6 +117,8 @@ const AddHomeworkScreen = ({ navigation }: any) => {
     }
   };
 
+  const formReady = !loadingTriples && !triplesError && triples.length > 0;
+
   const renderBody = () => {
     if (loadingTriples) {
       return (
@@ -138,43 +152,19 @@ const AddHomeworkScreen = ({ navigation }: any) => {
           showsVerticalScrollIndicator={false}
         >
           {/* Class and subject */}
-          <View>
+          <View onLayout={e => setPickerY(e.nativeEvent.layout.y)}>
             <Text style={s.label}>Class and subject</Text>
-            <TouchableOpacity style={[s.field, s.picker]} activeOpacity={0.7} onPress={() => setPickerOpen(o => !o)}>
+            <TouchableOpacity
+              style={[s.field, s.picker]}
+              activeOpacity={0.7}
+              onLayout={e => setPickerFieldY(e.nativeEvent.layout.y)}
+              onPress={() => setPickerOpen(true)}
+            >
               <Text style={[s.pickerText, !selected && s.placeholder]} numberOfLines={1}>
                 {selected ? tripleLabel(selected) : 'Choose a class and subject'}
               </Text>
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName={pickerOpen ? 'chevron-up' : 'chevron-down'}
-                size={16}
-                color={theme.colors.textMuted}
-              />
+              <VectorIcon iconSet="Ionicons" iconName="chevron-down" size={16} color={theme.colors.textMuted} />
             </TouchableOpacity>
-
-            {pickerOpen && (
-              <View style={s.options}>
-                {triples.map((t, i) => {
-                  const active = sameTriple(selected, t);
-                  return (
-                    <TouchableOpacity
-                      key={`${t.standard_id}:${t.section_id}:${t.subject_id}`}
-                      style={[s.option, i < triples.length - 1 && s.optionDivider]}
-                      activeOpacity={0.6}
-                      onPress={() => {
-                        setSelected(t);
-                        setPickerOpen(false);
-                      }}
-                    >
-                      <Text style={[s.optionText, active && s.optionTextActive]}>{tripleLabel(t)}</Text>
-                      {active && (
-                        <VectorIcon iconSet="Ionicons" iconName="checkmark" size={16} color={theme.colors.primary} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            )}
           </View>
 
           {/* Title */}
@@ -203,26 +193,55 @@ const AddHomeworkScreen = ({ navigation }: any) => {
             />
           </View>
 
-          {/* Attachment */}
-          <View>
-            <Text style={s.label}>Attachment</Text>
-            {file ? (
-              <View style={[s.field, s.fileRow]}>
-                <VectorIcon iconSet="Ionicons" iconName="document-attach-outline" size={18} color={theme.colors.textSecondary} />
-                <Text style={s.fileName} numberOfLines={1}>
+          {/* Attachment — added from the header; shown here as a chip */}
+          {file && (
+            <View>
+              <Text style={s.label}>Attachment</Text>
+              <View style={s.chip}>
+                <View style={s.chipType}>
+                  <Text style={s.chipTypeText}>{fileType(file)}</Text>
+                </View>
+                <Text style={s.chipName} numberOfLines={1} ellipsizeMode="middle">
                   {file.name}
                 </Text>
-                <TouchableOpacity onPress={() => setFile(null)} hitSlop={8} activeOpacity={0.6}>
-                  <Text style={s.removeText}>Remove</Text>
+                <TouchableOpacity onPress={() => setFile(null)} hitSlop={10} activeOpacity={0.6}>
+                  <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={theme.colors.textMuted} />
                 </TouchableOpacity>
               </View>
-            ) : (
-              <TouchableOpacity style={[s.field, s.fileRow]} onPress={pickFile} activeOpacity={0.7}>
-                <VectorIcon iconSet="Ionicons" iconName="attach-outline" size={18} color={theme.colors.textSecondary} />
-                <Text style={s.pickText}>Attach a photo or video</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+            </View>
+          )}
+
+          {/* Class menu: opens over the field, starting at its top line. It
+              lives at the form level (not inside the field's box) so Android
+              still takes taps on the part that hangs below the field. */}
+          {pickerOpen && (
+            <>
+              <Pressable style={s.backdrop} onPress={() => setPickerOpen(false)} />
+              <View style={[s.menu, { top: pickerY + pickerFieldY }]}>
+                <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                  {triples.map((t, i) => {
+                    const active = sameTriple(selected, t);
+                    return (
+                      <TouchableOpacity
+                        key={`${t.standard_id}:${t.section_id}:${t.subject_id}`}
+                        style={[s.option, i < triples.length - 1 && s.optionDivider]}
+                        activeOpacity={0.6}
+                        onPress={() => {
+                          setSelected(t);
+                          setPickerOpen(false);
+                        }}
+                      >
+                        <Text style={[s.optionText, active && s.optionTextActive]}>{tripleLabel(t)}</Text>
+                        {active && (
+                          <VectorIcon iconSet="Ionicons" iconName="checkmark" size={16} color={theme.colors.primary} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </>
+          )}
         </ScrollView>
 
         {/* Post */}
@@ -246,7 +265,12 @@ const AddHomeworkScreen = ({ navigation }: any) => {
 
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+      <DocHeader
+        title={TITLE}
+        onBackPress={() => navigation.goBack()}
+        rightIcon={formReady ? 'attach-outline' : undefined}
+        onRightPress={formReady ? pickFile : undefined}
+      />
       {renderBody()}
     </KeyboardAvoidingView>
   );
@@ -258,11 +282,14 @@ const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
   fill: { flex: 1 },
 
-  // Form
-  form: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 28, gap: 22 },
+  // Form — grows to the full height so the class menu's backdrop covers it.
+  form: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 28, gap: 22 },
   label: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 8 },
+  // White field, outlined in the grey the fields used to be filled with.
   field: {
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.card,
+    borderWidth: 1,
+    borderColor: theme.colors.background,
     borderRadius: theme.radius.md,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -275,23 +302,52 @@ const __mk_s = () => StyleSheet.create({
   picker: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14 },
   pickerText: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
   placeholder: { color: theme.colors.textMuted },
-  options: {
-    marginTop: 6,
+
+  // Class menu, over the field
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  menu: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    maxHeight: 320,
+    backgroundColor: theme.colors.card,
     borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.background,
     paddingHorizontal: 14,
+    shadowColor: theme.colors.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
   },
   option: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13 },
   optionDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
   optionText: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
   optionTextActive: { color: theme.colors.primary, fontWeight: '500' },
 
-  // Attachment
-  fileRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14 },
-  fileName: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
-  removeText: { fontSize: 14, fontWeight: '500', color: theme.colors.danger },
-  pickText: { fontSize: 15, color: theme.colors.textSecondary },
+  // Attachment chip: file type, then the name
+  chip: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.background,
+    borderRadius: theme.radius.full,
+    paddingLeft: 6,
+    paddingRight: 12,
+    paddingVertical: 6,
+  },
+  chipType: {
+    backgroundColor: theme.colors.background,
+    borderRadius: theme.radius.full,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  chipTypeText: { fontSize: 11, fontWeight: '700', color: theme.colors.textSecondary, letterSpacing: 0.3 },
+  chipName: { flexShrink: 1, fontSize: 14, color: theme.colors.textPrimary },
 
   // Post
   bar: {
