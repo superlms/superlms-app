@@ -1,8 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
-  Modal,
   PermissionsAndroid,
   Platform,
   Pressable,
@@ -22,6 +20,7 @@ import { useRefresh } from '../../hooks/useRefresh';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { studentContactAdmin, teacherContactAdmin } from '../../api/contactApi';
 import { DocHeader } from '../more/docUi';
+import { AppDialog, AppAlert } from '../../components/AppDialog';
 
 // Attachments show only a file-type icon and label, never the file name.
 const fileTypeIcon = (mime?: string) => {
@@ -93,7 +92,7 @@ const ContactSchoolScreen = ({ navigation }: any) => {
     if (Platform.OS === 'android') {
       const granted = await requestAndroidPermission();
       if (!granted) {
-        Alert.alert(
+        AppAlert.alert(
           'Permission Denied',
           'Storage permission is required to attach files. Please enable it in Settings.',
           [{ text: 'OK' }],
@@ -120,11 +119,11 @@ const ContactSchoolScreen = ({ navigation }: any) => {
 
   const handleSubmit = async () => {
     if (!subject.trim()) {
-      Alert.alert('Missing Subject', 'Please enter a subject for your query.');
+      AppAlert.alert('Missing Subject', 'Please enter a subject for your query.');
       return;
     }
     if (!message.trim()) {
-      Alert.alert('Missing Message', 'Please enter your query message.');
+      AppAlert.alert('Missing Message', 'Please enter your query message.');
       return;
     }
 
@@ -160,7 +159,7 @@ const ContactSchoolScreen = ({ navigation }: any) => {
         errorMessage = err.message;
       }
 
-      Alert.alert('Submission Failed', errorMessage);
+      AppAlert.alert('Submission Failed', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -272,26 +271,13 @@ const ContactSchoolScreen = ({ navigation }: any) => {
       </KeyboardAvoidingView>
 
       {/* Query submitted */}
-      <Modal
-        transparent
+      <AppDialog
         visible={successVisible}
-        animationType="fade"
+        title="Query submitted"
+        message="Your query has been submitted successfully. We will get back to you shortly."
+        actions={[{ text: 'Done', onPress: closeSuccess }]}
         onRequestClose={closeSuccess}
-      >
-        <View style={s.modalOverlay}>
-          <View style={s.modalCard}>
-            <VectorIcon iconSet="Ionicons" iconName="checkmark-circle-outline" size={44} color={theme.colors.success} />
-            <Text style={s.modalTitle}>Query submitted</Text>
-            <Text style={s.modalDesc}>
-              Your query has been submitted successfully. We will get back to
-              you shortly.
-            </Text>
-            <TouchableOpacity style={s.modalBtn} activeOpacity={0.85} onPress={closeSuccess}>
-              <Text style={s.modalBtnText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      />
     </View>
   );
 };
@@ -350,47 +336,6 @@ const __mk_s = () => StyleSheet.create({
   },
   submitBtnBusy: { opacity: 0.7 },
   submitText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
-
-  // Success modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    padding: 24,
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.textPrimary,
-    textAlign: 'center',
-    marginTop: 12,
-  },
-  modalDesc: {
-    marginTop: 6,
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  modalBtn: {
-    marginTop: 22,
-    alignSelf: 'stretch',
-    height: 48,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBtnText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
 
 

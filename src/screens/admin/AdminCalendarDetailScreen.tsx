@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -20,6 +19,7 @@ import { ApiEvent, EventDetail, getEventById } from '../../api/calendarApi';
 import { deleteEvent } from '../../api/adminContentApi';
 import { DetailRow, capitalize, timingLabel } from '../calendar/calendarUi';
 import { DocHeader, DocLoading } from '../more/docUi';
+import { AppAlert } from '../../components/AppDialog';
 
 const TITLE = 'Event';
 
@@ -101,7 +101,7 @@ const AdminCalendarDetailScreen = ({ navigation, route }: any) => {
       navigation.goBack();
     } catch (e) {
       setConfirmOpen(false);
-      Alert.alert('Error', apiErr(e, 'Could not delete.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not delete.'));
     } finally {
       setDeleting(false);
     }

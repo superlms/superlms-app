@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Linking,
   ScrollView,
@@ -15,6 +14,7 @@ import Header from '../../components/Header';
 import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { AdminEnquiry, EnquiryTab, deleteEnquiry } from '../../api/adminContentApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const AdminEnquiryDetailScreen = ({ navigation, route }: any) => {
   const tab: EnquiryTab = route.params?.tab ?? 'teacher';
@@ -41,7 +41,7 @@ const AdminEnquiryDetailScreen = ({ navigation, route }: any) => {
     });
 
   const confirmDelete = () =>
-    Alert.alert('Delete enquiry', 'Delete this enquiry permanently?', [
+    AppAlert.alert('Delete enquiry', 'Delete this enquiry permanently?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -52,7 +52,7 @@ const AdminEnquiryDetailScreen = ({ navigation, route }: any) => {
             await deleteEnquiry(tab, enquiry.id);
             navigation.goBack();
           } catch (e) {
-            Alert.alert('Error', apiErr(e, 'Could not delete.'));
+            AppAlert.alert('Error', apiErr(e, 'Could not delete.'));
           } finally {
             setDeleting(false);
           }

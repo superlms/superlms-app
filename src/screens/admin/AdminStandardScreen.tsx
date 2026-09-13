@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -32,6 +31,7 @@ import {
   getSections,
   getSubjects,
 } from '../../api/adminStandardApi';
+import { AppAlert } from '../../components/AppDialog';
 
 type Tab = 'classes' | 'sections' | 'subjects';
 const TABS: { key: Tab; label: string }[] = [
@@ -84,7 +84,7 @@ const AdminStandardScreen = ({ navigation }: any) => {
         }
       }
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load data.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load data.'));
     } finally {
       setLoading(false);
     }
@@ -368,15 +368,15 @@ const s = StyleSheet.create({
   fab: { position: 'absolute', right: 18, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
 
   // Shared modal/form styles (used by the exported FormModal / Field / ToggleRow / ChipPicker).
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  modalCard: { width: '100%', maxWidth: 460, maxHeight: '88%', backgroundColor: theme.colors.card, borderRadius: 18, padding: 20 },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 8, textAlign: 'center' },
-  modalActions: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  mbtn: { flex: 1, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  mbtnGhost: { backgroundColor: theme.colors.border },
-  mbtnGhostText: { fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  modalCard: { width: '100%', maxWidth: 460, maxHeight: '88%', backgroundColor: theme.colors.card, borderRadius: theme.radius.lg, padding: 24 },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 8 },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
+  mbtn: { flex: 1, height: 46, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center' },
+  mbtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
+  mbtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   mbtnPrimary: { backgroundColor: theme.colors.primary },
-  mbtnPrimaryText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  mbtnPrimaryText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 
   fieldLabel: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary, marginTop: 12, marginBottom: 6 },
   input: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: theme.colors.textPrimary, backgroundColor: theme.colors.background },

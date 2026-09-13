@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -26,6 +25,7 @@ import {
   rowsFromObject,
   type IdCardFaceData,
 } from '../idCard/IdCardFaces';
+import { AppAlert } from '../../components/AppDialog';
 
 const TITLE = 'ID Card';
 
@@ -64,7 +64,7 @@ const AdminIdCardViewScreen = ({ navigation, route }: any) => {
     try {
       setCard(await getIdCard(type, row.id));
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load card.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load card.'));
     } finally {
       setLoading(false);
     }
@@ -82,7 +82,7 @@ const AdminIdCardViewScreen = ({ navigation, route }: any) => {
       navigation.goBack();
     } catch (e) {
       setConfirmOpen(false);
-      Alert.alert('Error', apiErr(e, 'Could not delete.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not delete.'));
     } finally {
       setDeleting(false);
     }

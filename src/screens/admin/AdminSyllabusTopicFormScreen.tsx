@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,6 +15,7 @@ import Header from '../../components/Header';
 import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { createTopics, updateTopic } from '../../api/adminSyllabusApi';
+import { AppAlert } from '../../components/AppDialog';
 
 // Add many topics to a chapter, or edit a single topic.
 const AdminSyllabusTopicFormScreen = ({ navigation, route }: any) => {
@@ -29,14 +29,14 @@ const AdminSyllabusTopicFormScreen = ({ navigation, route }: any) => {
 
   const save = async () => {
     const clean = rows.map(r => r.trim()).filter(Boolean);
-    if (clean.length === 0) return Alert.alert('Required', 'Add at least one topic name.');
+    if (clean.length === 0) return AppAlert.alert('Required', 'Add at least one topic name.');
     setSaving(true);
     try {
       if (isEdit) await updateTopic(editing!.id, clean[0]);
       else await createTopics({ chapter_id: chapterId!, topics: clean.map(name => ({ name })) });
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save topics.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not save topics.'));
     } finally {
       setSaving(false);
     }

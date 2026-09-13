@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Switch,
@@ -43,6 +42,7 @@ import {
   toggleDriver,
   toggleRoute,
 } from '../../api/adminTransportApi';
+import { AppAlert } from '../../components/AppDialog';
 
 type Tab = 'routes' | 'drivers' | 'students' | 'fees';
 const MONTH_KEYS = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
@@ -81,7 +81,7 @@ const AdminTransportScreen = ({ navigation }: any) => {
       if (tab === 'routes') setRoutes(await getRoutes({ search }));
       else if (tab === 'drivers') { const r = await getDrivers({ search }); setDrivers(r.drivers); setVehicleTypes(r.vehicle_types); }
       else if (tab === 'students') { const r = await getTransportStudents(stuRoute, search); setStudents(r.students); setMonthsOrder(r.months_order); }
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load.')); }
     finally { setLoading(false); }
   }, [tab, search, stuRoute]);
 
@@ -106,18 +106,18 @@ const AdminTransportScreen = ({ navigation }: any) => {
     setRouteOpen(true);
   };
   const submitRoute = async () => {
-    if (!rName.trim()) return Alert.alert('Required', 'Enter a route name.');
+    if (!rName.trim()) return AppAlert.alert('Required', 'Enter a route name.');
     setSaving(true);
     try {
       await saveRoute(rId, { route_name: rName.trim(), pickup_time: rPickup || null, drop_time: rDrop || null, monthly_fee: Number(rFee) || 0, capacity: Number(rCap) || 0, is_active: rActive });
       setRouteOpen(false); await Promise.all([loadStats(), load()]); getRouteOptions().then(setRouteOptions).catch(() => {});
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not save route.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not save route.')); }
     finally { setSaving(false); }
   };
   const confirmDeleteRoute = (r: RouteRow) =>
-    Alert.alert('Delete Route', `Delete "${r.route_name}"?`, [
+    AppAlert.alert('Delete Route', `Delete "${r.route_name}"?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { try { await deleteRoute(r.id); await Promise.all([loadStats(), load()]); } catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); } } },
+      { text: 'Delete', style: 'destructive', onPress: async () => { try { await deleteRoute(r.id); await Promise.all([loadStats(), load()]); } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); } } },
     ]);
 
   // ── Driver form ──
@@ -143,19 +143,19 @@ const AdminTransportScreen = ({ navigation }: any) => {
     setDriverOpen(true);
   };
   const submitDriver = async () => {
-    if (!dName.trim()) return Alert.alert('Required', 'Enter driver name.');
-    if (!dEmail.trim()) return Alert.alert('Required', 'Enter driver email.');
+    if (!dName.trim()) return AppAlert.alert('Required', 'Enter driver name.');
+    if (!dEmail.trim()) return AppAlert.alert('Required', 'Enter driver email.');
     setSaving(true);
     try {
       await saveDriver(dId, { name: dName.trim(), email: dEmail.trim(), phone: dPhone || null, license_no: dLicense || null, vehicle_no: dVehicleNo || null, vehicle_type: dVehicleType || null, address: dAddress || null, experience_years: Number(dExp) || 0, is_active: dActive, routes: dRoutes, image: dImage });
       setDriverOpen(false); await Promise.all([loadStats(), load()]);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not save driver.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not save driver.')); }
     finally { setSaving(false); }
   };
   const confirmDeleteDriver = (d: DriverRow) =>
-    Alert.alert('Delete Driver', `Delete ${d.name}? Their login is removed too.`, [
+    AppAlert.alert('Delete Driver', `Delete ${d.name}? Their login is removed too.`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { try { await deleteDriver(d.id); await Promise.all([loadStats(), load()]); } catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); } } },
+      { text: 'Delete', style: 'destructive', onPress: async () => { try { await deleteDriver(d.id); await Promise.all([loadStats(), load()]); } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); } } },
     ]);
 
   // ── Student months editor ──
@@ -169,14 +169,14 @@ const AdminTransportScreen = ({ navigation }: any) => {
     try {
       await saveStudentMonths({ student_detail_id: mStudent.student_detail_id, transportation_id: mStudent.route_id, months: mMonths });
       setMonthOpen(false); await load();
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not save.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not save.')); }
     finally { setSaving(false); }
   };
   const confirmRemoveStudent = (st: TransportStudent) => {
     if (!st.route_id) return;
-    Alert.alert('Remove Student', `Remove ${st.name} from ${st.route}?`, [
+    AppAlert.alert('Remove Student', `Remove ${st.name} from ${st.route}?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => { try { await removeTransportStudent(st.student_detail_id, st.route_id!); await load(); } catch (e) { Alert.alert('Error', apiErr(e, 'Could not remove.')); } } },
+      { text: 'Remove', style: 'destructive', onPress: async () => { try { await removeTransportStudent(st.student_detail_id, st.route_id!); await load(); } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not remove.')); } } },
     ]);
   };
   const monthsCount = Object.values(mMonths).filter(Boolean).length;
@@ -188,7 +188,7 @@ const AdminTransportScreen = ({ navigation }: any) => {
   useEffect(() => { if (tab === 'fees') { const t = setTimeout(loadFeeStudents, 300); return () => clearTimeout(t); } }, [tab, loadFeeStudents]);
   const loadSummary = useCallback(async (id: number) => {
     setLoading(true);
-    try { setSummary(await getFeeSummary(id)); } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load summary.')); }
+    try { setSummary(await getFeeSummary(id)); } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load summary.')); }
     finally { setLoading(false); }
   }, []);
   const pickFeeStudent = (id: number) => { setFeeStudentId(id); loadSummary(id); };
@@ -202,18 +202,18 @@ const AdminTransportScreen = ({ navigation }: any) => {
   const openPay = () => { setPayAmount(summary ? String(Math.max(0, summary.remaining)) : ''); setPayMode('cash'); setPayDate(new Date().toISOString().slice(0, 10)); setPayRemark(''); setPayOpen(true); };
   const submitPay = async () => {
     if (!feeStudentId) return;
-    if (!(Number(payAmount) > 0)) return Alert.alert('Required', 'Enter a valid amount.');
+    if (!(Number(payAmount) > 0)) return AppAlert.alert('Required', 'Enter a valid amount.');
     setSaving(true);
     try {
       await recordPayment({ student_id: feeStudentId, amount: Number(payAmount), mode: payMode, date: payDate, remark: payRemark || undefined });
       setPayOpen(false); await loadSummary(feeStudentId);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not record payment.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not record payment.')); }
     finally { setSaving(false); }
   };
   const confirmDeletePayment = (id: number) =>
-    Alert.alert('Delete Payment', 'Remove this payment?', [
+    AppAlert.alert('Delete Payment', 'Remove this payment?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { try { await deletePayment(id); if (feeStudentId) await loadSummary(feeStudentId); } catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); } } },
+      { text: 'Delete', style: 'destructive', onPress: async () => { try { await deletePayment(id); if (feeStudentId) await loadSummary(feeStudentId); } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); } } },
     ]);
 
   const statCards = [

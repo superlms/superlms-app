@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -25,6 +24,7 @@ import {
   getStudentLookups,
   updateStudent,
 } from '../../api/adminStudentApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const GENDERS = [
   { label: 'Male', value: 'male' },
@@ -80,7 +80,7 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
           setFormSections(lk.sections);
         }
       } catch (e) {
-        Alert.alert('Error', apiErr(e, 'Could not load student.'));
+        AppAlert.alert('Error', apiErr(e, 'Could not load student.'));
         navigation.goBack();
       } finally {
         setLoading(false);
@@ -113,20 +113,20 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
       !form.gender || !form.standard_id || !form.section_id ||
       !form.father_name.trim() || !form.dob
     ) {
-      return Alert.alert('Required', 'Name, email, mobile, DOB, gender, class, section and father name are required.');
+      return AppAlert.alert('Required', 'Name, email, mobile, DOB, gender, class, section and father name are required.');
     }
     setSaving(true);
     try {
       if (editId) {
         await updateStudent(editId, form);
-        Alert.alert('Success', 'Student updated successfully.');
+        AppAlert.alert('Success', 'Student updated successfully.');
       } else {
         await createStudent(form);
-        Alert.alert('Success', 'Student created successfully. Login credentials have been emailed to the student.');
+        AppAlert.alert('Success', 'Student created successfully. Login credentials have been emailed to the student.');
       }
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save student.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not save student.'));
     } finally {
       setSaving(false);
     }

@@ -1,9 +1,10 @@
 import React from 'react';
-import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
 import { Skeleton } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
+import { AppAlert } from '../../components/AppDialog';
 
 // The shared look of the inbox-style lists — Notifications, Announcements and
 // calendar events: filter pills, day headings, rows led by a round icon, and
@@ -207,7 +208,7 @@ export const AttachmentChip = ({ url, kind }: { url: string; kind?: AttachmentKi
     try {
       await Linking.openURL(url);
     } catch {
-      Alert.alert('Error', 'Unable to open this file on this device.');
+      AppAlert.alert('Error', 'Unable to open this file on this device.');
     }
   };
 

@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Modal,
   ScrollView,
@@ -23,6 +22,7 @@ import {
 } from '../../api/adminContentApi';
 import { DocHeader, DocSection, DocBody, docStyles } from '../more/docUi';
 import { TYPE_LABEL, fmtDate } from './AdminAnnouncementScreen';
+import { AppAlert } from '../../components/AppDialog';
 
 const TITLE = 'Announcement';
 
@@ -77,7 +77,7 @@ const AdminAnnouncementDetailScreen = ({ navigation, route }: any) => {
       navigation.goBack();
     } catch (e) {
       setConfirmOpen(false);
-      Alert.alert('Error', apiErr(e, 'Could not delete.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not delete.'));
     } finally {
       setDeleting(false);
     }
@@ -87,7 +87,7 @@ const AdminAnnouncementDetailScreen = ({ navigation, route }: any) => {
     try {
       await Linking.openURL(url);
     } catch {
-      Alert.alert('Error', 'Unable to open this file on this device.');
+      AppAlert.alert('Error', 'Unable to open this file on this device.');
     }
   };
 

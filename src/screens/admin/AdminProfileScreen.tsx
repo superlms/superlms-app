@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -37,6 +36,7 @@ import {
   updateMember,
   updateSchoolInfo,
 } from '../../api/adminProfileApi';
+import { AppAlert } from '../../components/AppDialog';
 
 // Document picker is a native module added for this screen; require it lazily so
 // the bundle still loads on builds that haven't been rebuilt with it yet.
@@ -63,7 +63,7 @@ const pickImage = (): Promise<PickedFile | null> =>
 
 const pickPdf = async (): Promise<PickedFile | null> => {
   if (!DocPicker?.pick) {
-    Alert.alert('Picker unavailable', 'Rebuild the app to enable PDF uploads.');
+    AppAlert.alert('Picker unavailable', 'Rebuild the app to enable PDF uploads.');
     return null;
   }
   try {
@@ -76,7 +76,7 @@ const pickPdf = async (): Promise<PickedFile | null> => {
     return { uri: f.uri, type: f.type ?? 'application/pdf', name: f.name ?? 'document.pdf' };
   } catch (e: any) {
     if (String(e?.code ?? e?.message ?? '').toLowerCase().includes('cancel')) return null;
-    Alert.alert('Could not pick file', errMsg(e, 'Please try again.'));
+    AppAlert.alert('Could not pick file', errMsg(e, 'Please try again.'));
     return null;
   }
 };
@@ -159,7 +159,7 @@ const AdminProfileScreen = ({ navigation }: any) => {
       setProfile(p);
       setInfo({ ...p.school_info, custom_sections: p.school_info.custom_sections ?? [] });
     } catch (e) {
-      Alert.alert('Error', errMsg(e, 'Could not load profile.'));
+      AppAlert.alert('Error', errMsg(e, 'Could not load profile.'));
     } finally {
       setLoading(false);
     }
@@ -178,7 +178,7 @@ const AdminProfileScreen = ({ navigation }: any) => {
       setInfo({ ...p.school_info, custom_sections: p.school_info.custom_sections ?? [] });
       after();
     } catch (e) {
-      Alert.alert('Error', errMsg(e, 'Could not save.'));
+      AppAlert.alert('Error', errMsg(e, 'Could not save.'));
     } finally {
       setSavingInfo(false);
     }
@@ -191,7 +191,7 @@ const AdminProfileScreen = ({ navigation }: any) => {
       const { logo } = await updateAdminLogo(photo);
       setProfile(prev => (prev ? { ...prev, organization: prev.organization ? { ...prev.organization, logo } : prev.organization } : prev));
     } catch (e) {
-      Alert.alert('Error', errMsg(e, 'Could not update logo.'));
+      AppAlert.alert('Error', errMsg(e, 'Could not update logo.'));
     }
   };
 
@@ -216,7 +216,7 @@ const AdminProfileScreen = ({ navigation }: any) => {
   };
   const saveMember = async () => {
     if (!mName.trim() || !mDesig.trim()) {
-      Alert.alert('Required', 'Name and designation are required.');
+      AppAlert.alert('Required', 'Name and designation are required.');
       return;
     }
     setSavingMember(true);
@@ -226,17 +226,17 @@ const AdminProfileScreen = ({ navigation }: any) => {
       setMemberModal(false);
       await load();
     } catch (e) {
-      Alert.alert('Error', errMsg(e, 'Could not save member.'));
+      AppAlert.alert('Error', errMsg(e, 'Could not save member.'));
     } finally {
       setSavingMember(false);
     }
   };
   const confirmDeleteMember = (m: ManagementMember) =>
-    Alert.alert('Remove member', `Remove ${m.name}?`, [
+    AppAlert.alert('Remove member', `Remove ${m.name}?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: async () => {
         try { await deleteMember(m.id); await load(); }
-        catch (e) { Alert.alert('Error', errMsg(e, 'Could not remove member.')); }
+        catch (e) { AppAlert.alert('Error', errMsg(e, 'Could not remove member.')); }
       } },
     ]);
 
@@ -257,30 +257,30 @@ const AdminProfileScreen = ({ navigation }: any) => {
       setDocTitle('');
       await load();
     } catch (e) {
-      Alert.alert('Error', errMsg(e, 'Could not upload document.'));
+      AppAlert.alert('Error', errMsg(e, 'Could not upload document.'));
     } finally {
       setSavingDoc(false);
     }
   };
   const confirmDeleteDoc = (id: number, title: string) =>
-    Alert.alert('Delete document', `Delete "${title}"?`, [
+    AppAlert.alert('Delete document', `Delete "${title}"?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await deleteDocument(id); await load(); }
-        catch (e) { Alert.alert('Error', errMsg(e, 'Could not delete document.')); }
+        catch (e) { AppAlert.alert('Error', errMsg(e, 'Could not delete document.')); }
       } },
     ]);
 
   const savePassword = async () => {
-    if (!curPw || !newPw || !confPw) { Alert.alert('Required', 'Fill all password fields.'); return; }
-    if (newPw !== confPw) { Alert.alert('Mismatch', 'New password and confirmation do not match.'); return; }
+    if (!curPw || !newPw || !confPw) { AppAlert.alert('Required', 'Fill all password fields.'); return; }
+    if (newPw !== confPw) { AppAlert.alert('Mismatch', 'New password and confirmation do not match.'); return; }
     setSavingPw(true);
     try {
       await updateAdminPassword({ current_password: curPw, new_password: newPw, new_password_confirmation: confPw });
       setCurPw(''); setNewPw(''); setConfPw('');
-      Alert.alert('Done', 'Password updated.');
+      AppAlert.alert('Done', 'Password updated.');
     } catch (e) {
-      Alert.alert('Error', errMsg(e, 'Could not update password.'));
+      AppAlert.alert('Error', errMsg(e, 'Could not update password.'));
     } finally {
       setSavingPw(false);
     }
@@ -642,19 +642,20 @@ const __mk = () => StyleSheet.create({
   primaryBtn: { backgroundColor: theme.colors.primary, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
   primaryBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  modalCard: { width: '100%', maxWidth: 420, backgroundColor: theme.colors.card, borderRadius: 18, padding: 20 },
-  modalTitle: { fontSize: 18, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 14, textAlign: 'center' },
+  // Popups: the app's dialog card (components/AppDialog)
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  modalCard: { width: '100%', maxWidth: 420, backgroundColor: theme.colors.card, borderRadius: theme.radius.lg, padding: 24 },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 14 },
   memberPhotoPick: { alignItems: 'center', gap: 6, marginBottom: 14 },
   memberPhotoLg: { width: 80, height: 80, borderRadius: 40, resizeMode: 'cover' },
   memberPhotoPickText: { fontSize: 12, fontWeight: '700', color: theme.colors.primary },
-  docFileName: { fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: 12 },
-  modalActions: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  modalBtn: { flex: 1, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  modalBtnGhost: { backgroundColor: theme.colors.border },
-  modalBtnGhostText: { fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary },
+  docFileName: { fontSize: 13, color: theme.colors.textSecondary, marginBottom: 12 },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
+  modalBtn: { flex: 1, height: 46, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center' },
+  modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
+  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   modalBtnPrimary: { backgroundColor: theme.colors.primary },
-  modalBtnPrimaryText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  modalBtnPrimaryText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
 
 let s = __mk();

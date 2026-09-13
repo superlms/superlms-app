@@ -1,10 +1,11 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { theme } from '../../utils/theme';
 import { DocHeader } from '../more/docUi';
 import { FeeType, PaymentStatusResponse } from '../../api/feeApi';
 import { usePhonePePayment } from '../../hooks/usePhonePePayment';
 import { AmountField, PayAction, inr } from './feesUi';
+import { AppAlert } from '../../components/AppDialog';
 
 /**
  * Generic "enter / adjust amount → pay" screen (academic fees).
@@ -28,13 +29,13 @@ const PayAmountScreen = ({ route, navigation }: any) => {
   const onSettled = useCallback(
     (res: PaymentStatusResponse) => {
       if (res.state === 'COMPLETED') {
-        Alert.alert(
+        AppAlert.alert(
           'Payment successful',
           res.receipt_number ? `Receipt: ${res.receipt_number}` : 'Your payment was received.',
           [{ text: 'OK', onPress: () => navigation.goBack() }],
         );
       } else if (res.state === 'FAILED') {
-        Alert.alert('Payment failed', 'Your payment did not go through. Please try again.');
+        AppAlert.alert('Payment failed', 'Your payment did not go through. Please try again.');
       }
     },
     [navigation],
@@ -43,7 +44,7 @@ const PayAmountScreen = ({ route, navigation }: any) => {
   const { phase, payFees, checkStatus, error } = usePhonePePayment(onSettled);
 
   React.useEffect(() => {
-    if (phase === 'error' && error) Alert.alert('Payment error', error);
+    if (phase === 'error' && error) AppAlert.alert('Payment error', error);
   }, [phase, error]);
 
   const bump = (delta: number) => {
@@ -53,7 +54,7 @@ const PayAmountScreen = ({ route, navigation }: any) => {
 
   const onPay = () => {
     if (value <= 0) {
-      Alert.alert('Enter amount', 'Please enter a valid amount to pay.');
+      AppAlert.alert('Enter amount', 'Please enter a valid amount to pay.');
       return;
     }
     payFees(value, feeType);

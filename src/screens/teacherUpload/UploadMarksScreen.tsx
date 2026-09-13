@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ScreenSkeleton from '../../components/Skeleton';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -21,6 +20,7 @@ import SelectionWizard from './SelectionWizard';
 import SelectionCard from './SelectionCard';
 import { emptySelection, isComplete, Selection, UploadEntry, UploadStudent } from './uploadData';
 import { getMarksStudents, getTeacherMarks, marksErrorMessage } from '../../api/marksApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const UploadMarksScreen = ({ navigation }: any) => {
   const [selection, setSelection] = useState<Selection>(emptySelection());
@@ -126,7 +126,7 @@ const UploadMarksScreen = ({ navigation }: any) => {
 
   const handleSubmit = () => {
     if (enteredCount === 0) {
-      Alert.alert('Nothing to submit', 'Enter marks for at least one student.');
+      AppAlert.alert('Nothing to submit', 'Enter marks for at least one student.');
       return;
     }
     const entries: UploadEntry[] = students

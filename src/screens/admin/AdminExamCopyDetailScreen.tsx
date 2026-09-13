@@ -1,9 +1,10 @@
 import React from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
 import { theme } from '../../utils/theme';
 import { ExamCopyRow } from '../../api/adminExamExtraApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const pctColor = (p?: number | null) => (p == null ? '#9CA3AF' : p >= 75 ? '#22C55E' : p >= 40 ? '#F59E0B' : '#EF4444');
 
@@ -29,7 +30,7 @@ const AdminExamCopyDetailScreen = ({ navigation, route }: any) => {
   const color = c.is_absent ? '#EF4444' : pctColor(c.percentage);
   const openPdf = () => {
     if (c.pdf_url) Linking.openURL(c.pdf_url);
-    else Alert.alert('No PDF', 'This copy has no uploaded PDF yet.');
+    else AppAlert.alert('No PDF', 'This copy has no uploaded PDF yet.');
   };
 
   return (

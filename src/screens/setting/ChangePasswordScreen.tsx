@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -16,6 +15,7 @@ import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
 import { updatePassword } from '../../api/authApi';
 import { DocHeader } from '../more/docUi';
+import { AppDialog } from '../../components/AppDialog';
 
 // Mirrors the backend update-password validation rules so the checklist
 // and the API accept exactly the same passwords.
@@ -191,30 +191,21 @@ const ChangePasswordScreen = () => {
       </ScrollView>
 
       {/* Success acknowledgement */}
-      <Modal
-        transparent
+      <AppDialog
         visible={!!successMsg}
-        animationType="fade"
+        title="Password changed"
+        message={successMsg}
+        actions={[
+          {
+            text: 'Done',
+            onPress: () => {
+              setSuccessMsg('');
+              navigation.goBack();
+            },
+          },
+        ]}
         onRequestClose={() => navigation.goBack()}
-      >
-        <View style={s.modalOverlay}>
-          <View style={s.modalCard}>
-            <VectorIcon iconSet="Ionicons" iconName="checkmark-circle-outline" size={44} color={theme.colors.success} />
-            <Text style={s.modalTitle}>Password changed</Text>
-            <Text style={s.modalDesc}>{successMsg}</Text>
-            <TouchableOpacity
-              style={s.modalBtn}
-              activeOpacity={0.85}
-              onPress={() => {
-                setSuccessMsg('');
-                navigation.goBack();
-              }}
-            >
-              <Text style={s.modalBtnText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -262,47 +253,6 @@ const __mk_s = () => StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.5 },
   buttonText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
-
-  // Success modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    padding: 24,
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.textPrimary,
-    textAlign: 'center',
-    marginTop: 12,
-  },
-  modalDesc: {
-    marginTop: 6,
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  modalBtn: {
-    marginTop: 22,
-    alignSelf: 'stretch',
-    height: 48,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBtnText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
 
 

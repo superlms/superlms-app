@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import Header from '../../components/Header';
@@ -13,6 +13,7 @@ import {
   AdminExam, ExamStats, ExamOptions, ExamFilters, SyllabusGroup,
   getExams, getSyllabus,
 } from '../../api/adminExamApi';
+import { AppAlert } from '../../components/AppDialog';
 
 type Tab = 'exams' | 'syllabus';
 const STATUS_OPTS: [string, string][] = [['', 'All'], ['published', 'Published'], ['draft', 'Draft'], ['upcoming', 'Upcoming'], ['active', 'Active'], ['completed', 'Completed']];
@@ -56,7 +57,7 @@ const AdminExamScreen = ({ navigation }: any) => {
       if (tab === 'exams') await loadExams();
       else await loadSyllabus();
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load data.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load data.'));
     } finally {
       setLoading(false);
     }

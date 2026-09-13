@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import Header from '../../components/Header';
@@ -10,6 +10,7 @@ import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { ExamFilterOptions, PerfStats, PerfSubject, getPerformance } from '../../api/adminExamExtraApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const pctColor = (p: number) => (p >= 75 ? '#22C55E' : p >= 40 ? '#F59E0B' : '#EF4444');
 
@@ -34,7 +35,7 @@ const AdminPerformanceScreen = ({ navigation }: any) => {
       setSubjects(res.subjects);
       setOptions(res.options);
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load performance.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load performance.'));
     } finally {
       setLoading(false);
     }

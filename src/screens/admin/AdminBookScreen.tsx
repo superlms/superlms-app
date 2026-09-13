@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Linking,
   ScrollView,
@@ -20,6 +19,7 @@ import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { BookRow, BookStats, deleteBook, getBooks } from '../../api/adminBookApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const AdminBookScreen = ({ navigation }: any) => {
   const [books, setBooks] = useState<BookRow[]>([]);
@@ -38,7 +38,7 @@ const AdminBookScreen = ({ navigation }: any) => {
       setClasses(res.classes);
       if (fClass === null && res.classes.length > 0) setFClass(res.classes[0].id);
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load books.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load books.'));
     } finally {
       setLoading(false);
     }
@@ -51,11 +51,11 @@ const AdminBookScreen = ({ navigation }: any) => {
   const openEdit = (b: BookRow) => navigation.navigate('AdminBookForm', { book: b, classes });
 
   const remove = (b: BookRow) =>
-    Alert.alert('Delete Book', `Delete "${b.title}"?`, [
+    AppAlert.alert('Delete Book', `Delete "${b.title}"?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await deleteBook(b.id); await load(); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
+        catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); }
       } },
     ]);
 

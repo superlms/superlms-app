@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -27,6 +26,7 @@ import {
   updateSection,
   updateSubject,
 } from '../../api/adminStandardApi';
+import { AppAlert } from '../../components/AppDialog';
 
 type StdType = 'class' | 'section' | 'subject';
 const TITLES: Record<StdType, string> = { class: 'Class', section: 'Section', subject: 'Subject' };
@@ -76,9 +76,9 @@ const AdminStandardFormScreen = ({ navigation, route }: any) => {
     setSectionIds(prev => (prev.includes(sid) ? prev.filter(x => x !== sid) : [...prev, sid]));
 
   const save = async () => {
-    if (!name.trim() || !code.trim()) return Alert.alert('Required', 'Name and code are required.');
-    if (type !== 'class' && !classId) return Alert.alert('Required', 'Please select a class.');
-    if (type === 'subject' && sectionIds.length === 0) return Alert.alert('Required', 'Select at least one section.');
+    if (!name.trim() || !code.trim()) return AppAlert.alert('Required', 'Name and code are required.');
+    if (type !== 'class' && !classId) return AppAlert.alert('Required', 'Please select a class.');
+    if (type === 'subject' && sectionIds.length === 0) return AppAlert.alert('Required', 'Select at least one section.');
 
     setSaving(true);
     try {
@@ -96,10 +96,10 @@ const AdminStandardFormScreen = ({ navigation, route }: any) => {
         };
         isEdit ? await updateSubject(id!, p) : await createSubject(p);
       }
-      Alert.alert('Success', `${TITLES[type]} ${isEdit ? 'updated' : 'created'} successfully.`);
+      AppAlert.alert('Success', `${TITLES[type]} ${isEdit ? 'updated' : 'created'} successfully.`);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', apiErr(e, `Could not save ${type}.`));
+      AppAlert.alert('Error', apiErr(e, `Could not save ${type}.`));
     } finally {
       setSaving(false);
     }

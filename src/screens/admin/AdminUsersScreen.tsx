@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -19,6 +18,7 @@ import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { AdminUserRow, AdminUserStats, getAdminUsers } from '../../api/adminMoreApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const roleLabel = (r: string) => (r === 'admin' ? 'Admin' : r === 'sub-admin' ? 'Sub-admin' : r);
 
@@ -35,7 +35,7 @@ const AdminUsersScreen = ({ navigation }: any) => {
       setRows(res.users);
       setStats(res.stats);
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load users.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load users.'));
     } finally {
       setLoading(false);
     }

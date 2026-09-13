@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -29,6 +28,7 @@ import {
   issueReportCards,
   revokeReportCard,
 } from '../../api/adminReportCardApi';
+import { AppAlert } from '../../components/AppDialog';
 
 type Tab = 'list' | 'issue';
 
@@ -66,7 +66,7 @@ const AdminReportCardScreen = ({ navigation }: any) => {
     try {
       const res = await getReportCards({ search, standard_id: fClass, section_id: fSection, per_page: 40 });
       setItems(res.data);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load report cards.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load report cards.')); }
     finally { setLoading(false); }
   }, [search, fClass, fSection]);
 
@@ -78,17 +78,17 @@ const AdminReportCardScreen = ({ navigation }: any) => {
     setDownloadingId(rc.id);
     try {
       await downloadReportCardPdf(rc.pdf_url, `Report_Card_${(rc.full_name || 'student').replace(/\s+/g, '_')}`);
-      Alert.alert('Downloaded', Platform.OS === 'android' ? 'Saved to your Downloads.' : 'Saved to your device.');
-    } catch (e) { Alert.alert('Download failed', apiErr(e, 'Could not download.')); }
+      AppAlert.alert('Downloaded', Platform.OS === 'android' ? 'Saved to your Downloads.' : 'Saved to your device.');
+    } catch (e) { AppAlert.alert('Download failed', apiErr(e, 'Could not download.')); }
     finally { setDownloadingId(null); }
   };
 
   const revoke = (rc: ReportCardItem) =>
-    Alert.alert('Revoke Report Card', `Revoke ${rc.full_name}'s report card?`, [
+    AppAlert.alert('Revoke Report Card', `Revoke ${rc.full_name}'s report card?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Revoke', style: 'destructive', onPress: async () => {
         try { await revokeReportCard(rc.id); await Promise.all([loadStats(), loadList()]); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not revoke.')); }
+        catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not revoke.')); }
       } },
     ]);
 
@@ -98,7 +98,7 @@ const AdminReportCardScreen = ({ navigation }: any) => {
     setIssueLoading(true);
     setSelected([]);
     try { setIssueStudents(await getReportCardIssueStudents(iClass, iSection)); }
-    catch (e) { Alert.alert('Error', apiErr(e, 'Could not load students.')); }
+    catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load students.')); }
     finally { setIssueLoading(false); }
   }, [iClass, iSection]);
 
@@ -115,13 +115,13 @@ const AdminReportCardScreen = ({ navigation }: any) => {
   };
 
   const doIssue = async () => {
-    if (!iClass || !iSection || selected.length === 0) return Alert.alert('Select students', 'Pick at least one eligible student.');
+    if (!iClass || !iSection || selected.length === 0) return AppAlert.alert('Select students', 'Pick at least one eligible student.');
     setIssuing(true);
     try {
       const res = await issueReportCards({ standard_id: iClass, section_id: iSection, student_ids: selected });
-      Alert.alert('Done', `Issued ${res.issued} report card(s).` + (res.skipped > 0 ? ` ${res.skipped} skipped (already issued).` : ''));
+      AppAlert.alert('Done', `Issued ${res.issued} report card(s).` + (res.skipped > 0 ? ` ${res.skipped} skipped (already issued).` : ''));
       await Promise.all([loadStats(), loadIssueStudents(), loadList()]);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not issue.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not issue.')); }
     finally { setIssuing(false); }
   };
 

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   ScrollView,
@@ -30,7 +29,7 @@ import constant from '../../utils/constant';
 import VectorIcon from '../../components/VectorIcon';
 import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
-import { ConfirmDialog, SuccessDialog } from '../../components/ConfirmDialog';
+import { AppDialog, AppAlert } from '../../components/AppDialog';
 import { useFocusLoad, useRefresh } from '../../hooks/useRefresh';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { ErrorBox } from '../homework/homeworkUi';
@@ -267,7 +266,7 @@ const MarkAttendanceScreen = () => {
       });
       loadClasses(selectedDate, true);
     } catch (e: any) {
-      Alert.alert('Submit failed', attendanceErrorMessage(e));
+      AppAlert.alert('Submit failed', attendanceErrorMessage(e));
     } finally {
       setSubmitting(false);
     }
@@ -291,7 +290,7 @@ const MarkAttendanceScreen = () => {
       loadClasses(selectedDate, true);
     } catch (e: any) {
       setHolidayConfirm(false);
-      Alert.alert('Could not mark holiday', attendanceErrorMessage(e));
+      AppAlert.alert('Could not mark holiday', attendanceErrorMessage(e));
     } finally {
       setMarkingHoliday(false);
     }
@@ -487,40 +486,36 @@ const MarkAttendanceScreen = () => {
       )}
 
       {/* Whole class holiday — saved straight away */}
-      <ConfirmDialog
+      <AppDialog
         visible={holidayConfirm}
         title="Mark as Holiday?"
         message={`Every student in ${classLabel || 'this class'} will be marked Holiday for ${formatLong(selectedDate)}. You can still change it afterwards.`}
-        confirmText="Mark Holiday"
-        confirmColor={STATUS_CONFIG.holiday.color}
-        iconName="sunny-outline"
-        iconColor={STATUS_CONFIG.holiday.color}
-        iconBg={STATUS_CONFIG.holiday.bg}
-        loading={markingHoliday}
-        onConfirm={doMarkHoliday}
-        onCancel={() => setHolidayConfirm(false)}
+        actions={[
+          { text: 'Cancel', style: 'cancel', onPress: () => setHolidayConfirm(false) },
+          { text: 'Mark Holiday', onPress: doMarkHoliday, loading: markingHoliday },
+        ]}
+        onRequestClose={() => setHolidayConfirm(false)}
       />
 
       {/* Submit confirmation */}
-      <ConfirmDialog
+      <AppDialog
         visible={submitConfirm}
         title={alreadyMarked ? 'Update attendance?' : 'Submit attendance?'}
         message={confirmMessage}
-        confirmText={alreadyMarked ? 'Update' : 'Submit'}
-        confirmColor={theme.colors.primary}
-        iconName="checkmark-done-outline"
-        loading={submitting}
-        onConfirm={doSubmit}
-        onCancel={() => setSubmitConfirm(false)}
+        actions={[
+          { text: 'Cancel', style: 'cancel', onPress: () => setSubmitConfirm(false) },
+          { text: alreadyMarked ? 'Update' : 'Submit', onPress: doSubmit, loading: submitting },
+        ]}
+        onRequestClose={() => setSubmitConfirm(false)}
       />
 
       {/* Saved */}
-      <SuccessDialog
+      <AppDialog
         visible={!!success}
         title={success?.title ?? ''}
         message={success?.message ?? ''}
-        buttonText="Done"
-        onClose={() => setSuccess(null)}
+        actions={[{ text: 'Done', onPress: () => setSuccess(null) }]}
+        onRequestClose={() => setSuccess(null)}
       />
     </View>
   );

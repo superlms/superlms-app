@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Alert,
   Linking,
   ScrollView,
   StyleSheet,
@@ -17,6 +16,7 @@ import { STATUS_META } from './queryTypes';
 import type { Query } from './queryTypes';
 import constant from '../../utils/constant';
 import { DocHeader, DocSection, DocBody, docStyles } from '../more/docUi';
+import { AppAlert } from '../../components/AppDialog';
 
 // Files come from the same host as the API but outside the /api/v1 prefix
 const FILE_ORIGIN = constant.API_BASE_URL.replace(/\/api\/v\d+\/?$/, '');
@@ -82,7 +82,7 @@ const ViewQueryScreen = ({ navigation, route }: any) => {
     try {
       await Linking.openURL(url);
     } catch {
-      Alert.alert('Error', 'Unable to open this file on this device.');
+      AppAlert.alert('Error', 'Unable to open this file on this device.');
     }
   };
 

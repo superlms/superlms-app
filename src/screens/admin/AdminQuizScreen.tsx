@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -18,6 +17,7 @@ import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import AdminCurriculumFilter, { CurriculumSelection } from './AdminCurriculumFilter';
 import { QuizChapter, QuizTarget, getQuizStats, getQuizTree } from '../../api/adminQuizApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const AdminQuizScreen = ({ navigation }: any) => {
   const [questions, setQuestions] = useState(0);
@@ -32,7 +32,7 @@ const AdminQuizScreen = ({ navigation }: any) => {
     setLoading(true);
     try {
       setChapters(await getQuizTree({ standard_id: sel.standardId, section_id: sel.sectionId, subject_id: sel.subjectId }));
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load quiz.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load quiz.')); }
     finally { setLoading(false); }
   }, [sel]);
 

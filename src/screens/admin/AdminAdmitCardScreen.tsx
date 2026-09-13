@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   ScrollView,
@@ -34,6 +33,7 @@ import {
   getAdmitStudents,
   issueAdmitCard,
 } from '../../api/adminAdmitCardApi';
+import { AppAlert } from '../../components/AppDialog';
 
 type Criteria = 'none' | 'attendance' | 'fee';
 
@@ -77,7 +77,7 @@ const AdminAdmitCardScreen = ({ navigation }: any) => {
     try {
       const res = await getAdmitStudents({ exam_id: exam!, standard_id: cls!, section_id: section, search, status, per_page: 50 });
       setStudents(res.data);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load students.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load students.')); }
     finally { setLoading(false); }
   }, [ready, exam, cls, section, search, status]);
 
@@ -90,19 +90,19 @@ const AdminAdmitCardScreen = ({ navigation }: any) => {
     setBusyId(st.id);
     try {
       const res = await issueAdmitCard(exam, st.id);
-      if (res.already) Alert.alert('Already issued', 'This student already has an admit card for this exam.');
+      if (res.already) AppAlert.alert('Already issued', 'This student already has an admit card for this exam.');
       await Promise.all([loadAnalytics(), loadStudents()]);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not issue admit card.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not issue admit card.')); }
     finally { setBusyId(null); }
   };
 
   const confirmDelete = (st: AdmitStudent) =>
-    Alert.alert('Delete Admit Card', `Remove ${st.full_name}'s admit card?`, [
+    AppAlert.alert('Delete Admit Card', `Remove ${st.full_name}'s admit card?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         if (!st.admit_card_id) return;
         try { await deleteAdmitCard(st.admit_card_id); await Promise.all([loadAnalytics(), loadStudents()]); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
+        catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); }
       } },
     ]);
 
@@ -111,7 +111,7 @@ const AdminAdmitCardScreen = ({ navigation }: any) => {
     setCardLoading(true);
     setCard({ id: st.admit_card_id } as AdmitCardView);
     try { setCard(await getAdmitCard(st.admit_card_id)); }
-    catch (e) { Alert.alert('Error', apiErr(e, 'Could not load admit card.')); setCard(null); }
+    catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load admit card.')); setCard(null); }
     finally { setCardLoading(false); }
   };
 
@@ -126,20 +126,20 @@ const AdminAdmitCardScreen = ({ navigation }: any) => {
     setDownloading(true);
     try {
       await downloadAdmitCardPdf(card.pdf_url, `Admit_Card_${(card.student.full_name || 'student').replace(/\s+/g, '_')}`);
-      Alert.alert('Downloaded', Platform.OS === 'android' ? 'Saved to your Downloads.' : 'Saved to your device.');
-    } catch (e) { Alert.alert('Download failed', apiErr(e, 'Could not download.')); }
+      AppAlert.alert('Downloaded', Platform.OS === 'android' ? 'Saved to your Downloads.' : 'Saved to your device.');
+    } catch (e) { AppAlert.alert('Download failed', apiErr(e, 'Could not download.')); }
     finally { setDownloading(false); }
   };
 
   const runGenerate = async () => {
-    if (!exam || !cls) return Alert.alert('Pick exam & class', 'Select an exam and class in the filters first.');
+    if (!exam || !cls) return AppAlert.alert('Pick exam & class', 'Select an exam and class in the filters first.');
     setGenerating(true);
     try {
       const res = await generateAdmitCards({ exam_id: exam, standard_id: cls, section_id: section, criteria, percentage: Number(percentage) || 75 });
       setGenOpen(false);
-      Alert.alert('Done', `Issued ${res.generated} admit card(s).` + (res.skipped > 0 ? ` ${res.skipped} did not meet the criteria.` : ''));
+      AppAlert.alert('Done', `Issued ${res.generated} admit card(s).` + (res.skipped > 0 ? ` ${res.skipped} did not meet the criteria.` : ''));
       await Promise.all([loadAnalytics(), loadStudents()]);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not generate.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not generate.')); }
     finally { setGenerating(false); }
   };
 

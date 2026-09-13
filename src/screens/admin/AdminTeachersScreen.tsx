@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -26,6 +25,7 @@ import {
   TeacherFilters,
   getTeachers,
 } from '../../api/adminTeacherApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const GENDER_OPTS = [
   { label: 'All Genders', value: '' },
@@ -73,7 +73,7 @@ const AdminTeachersScreen = ({ navigation }: any) => {
       setRows(res.teachers);
       setStats(res.stats);
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load teachers.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load teachers.'));
     } finally {
       setLoading(false);
     }
@@ -91,7 +91,7 @@ const AdminTeachersScreen = ({ navigation }: any) => {
     try {
       const res = await getTeachers(buildFilters({ per_page: 10000 }));
       const list = res.teachers;
-      if (list.length === 0) { Alert.alert('Export', 'No teachers to export.'); return; }
+      if (list.length === 0) { AppAlert.alert('Export', 'No teachers to export.'); return; }
       const headers = ['Name', 'Employee ID', 'Email', 'Phone', 'Gender', 'Qualification', 'Status'];
       const lines = [headers.join(',')];
       list.forEach(r => {
@@ -102,9 +102,9 @@ const AdminTeachersScreen = ({ navigation }: any) => {
       });
       const stamp = new Date().toISOString().slice(0, 10);
       await saveCsvFile(`teachers_${stamp}`, lines.join('\n'));
-      Alert.alert('Export complete', `${list.length} teachers exported to your Downloads.`);
+      AppAlert.alert('Export complete', `${list.length} teachers exported to your Downloads.`);
     } catch (e) {
-      Alert.alert('Export failed', apiErr(e, 'Could not export teachers.'));
+      AppAlert.alert('Export failed', apiErr(e, 'Could not export teachers.'));
     } finally {
       setExporting(false);
     }

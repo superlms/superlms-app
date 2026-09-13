@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +13,7 @@ import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
 import { AccountsDashboard, getAccountsDashboard } from '../../api/accountsApi';
 import { AccountsUser, getStoredUser, logout } from '../../api/authApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const inr = (n: number) => `₹ ${Number(n || 0).toLocaleString('en-IN')}`;
 
@@ -71,7 +71,7 @@ const AccountsDashboardScreen = ({ navigation }: any) => {
   const { refreshing, onRefresh } = useRefresh(load);
 
   const onLogout = () => {
-    Alert.alert('Logout', 'Sign out of the accounts account?', [
+    AppAlert.alert('Logout', 'Sign out of the accounts account?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Logout',
@@ -86,7 +86,7 @@ const AccountsDashboardScreen = ({ navigation }: any) => {
   };
 
   const openModule = (label: string) =>
-    Alert.alert(label, 'This module is coming soon to the accounts app.');
+    AppAlert.alert(label, 'This module is coming soon to the accounts app.');
 
   const statCards = [
     { label: "Today's Collection", value: stats ? inr(stats.fees_collected_today) : '—', icon: 'today', color: '#22C55E' },

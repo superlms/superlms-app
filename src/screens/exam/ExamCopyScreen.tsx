@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import ScreenSkeleton from '../../components/Skeleton';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   ScrollView,
   StyleSheet,
@@ -20,6 +19,7 @@ import {
   marksErrorMessage,
   type StudentExamCopy,
 } from '../../api/marksApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const gradeColor = (g?: string | null): { color: string; bg: string } => {
   const x = (g || '').toUpperCase();
@@ -163,7 +163,7 @@ const ExamCopyScreen = ({ navigation }: any) => {
     try {
       await Linking.openURL(item.pdf_url);
     } catch {
-      Alert.alert('Error', 'Unable to open this copy on your device.');
+      AppAlert.alert('Error', 'Unable to open this copy on your device.');
     }
   };
 

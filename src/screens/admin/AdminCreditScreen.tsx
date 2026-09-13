@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   ScrollView,
   StyleSheet,
@@ -29,6 +28,7 @@ import {
   suggestCreditEndDate,
   updateCredit,
 } from '../../api/adminCreditApi';
+import { AppAlert } from '../../components/AppDialog';
 
 type Tab = 'queries' | 'policies';
 
@@ -75,7 +75,7 @@ const AdminCreditScreen = ({ navigation }: any) => {
     try {
       const res = await getCredits({ search, status: fStatus, per_page: 30 });
       setItems(res.data);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load credit queries.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load credit queries.')); }
     finally { setLoading(false); }
   }, [search, fStatus]);
 
@@ -90,7 +90,7 @@ const AdminCreditScreen = ({ navigation }: any) => {
   };
 
   const openEdit = (q: CreditQuery) => {
-    if (!q.editable) { Alert.alert('Cannot edit', 'Only pending queries can be edited.'); return; }
+    if (!q.editable) { AppAlert.alert('Cannot edit', 'Only pending queries can be edited.'); return; }
     setEditId(q.id);
     setAmount(String(q.amount));
     setStartDate(q.start_date ?? '');
@@ -108,11 +108,11 @@ const AdminCreditScreen = ({ navigation }: any) => {
   };
 
   const save = async () => {
-    if (!amount.trim() || Number(amount) < 1) return Alert.alert('Required', 'Enter a valid amount.');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return Alert.alert('Required', 'Enter a start date (YYYY-MM-DD).');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return Alert.alert('Required', 'Enter an end date (YYYY-MM-DD).');
-    if (!heading.trim()) return Alert.alert('Required', 'Enter a heading.');
-    if (reason.trim().length < 10) return Alert.alert('Required', 'Reason must be at least 10 characters.');
+    if (!amount.trim() || Number(amount) < 1) return AppAlert.alert('Required', 'Enter a valid amount.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return AppAlert.alert('Required', 'Enter a start date (YYYY-MM-DD).');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return AppAlert.alert('Required', 'Enter an end date (YYYY-MM-DD).');
+    if (!heading.trim()) return AppAlert.alert('Required', 'Enter a heading.');
+    if (reason.trim().length < 10) return AppAlert.alert('Required', 'Reason must be at least 10 characters.');
     setSaving(true);
     try {
       const payload = { amount: Number(amount), start_date: startDate, end_date: endDate, heading: heading.trim(), reason: reason.trim() };
@@ -120,16 +120,16 @@ const AdminCreditScreen = ({ navigation }: any) => {
       else await createCredit(payload);
       setFormOpen(false);
       await Promise.all([loadStats(), loadList()]);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not save credit request.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not save credit request.')); }
     finally { setSaving(false); }
   };
 
   const confirmDelete = (q: CreditQuery) =>
-    Alert.alert('Delete Request', `Delete "${q.heading}"?`, [
+    AppAlert.alert('Delete Request', `Delete "${q.heading}"?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await deleteCredit(q.id); await Promise.all([loadStats(), loadList()]); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
+        catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); }
       } },
     ]);
 

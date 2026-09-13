@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,6 +16,7 @@ import { theme } from '../../utils/theme';
 import { apiErr, pickImage, pickPdf } from '../../utils/filePickers';
 import { PickedFile } from '../../api/adminProfileApi';
 import { ContentType, saveContent } from '../../api/adminContentLibApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const TYPES: { id: ContentType; label: string; icon: string }[] = [
   { id: 'text', label: 'Text', icon: 'text-outline' },
@@ -46,16 +46,16 @@ const AdminContentFormScreen = ({ navigation, route }: any) => {
   };
 
   const save = async () => {
-    if (cType === 'text' && !text.trim()) return Alert.alert('Required', 'Enter some text.');
-    if (cType === 'url' && !url.trim()) return Alert.alert('Required', 'Enter a link.');
-    if (cType === 'image' && !image) return Alert.alert('Required', 'Pick an image.');
-    if (cType === 'pdf' && !pdf) return Alert.alert('Required', 'Pick a PDF.');
+    if (cType === 'text' && !text.trim()) return AppAlert.alert('Required', 'Enter some text.');
+    if (cType === 'url' && !url.trim()) return AppAlert.alert('Required', 'Enter a link.');
+    if (cType === 'image' && !image) return AppAlert.alert('Required', 'Pick an image.');
+    if (cType === 'pdf' && !pdf) return AppAlert.alert('Required', 'Pick a PDF.');
     setSaving(true);
     try {
       await saveContent({ target_type: targetType, target_id: targetId, content_type: cType, text, url, image, pdf });
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save content.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not save content.'));
     } finally {
       setSaving(false);
     }

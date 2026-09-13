@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -13,6 +12,7 @@ import VectorIcon from '../../components/VectorIcon';
 import { theme } from '../../utils/theme';
 import { visibleAdminModules } from './adminModules';
 import { AdminUser, getStoredUser } from '../../api/authApi';
+import { AppAlert } from '../../components/AppDialog';
 
 type OrderKey = 'sidebar' | 'ascending';
 
@@ -87,7 +87,7 @@ const AdminQuickLinksScreen = () => {
       navigation.navigate(route);
       return;
     }
-    Alert.alert(m.label, 'This module is coming soon to the admin app.');
+    AppAlert.alert(m.label, 'This module is coming soon to the admin app.');
   };
 
   return (

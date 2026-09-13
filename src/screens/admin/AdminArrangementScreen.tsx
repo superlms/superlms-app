@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -24,6 +23,7 @@ import {
   deleteArrangement,
   getArrangements,
 } from '../../api/adminArrangementApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
@@ -43,7 +43,7 @@ const AdminArrangementScreen = ({ navigation }: any) => {
       setData(await getArrangements(date, fClass ?? undefined));
       setPicks({});
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load arrangements.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load arrangements.'));
     } finally {
       setLoading(false);
     }
@@ -57,25 +57,25 @@ const AdminArrangementScreen = ({ navigation }: any) => {
 
   const assign = async (slot: ArrangementSlot) => {
     const pick = picks[slot.slot_id];
-    if (!pick?.sub) return Alert.alert('Required', 'Pick a substitute teacher.');
-    if (!pick.reason?.trim()) return Alert.alert('Required', 'Reason is required.');
+    if (!pick?.sub) return AppAlert.alert('Required', 'Pick a substitute teacher.');
+    if (!pick.reason?.trim()) return AppAlert.alert('Required', 'Reason is required.');
     setBusy(slot.slot_id);
     try {
       await assignArrangement({ date, slot_id: slot.slot_id, substitute_id: pick.sub, reason: pick.reason.trim() });
       await load();
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not assign substitute.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not assign substitute.'));
     } finally {
       setBusy(null);
     }
   };
 
   const removeArr = (slot: ArrangementSlot) =>
-    Alert.alert('Delete Arrangement', `Remove substitute for ${slot.subject}?`, [
+    AppAlert.alert('Delete Arrangement', `Remove substitute for ${slot.subject}?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await deleteArrangement(slot.arrangement!.id); await load(); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
+        catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); }
       } },
     ]);
 

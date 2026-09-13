@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
   ScrollView,
   StyleSheet,
   Switch,
@@ -14,6 +13,7 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { Biometrics } from '../../utils/biometrics';
 import { DocHeader } from '../more/docUi';
 import { MenuRow, MenuRowSkeleton, menuStyles } from '../more/menuUi';
+import { AppAlert } from '../../components/AppDialog';
 
 const NOTIFICATIONS_KEY = 'notifications_enabled';
 
@@ -73,7 +73,7 @@ const SettingsScreen = () => {
         const { available } = await Biometrics.check();
         if (!available) {
           setBioAvailable(false);
-          Alert.alert(
+          AppAlert.alert(
             'Biometric unavailable',
             'No fingerprint, face or screen lock is set up on this device. Add one in your phone settings first.',
           );

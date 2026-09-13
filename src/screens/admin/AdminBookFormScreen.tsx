@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,6 +16,7 @@ import { apiErr, pickImage, pickPdf } from '../../utils/filePickers';
 import { PickedFile } from '../../api/adminProfileApi';
 import { Field, ToggleRow, ChipPicker } from './AdminStandardScreen';
 import { BookRow, BookPayload, createBook, getBookOptions, updateBook } from '../../api/adminBookApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const AdminBookFormScreen = ({ navigation, route }: any) => {
   const editing: BookRow | undefined = route.params?.book;
@@ -67,7 +67,7 @@ const AdminBookFormScreen = ({ navigation, route }: any) => {
 
   const save = async () => {
     if (!form.title.trim() || !form.standard_id || !form.subject_id) {
-      return Alert.alert('Required', 'Title, class and subject are required.');
+      return AppAlert.alert('Required', 'Title, class and subject are required.');
     }
     setSaving(true);
     try {
@@ -75,7 +75,7 @@ const AdminBookFormScreen = ({ navigation, route }: any) => {
       else await createBook(form);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save book.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not save book.'));
     } finally {
       setSaving(false);
     }

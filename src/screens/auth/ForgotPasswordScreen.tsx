@@ -7,7 +7,6 @@ import {
   ScrollView,
   StatusBar,
   Image,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   useWindowDimensions,

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,6 +15,7 @@ import Header from '../../components/Header';
 import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { Mcq, QuizTarget, createMcqs, deleteMcqs, getMcqs, updateMcqs } from '../../api/adminQuizApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const blankMcq = (): Mcq => ({
   question_text: '',
@@ -53,7 +53,7 @@ const AdminQuizFormScreen = ({ navigation, route }: any) => {
     try {
       setRows((await getMcqs(target.type, target.id)).mcqs);
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load MCQs.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load MCQs.'));
     } finally {
       setLoading(false);
     }
@@ -67,14 +67,14 @@ const AdminQuizFormScreen = ({ navigation, route }: any) => {
   const save = async () => {
     if (rows.length === 0) { navigation.goBack(); return; }
     const err = validate(rows);
-    if (err) return Alert.alert('Check questions', err);
+    if (err) return AppAlert.alert('Check questions', err);
     setSaving(true);
     try {
       if (mode === 'add') await createMcqs(target.type, target.id, rows);
       else await updateMcqs(rows);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save MCQs.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not save MCQs.'));
     } finally {
       setSaving(false);
     }
@@ -82,13 +82,13 @@ const AdminQuizFormScreen = ({ navigation, route }: any) => {
 
   const deleteOne = (q: Mcq, qi: number) => {
     if (!q.id) { setRows(rs => rs.filter((_, i) => i !== qi)); return; }
-    Alert.alert('Delete MCQ', 'Delete this question?', [
+    AppAlert.alert('Delete MCQ', 'Delete this question?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try {
           await deleteMcqs([q.id!]);
           setRows(rs => rs.filter(r => r.id !== q.id));
-        } catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
+        } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); }
       } },
     ]);
   };

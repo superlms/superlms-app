@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   ScrollView,
   StatusBar,
@@ -25,6 +24,7 @@ import {
   getContent,
   getContentStats,
 } from '../../api/adminContentLibApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const AdminContentScreen = ({ navigation }: any) => {
   const [stats, setStats] = useState<ContentStats | null>(null);
@@ -39,7 +39,7 @@ const AdminContentScreen = ({ navigation }: any) => {
     setLoading(true);
     try {
       setChapters(await getContent({ standard_id: sel.standardId, section_id: sel.sectionId, subject_id: sel.subjectId }));
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load content.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load content.')); }
     finally { setLoading(false); }
   }, [sel]);
 
@@ -52,11 +52,11 @@ const AdminContentScreen = ({ navigation }: any) => {
     navigation.navigate('AdminContentForm', { targetType: type, targetId: id, name, existing });
 
   const clear = (type: 'chapter' | 'topic', id: number, name: string) =>
-    Alert.alert('Remove Content', `Remove all content from "${name}"?`, [
+    AppAlert.alert('Remove Content', `Remove all content from "${name}"?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: async () => {
         try { await clearContent(type, id); await Promise.all([loadStats(), loadList()]); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not remove.')); }
+        catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not remove.')); }
       } },
     ]);
 

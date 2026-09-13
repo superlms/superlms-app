@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   StatusBar,
@@ -31,6 +30,7 @@ import {
   getTimetableStats,
   saveTimetable,
 } from '../../api/adminTimetableApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const DAYS = [1, 2, 3, 4, 5, 6];
 const DAY_ABBR: Record<number, string> = { 1: 'Mon', 2: 'Tue', 3: 'Wed', 4: 'Thu', 5: 'Fri', 6: 'Sat' };
@@ -69,7 +69,7 @@ const AdminTimetableScreen = ({ navigation }: any) => {
     try {
       const res = await getTimetable({ view, standard_id: fClass, section_id: fSection, teacher_id: fTeacher });
       setCards(res.cards);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load timetable.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load timetable.')); }
     finally { setLoading(false); }
   }, [view, fClass, fSection, fTeacher]);
 
@@ -95,7 +95,7 @@ const AdminTimetableScreen = ({ navigation }: any) => {
       const res = await getTimetableBuilder(cid, sid);
       setBRows(res.rows);
       setBIsEdit(res.is_edit);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load builder.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load builder.')); }
     finally { setBLoading(false); }
   };
   const setRowTime = (idx: number, key: 'start_time' | 'end_time', v: string) =>
@@ -104,22 +104,22 @@ const AdminTimetableScreen = ({ navigation }: any) => {
     setBRows(rows => rows.map((r, i) => i === idx ? { ...r, day_teachers: { ...r.day_teachers, [day]: teacherId } } : r));
 
   const saveBuilder = async () => {
-    if (!bClass || !bSection) return Alert.alert('Required', 'Pick class and section.');
+    if (!bClass || !bSection) return AppAlert.alert('Required', 'Pick class and section.');
     setSaving(true);
     try {
       await saveTimetable({ standard_id: bClass, section_id: bSection, is_edit: bIsEdit, rows: bRows });
       setBuilderOpen(false);
       await Promise.all([loadStats(), loadCards()]);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not save timetable.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not save timetable.')); }
     finally { setSaving(false); }
   };
 
   const removeSection = (c: SectionCard) =>
-    Alert.alert('Delete Timetable', `Remove ${c.standard} ${c.section} timetable?`, [
+    AppAlert.alert('Delete Timetable', `Remove ${c.standard} ${c.section} timetable?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await deleteTimetable(c.standard_id, c.section_id!); await Promise.all([loadStats(), loadCards()]); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
+        catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); }
       } },
     ]);
 
@@ -386,13 +386,14 @@ const s = StyleSheet.create({
   dayCellTeacher: { fontSize: 10, color: theme.colors.textMuted, marginTop: 1 },
   dayCellTeacherOn: { color: theme.colors.primary, fontWeight: '700' },
 
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  pickerCard: { width: '100%', maxWidth: 400, backgroundColor: theme.colors.card, borderRadius: 18, padding: 18 },
-  pickerTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.textPrimary, textAlign: 'center', marginBottom: 12 },
+  // Teacher picker: the app's dialog card (components/AppDialog)
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  pickerCard: { width: '100%', maxWidth: 420, backgroundColor: theme.colors.card, borderRadius: theme.radius.lg, padding: 24 },
+  pickerTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 12 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, height: 42, borderRadius: 12, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, marginBottom: 8 },
   searchInput: { flex: 1, fontSize: 14, color: theme.colors.textPrimary, paddingVertical: 0 },
   pickerRow: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   pickerRowText: { fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary },
-  pickerClose: { marginTop: 12, height: 44, borderRadius: 12, backgroundColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
-  pickerCloseText: { fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary },
+  pickerClose: { marginTop: 22, height: 46, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
+  pickerCloseText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
 });

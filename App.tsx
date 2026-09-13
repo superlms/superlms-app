@@ -17,6 +17,7 @@ import AppLock from './src/components/AppLock';
 import { ThemeProvider, theme } from './src/utils/theme';
 import { initNotifications } from './src/notifications';
 import { checkForOTAUpdate } from './src/utils/otaUpdate';
+import { AppAlertHost } from './src/components/AppDialog';
 
 // Routes where the biometric prompt must NOT fire — splash, onboarding and
 // every auth screen. Anything else is considered "inside the app" (dashboard
@@ -96,6 +97,8 @@ const App = () => {
       <SafeAreaProvider>
         <ThemeProvider>
           <AppInner />
+          {/* Draws every AppAlert.alert() popup */}
+          <AppAlertHost />
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

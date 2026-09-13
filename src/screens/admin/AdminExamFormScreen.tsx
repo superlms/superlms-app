@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import Header from '../../components/Header';
@@ -8,6 +15,7 @@ import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { Field, ToggleRow, ChipPicker } from './AdminStandardScreen';
 import { AdminExam, ExamOptions, ExamPayload, createExam, deleteExam, updateExam } from '../../api/adminExamApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const empty: ExamPayload = {
   exam_name: '', term: 'Term-1', academic_year: '', start_date: '', end_date: '',
@@ -35,10 +43,10 @@ const AdminExamFormScreen = ({ navigation, route }: any) => {
 
   const save = async () => {
     if (!form.exam_name.trim() || !form.academic_year || !form.start_date || !form.end_date || !form.exam_type) {
-      return Alert.alert('Required', 'Name, academic year, dates and exam type are required.');
+      return AppAlert.alert('Required', 'Name, academic year, dates and exam type are required.');
     }
     if (!form.uses_grading_system && (!form.total_marks || !form.passing_marks)) {
-      return Alert.alert('Required', 'Total and passing marks are required unless using grading system.');
+      return AppAlert.alert('Required', 'Total and passing marks are required unless using grading system.');
     }
     setSaving(true);
     try {
@@ -46,18 +54,18 @@ const AdminExamFormScreen = ({ navigation, route }: any) => {
       else await createExam(form);
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save exam.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not save exam.'));
     } finally {
       setSaving(false);
     }
   };
 
   const remove = () =>
-    Alert.alert('Delete Exam', `Delete "${editing!.exam_name}"? Its syllabus will be removed.`, [
+    AppAlert.alert('Delete Exam', `Delete "${editing!.exam_name}"? Its syllabus will be removed.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await deleteExam(editing!.id); navigation.goBack(); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
+        catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); }
       } },
     ]);
 

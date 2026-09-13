@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import ScreenSkeleton from '../../components/Skeleton';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -24,6 +23,7 @@ import {
   quizErrorMessage,
   type QuizQuestion,
 } from '../../api/quizApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const PRIMARY = theme.colors.primary;
 const LETTERS = ['A', 'B', 'C', 'D'];
@@ -75,16 +75,16 @@ const QuestionModal = ({
   const submit = () => {
     if (saving) return;
     if (!question.trim()) {
-      Alert.alert('Missing question', 'Enter the question text.');
+      AppAlert.alert('Missing question', 'Enter the question text.');
       return;
     }
     const filled = options.map(o => o.trim());
     if (filled.filter(Boolean).length < 2) {
-      Alert.alert('Need options', 'Enter at least 2 options.');
+      AppAlert.alert('Need options', 'Enter at least 2 options.');
       return;
     }
     if (!filled[correctIndex]) {
-      Alert.alert('Mark correct', 'The option marked correct is empty.');
+      AppAlert.alert('Mark correct', 'The option marked correct is empty.');
       return;
     }
     onSubmit({
@@ -313,14 +313,14 @@ const ManageQuizScreen = ({ navigation, route }: any) => {
       setModalOpen(false);
       setEditing(null);
     } catch (e: any) {
-      Alert.alert('Error', quizErrorMessage(e));
+      AppAlert.alert('Error', quizErrorMessage(e));
     } finally {
       setSaving(false);
     }
   };
 
   const confirmDelete = (q: QuizQuestion) => {
-    Alert.alert('Delete Question', 'Delete this MCQ? This cannot be undone.', [
+    AppAlert.alert('Delete Question', 'Delete this MCQ? This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -331,7 +331,7 @@ const ManageQuizScreen = ({ navigation, route }: any) => {
             await deleteQuestion(q.id);
             setQuestions(prev => prev.filter(x => x.id !== q.id));
           } catch (e: any) {
-            Alert.alert('Error', quizErrorMessage(e));
+            AppAlert.alert('Error', quizErrorMessage(e));
           } finally {
             setBusyId(null);
           }

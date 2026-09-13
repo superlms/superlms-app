@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   StyleSheet,
   Text,
@@ -34,6 +33,7 @@ import {
   comboClass,
   comboLabel,
 } from '../subjects/outlineUi';
+import { AppAlert } from '../../components/AppDialog';
 
 const TITLE = 'Manage Syllabus';
 
@@ -193,14 +193,14 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
       }
       setChapterModal(null);
     } catch (e: any) {
-      Alert.alert('Error', contentErrorMessage(e));
+      AppAlert.alert('Error', contentErrorMessage(e));
     } finally {
       setSaving(false);
     }
   };
 
   const confirmDeleteChapter = (chapter: SyllabusChapter) => {
-    Alert.alert(
+    AppAlert.alert(
       'Delete Chapter',
       `Delete "${chapter.name}" and all its topics? This cannot be undone.`,
       [
@@ -214,7 +214,7 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
               await deleteChapter(chapter.id);
               outline.setChapters(prev => (prev ?? []).filter(c => c.id !== chapter.id));
             } catch (e: any) {
-              Alert.alert('Error', contentErrorMessage(e));
+              AppAlert.alert('Error', contentErrorMessage(e));
             } finally {
               setBusyChapterId(null);
             }
@@ -248,14 +248,14 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
       }
       setTopicModal(null);
     } catch (e: any) {
-      Alert.alert('Error', contentErrorMessage(e));
+      AppAlert.alert('Error', contentErrorMessage(e));
     } finally {
       setSaving(false);
     }
   };
 
   const confirmDeleteTopic = (chapter: SyllabusChapter, topic: SyllabusTopic) => {
-    Alert.alert('Delete Topic', `Delete "${topic.name}"?`, [
+    AppAlert.alert('Delete Topic', `Delete "${topic.name}"?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -269,7 +269,7 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
               ),
             );
           } catch (e: any) {
-            Alert.alert('Error', contentErrorMessage(e));
+            AppAlert.alert('Error', contentErrorMessage(e));
           }
         },
       },

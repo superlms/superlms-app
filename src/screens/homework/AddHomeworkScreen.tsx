@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -26,6 +25,7 @@ import {
   type HomeworkItem,
 } from '../../api/homeworkApi';
 import { ErrorBox } from './homeworkUi';
+import { AppAlert } from '../../components/AppDialog';
 
 interface PickedFile {
   uri: string;
@@ -141,8 +141,8 @@ const AddHomeworkScreen = ({ navigation, route }: any) => {
   };
 
   const handleSubmit = async () => {
-    if (!selected) return Alert.alert('Select a class', 'Please choose a class & subject.');
-    if (!title.trim()) return Alert.alert('Missing title', 'Please enter a homework title.');
+    if (!selected) return AppAlert.alert('Select a class', 'Please choose a class & subject.');
+    if (!title.trim()) return AppAlert.alert('Missing title', 'Please enter a homework title.');
 
     const payload = {
       standard_id: selected.standard_id,
@@ -156,17 +156,17 @@ const AddHomeworkScreen = ({ navigation, route }: any) => {
     try {
       if (editing) {
         await updateHomework(editing.id, payload, file, !!editing.file_url && !keptFile);
-        Alert.alert('Homework updated', 'Your changes were saved.', [
+        AppAlert.alert('Homework updated', 'Your changes were saved.', [
           { text: 'Done', onPress: () => navigation.goBack() },
         ]);
       } else {
         await createHomework(payload, file);
-        Alert.alert('Homework added', 'The homework was posted successfully.', [
+        AppAlert.alert('Homework added', 'The homework was posted successfully.', [
           { text: 'Done', onPress: () => navigation.goBack() },
         ]);
       }
     } catch (e: any) {
-      Alert.alert(editing ? 'Could not save homework' : 'Could not add homework', homeworkErrorMessage(e));
+      AppAlert.alert(editing ? 'Could not save homework' : 'Could not add homework', homeworkErrorMessage(e));
     } finally {
       setSubmitting(false);
     }

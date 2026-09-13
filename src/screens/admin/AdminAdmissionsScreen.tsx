@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -19,6 +18,7 @@ import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { AdmissionRow, AdmissionStats, getAdmissions } from '../../api/adminMoreApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const STATUS_COLOR: Record<string, string> = { pending: '#F59E0B', updated: '#0EA5E9', admitted: '#22C55E' };
 const statusColor = (s: string) => STATUS_COLOR[s] ?? '#9CA3AF';
@@ -40,7 +40,7 @@ const AdminAdmissionsScreen = ({ navigation }: any) => {
       setRows(res.admissions);
       setStats(res.stats);
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load admissions.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load admissions.'));
     } finally {
       setLoading(false);
     }

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -28,6 +27,7 @@ import {
   getStudents,
   getStudentLookups,
 } from '../../api/adminStudentApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const GENDER_OPTS = [
   { label: 'All Genders', value: '' },
@@ -89,7 +89,7 @@ const AdminStudentsScreen = ({ navigation }: any) => {
       setRows(res.students);
       setStats(res.stats);
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load students.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load students.'));
     } finally {
       setLoading(false);
     }
@@ -128,7 +128,7 @@ const AdminStudentsScreen = ({ navigation }: any) => {
       const res = await getStudents(buildFilters({ per_page: 10000 }));
       const list = res.students;
       if (list.length === 0) {
-        Alert.alert('Export', 'No students to export.');
+        AppAlert.alert('Export', 'No students to export.');
         return;
       }
       const headers = ['Name', 'Admission No', 'Roll No', 'Class', 'Section', 'Gender', 'Email', 'Phone', 'Status'];
@@ -141,9 +141,9 @@ const AdminStudentsScreen = ({ navigation }: any) => {
       });
       const stamp = new Date().toISOString().slice(0, 10);
       await saveCsvFile(`students_${stamp}`, lines.join('\n'));
-      Alert.alert('Export complete', `${list.length} students exported to your Downloads.`);
+      AppAlert.alert('Export complete', `${list.length} students exported to your Downloads.`);
     } catch (e) {
-      Alert.alert('Export failed', apiErr(e, 'Could not export students.'));
+      AppAlert.alert('Export failed', apiErr(e, 'Could not export students.'));
     } finally {
       setExporting(false);
     }

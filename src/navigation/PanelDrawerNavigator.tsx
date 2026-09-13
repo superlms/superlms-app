@@ -1,8 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   Image,
-  Modal,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -15,6 +13,7 @@ import {
 import { CommonActions } from '@react-navigation/native';
 import { theme, onThemeChange } from '../utils/theme';
 import VectorIcon from '../components/VectorIcon';
+import { AppDialog, AppAlert } from '../components/AppDialog';
 import AdminTabNavigator from './AdminTabNavigator';
 import AdminAnalyticsScreen from '../screens/admin/AdminAnalyticsScreen';
 import AdminTimetableScreen from '../screens/admin/AdminTimetableScreen';
@@ -159,7 +158,7 @@ const PanelDrawerNavigator = ({ route }: any) => {
         return;
       }
       navigation.closeDrawer();
-      Alert.alert(
+      AppAlert.alert(
         item.label,
         `This module is coming soon to the ${panel} app.`,
       );
@@ -271,52 +270,16 @@ const PanelDrawerNavigator = ({ route }: any) => {
           </View>
         </DrawerContentScrollView>
 
-        <Modal
-          transparent
+        <AppDialog
           visible={logoutVisible}
-          animationType="fade"
+          title="Log out?"
+          message="You will be signed out of this account on this device."
+          actions={[
+            { text: 'Cancel', style: 'cancel', onPress: () => setLogoutVisible(false) },
+            { text: 'Log out', style: 'destructive', onPress: doLogout },
+          ]}
           onRequestClose={() => setLogoutVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <View style={styles.modalIconWrap}>
-                <VectorIcon
-                  iconSet="Ionicons"
-                  iconName="log-out-outline"
-                  size={28}
-                  color={theme.colors.danger}
-                />
-              </View>
-
-              <Text style={styles.modalTitle}>Logout</Text>
-              <Text style={styles.modalDesc}>
-                Are you sure you want to sign out of your account?
-              </Text>
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalBtnGhost]}
-                  activeOpacity={0.85}
-                  onPress={() => setLogoutVisible(false)}
-                >
-                  <Text style={[styles.modalBtnText, styles.modalBtnGhostText]}>
-                    Cancel
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalBtnDanger]}
-                  activeOpacity={0.9}
-                  onPress={doLogout}
-                >
-                  <Text style={[styles.modalBtnText, styles.modalBtnDangerText]}>
-                    Logout
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+        />
       </>
     );
   };
@@ -436,73 +399,6 @@ const __mk_styles = () =>
       fontSize: 14,
       color: theme.colors.danger,
       fontWeight: '600',
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.35)',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: theme.spacing.lg,
-    },
-    modalCard: {
-      width: '100%',
-      maxWidth: 420,
-      backgroundColor: theme.colors.card,
-      borderRadius: theme.radius.lg,
-      padding: theme.spacing.xl,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    modalIconWrap: {
-      width: 72,
-      height: 72,
-      borderRadius: theme.radius.full,
-      backgroundColor: '#FEE2E2',
-      alignItems: 'center',
-      justifyContent: 'center',
-      alignSelf: 'center',
-      marginBottom: theme.spacing.md,
-    },
-    modalTitle: {
-      fontSize: 22,
-      fontWeight: '800',
-      color: theme.colors.textPrimary,
-      textAlign: 'center',
-    },
-    modalDesc: {
-      marginTop: theme.spacing.sm,
-      fontSize: 14,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
-      lineHeight: 20,
-    },
-    modalActions: {
-      flexDirection: 'row',
-      gap: theme.spacing.md,
-      marginTop: theme.spacing.xl,
-    },
-    modalBtn: {
-      flex: 1,
-      height: 48,
-      borderRadius: theme.radius.md,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    modalBtnText: {
-      fontSize: 15,
-      fontWeight: '700',
-    },
-    modalBtnGhost: {
-      backgroundColor: theme.colors.border,
-    },
-    modalBtnGhostText: {
-      color: theme.colors.textPrimary,
-    },
-    modalBtnDanger: {
-      backgroundColor: theme.colors.danger,
-    },
-    modalBtnDangerText: {
-      color: theme.colors.white,
     },
     divider: {
       height: 1,

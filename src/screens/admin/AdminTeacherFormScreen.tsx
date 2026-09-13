@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -18,6 +17,7 @@ import { apiErr, pickImage } from '../../utils/filePickers';
 import { PickedFile } from '../../api/adminProfileApi';
 import { Field, ToggleRow } from './AdminStandardScreen';
 import { TeacherPayload, createTeacher, getTeacher, updateTeacher } from '../../api/adminTeacherApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const GENDERS = [
   { label: 'Male', value: 'male' },
@@ -56,7 +56,7 @@ const AdminTeacherFormScreen = ({ navigation, route }: any) => {
           state: d.state ?? '', city: d.city ?? '', is_active: d.is_active, image: null,
         });
       } catch (e) {
-        Alert.alert('Error', apiErr(e, 'Could not load teacher.'));
+        AppAlert.alert('Error', apiErr(e, 'Could not load teacher.'));
         navigation.goBack();
       } finally {
         setLoading(false);
@@ -72,20 +72,20 @@ const AdminTeacherFormScreen = ({ navigation, route }: any) => {
   const save = async () => {
     const required = ['name', 'email', 'mobile', 'dob', 'gender', 'employee_id', 'date_of_joining', 'qualification', 'address', 'pincode', 'emergency_contact'] as (keyof TeacherPayload)[];
     if (required.some(k => !String(form[k] ?? '').trim())) {
-      return Alert.alert('Required', 'Please fill all required fields.');
+      return AppAlert.alert('Required', 'Please fill all required fields.');
     }
     setSaving(true);
     try {
       if (editId) {
         await updateTeacher(editId, form);
-        Alert.alert('Success', 'Teacher updated successfully.');
+        AppAlert.alert('Success', 'Teacher updated successfully.');
       } else {
         await createTeacher(form);
-        Alert.alert('Success', 'Teacher created successfully. Login credentials have been emailed to the teacher.');
+        AppAlert.alert('Success', 'Teacher created successfully. Login credentials have been emailed to the teacher.');
       }
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save teacher.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not save teacher.'));
     } finally {
       setSaving(false);
     }

@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,6 +16,7 @@ import Header from '../../components/Header';
 import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { getRating, submitRating } from '../../api/adminMoreApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const LABELS = ['', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
 
@@ -44,15 +44,15 @@ const AdminRateLmsScreen = ({ navigation }: any) => {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const save = async () => {
-    if (rating < 1) return Alert.alert('Rate first', 'Please tap a star to rate.');
-    if (!feedback.trim()) return Alert.alert('Feedback', 'Please share a few words of feedback.');
+    if (rating < 1) return AppAlert.alert('Rate first', 'Please tap a star to rate.');
+    if (!feedback.trim()) return AppAlert.alert('Feedback', 'Please share a few words of feedback.');
     setSaving(true);
     try {
       const r = await submitRating(rating, feedback.trim());
       setSubmittedAt(r.submitted_at ?? new Date().toISOString());
-      Alert.alert('Thank you!', 'Your feedback has been submitted.');
+      AppAlert.alert('Thank you!', 'Your feedback has been submitted.');
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not submit rating.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not submit rating.'));
     } finally {
       setSaving(false);
     }

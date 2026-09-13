@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Modal,
   StyleSheet,
@@ -27,6 +26,7 @@ import {
   MAX_COPY_BYTES,
   MAX_COPY_LABEL,
 } from '../../api/marksApi';
+import { AppAlert } from '../../components/AppDialog';
 
 type Mode = 'copy' | 'marks';
 
@@ -53,7 +53,7 @@ const ManageEntriesScreen = ({ navigation, route }: any) => {
   const handleConfirm = async () => {
     if (!entries.length) return;
     if (!selection.exam || !selection.cls || !selection.subject) {
-      Alert.alert('Incomplete selection', 'Please pick exam, class and subject again.');
+      AppAlert.alert('Incomplete selection', 'Please pick exam, class and subject again.');
       return;
     }
     const base = {
@@ -97,11 +97,11 @@ const ManageEntriesScreen = ({ navigation, route }: any) => {
     setSubmitting(false);
     const noun = mode === 'marks' ? 'marks' : 'copies';
     if (failed.length === 0) {
-      Alert.alert('Saved', `${ok} ${noun} saved successfully.`, [
+      AppAlert.alert('Saved', `${ok} ${noun} saved successfully.`, [
         { text: 'Done', onPress: () => navigation.goBack() },
       ]);
     } else {
-      Alert.alert(
+      AppAlert.alert(
         ok > 0 ? 'Partly saved' : 'Save failed',
         `${ok} saved, ${failed.length} failed:\n\n${failed.slice(0, 6).join('\n')}`,
       );
@@ -118,7 +118,7 @@ const ManageEntriesScreen = ({ navigation, route }: any) => {
 
   const handleDelete = (entry: UploadEntry) => {
     const saved = entry.serverId != null;
-    Alert.alert(
+    AppAlert.alert(
       'Delete Entry',
       `Remove ${mode === 'copy' ? 'copy' : 'marks'} for ${entry.name}?${
         saved ? '\n\nThis will also remove it for the student.' : ''
@@ -136,7 +136,7 @@ const ManageEntriesScreen = ({ navigation, route }: any) => {
                 if (mode === 'marks') await deleteMark(entry.serverId!);
                 else await deleteExamCopy(entry.serverId!);
               } catch (err: any) {
-                Alert.alert('Delete failed', marksErrorMessage(err));
+                AppAlert.alert('Delete failed', marksErrorMessage(err));
                 return;
               }
             }
@@ -153,7 +153,7 @@ const ManageEntriesScreen = ({ navigation, route }: any) => {
       const asset = response.assets?.[0];
       if (!asset) return;
       if (asset.fileSize != null && asset.fileSize > MAX_COPY_BYTES) {
-        Alert.alert('File too large', `Each copy must be ${MAX_COPY_LABEL} or smaller.`);
+        AppAlert.alert('File too large', `Each copy must be ${MAX_COPY_LABEL} or smaller.`);
         return;
       }
       sync(
@@ -455,23 +455,24 @@ const __mk_s = () => StyleSheet.create({
   },
   emptySub: { fontSize: 13, color: theme.colors.textMuted },
 
+  // Marks popup: the app's dialog card (components/AppDialog)
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.spacing.lg,
+    padding: 24,
   },
   modalCard: {
     width: '100%',
     maxWidth: 360,
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.lg,
-    padding: theme.spacing.lg,
+    padding: 24,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '600',
     color: theme.colors.textPrimary,
   },
   modalSub: {
@@ -500,8 +501,8 @@ const __mk_s = () => StyleSheet.create({
   },
   modalActions: {
     flexDirection: 'row',
-    gap: theme.spacing.md,
-    marginTop: theme.spacing.lg,
+    gap: 10,
+    marginTop: 22,
   },
   modalBtn: {
     flex: 1,
@@ -510,10 +511,10 @@ const __mk_s = () => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modalBtnGhost: { backgroundColor: theme.colors.border },
-  modalBtnGhostText: { fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary },
+  modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
+  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   modalBtnPrimary: { backgroundColor: theme.colors.primary },
-  modalBtnPrimaryText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  modalBtnPrimaryText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
 
 

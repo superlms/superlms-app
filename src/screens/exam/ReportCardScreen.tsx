@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   ScrollView,
@@ -24,6 +23,7 @@ import {
   getReportCards,
   reportCardErrorMessage,
 } from '../../api/reportCardApi';
+import { AppAlert } from '../../components/AppDialog';
 
 // Colour for a grade letter (A1/A2 → green, B → teal, C → amber, D/E → red).
 const gradeColor = (grade?: string | null): { color: string; bg: string } => {
@@ -97,14 +97,14 @@ const ReportCardScreen = ({ navigation }: any) => {
     setDownloading(true);
     try {
       await downloadReportCardPdf(card.pdf_url, fileNameFor(card));
-      Alert.alert(
+      AppAlert.alert(
         'Downloaded',
         Platform.OS === 'android'
           ? 'Report card saved to your Downloads.'
           : 'Report card saved to your device.',
       );
     } catch (e) {
-      Alert.alert('Download failed', reportCardErrorMessage(e));
+      AppAlert.alert('Download failed', reportCardErrorMessage(e));
     } finally {
       setDownloading(false);
     }

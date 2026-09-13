@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -34,6 +33,7 @@ import {
   tasks,
   todayKey,
 } from './homeworkUi';
+import { AppAlert } from '../../components/AppDialog';
 
 const TITLE = 'Homework';
 
@@ -101,7 +101,7 @@ const StudentHomeworkScreen = ({ navigation }: any) => {
       setConfirm(null);
     } catch (e: any) {
       setConfirm(null);
-      Alert.alert('Could not mark complete', homeworkErrorMessage(e));
+      AppAlert.alert('Could not mark complete', homeworkErrorMessage(e));
     } finally {
       setSaving(false);
     }

@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -15,6 +14,7 @@ import Header from '../../components/Header';
 import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { TeacherDetail, deleteTeacher, getTeacher } from '../../api/adminTeacherApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const Row = ({ label, value }: { label: string; value?: string | null }) =>
   value ? (
@@ -34,7 +34,7 @@ const AdminTeacherDetailScreen = ({ navigation, route }: any) => {
     try {
       setD(await getTeacher(id));
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load teacher.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load teacher.'));
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -44,7 +44,7 @@ const AdminTeacherDetailScreen = ({ navigation, route }: any) => {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const remove = () =>
-    Alert.alert('Delete Teacher', `Delete "${d?.name}"? This cannot be undone.`, [
+    AppAlert.alert('Delete Teacher', `Delete "${d?.name}"? This cannot be undone.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -55,7 +55,7 @@ const AdminTeacherDetailScreen = ({ navigation, route }: any) => {
             await deleteTeacher(id);
             navigation.goBack();
           } catch (e) {
-            Alert.alert('Error', apiErr(e, 'Could not delete.'));
+            AppAlert.alert('Error', apiErr(e, 'Could not delete.'));
           } finally {
             setDeleting(false);
           }

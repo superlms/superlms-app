@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   Image,
   Linking,
   ScrollView,
@@ -15,6 +14,7 @@ import { DocHeader, DocNoData } from '../more/docUi';
 import AttachmentPreviewModal from '../announcement/AttachmentPreviewModal';
 import type { SyllabusTopic } from '../../api/contentApi';
 import { ResourceRow } from './contentUi';
+import { AppAlert } from '../../components/AppDialog';
 
 const TITLE = 'Topic';
 
@@ -41,7 +41,7 @@ const ViewContentScreen = ({ navigation, route }: any) => {
     try {
       await Linking.openURL(url);
     } catch {
-      Alert.alert('Error', 'Unable to open the link on this device.');
+      AppAlert.alert('Error', 'Unable to open the link on this device.');
     }
   };
 

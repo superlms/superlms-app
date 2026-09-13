@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -25,6 +24,7 @@ import {
   getSyllabus,
   getSyllabusStats,
 } from '../../api/adminSyllabusApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const AdminSyllabusScreen = ({ navigation }: any) => {
   const [stats, setStats] = useState<SyllabusStats | null>(null);
@@ -43,7 +43,7 @@ const AdminSyllabusScreen = ({ navigation }: any) => {
     try {
       setChapters(await getSyllabus({ standard_id: sel.standardId, section_id: sel.sectionId, subject_id: sel.subjectId }));
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load syllabus.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load syllabus.'));
     } finally {
       setLoading(false);
     }
@@ -58,7 +58,7 @@ const AdminSyllabusScreen = ({ navigation }: any) => {
   const toggle = (id: number) => setExpanded(p => (p.includes(id) ? p.filter(x => x !== id) : [...p, id]));
 
   const addChapters = () => {
-    if (!sel.subjectId) return Alert.alert('Select subject', 'Pick a class and subject first.');
+    if (!sel.subjectId) return AppAlert.alert('Select subject', 'Pick a class and subject first.');
     navigation.navigate('AdminSyllabusChapterForm', { sel });
   };
   const editChapter = (c: SyllabusChapter) => navigation.navigate('AdminSyllabusChapterForm', { chapter: c });
@@ -66,20 +66,20 @@ const AdminSyllabusScreen = ({ navigation }: any) => {
   const editTopic = (t: { id: number; name: string }) => navigation.navigate('AdminSyllabusTopicForm', { topic: t });
 
   const removeChapter = (c: SyllabusChapter) =>
-    Alert.alert('Delete Chapter', `Delete "${c.name}" and its topics?`, [
+    AppAlert.alert('Delete Chapter', `Delete "${c.name}" and its topics?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await deleteChapter(c.id); await Promise.all([loadStats(), loadList()]); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
+        catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); }
       } },
     ]);
 
   const removeTopic = (t: { id: number; name: string }) =>
-    Alert.alert('Delete Topic', `Delete "${t.name}"?`, [
+    AppAlert.alert('Delete Topic', `Delete "${t.name}"?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await deleteTopic(t.id); await Promise.all([loadStats(), loadList()]); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
+        catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); }
       } },
     ]);
 

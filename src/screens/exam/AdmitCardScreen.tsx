@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   ScrollView,
@@ -26,6 +25,7 @@ import {
   isAdmitCardNotIssued,
 } from '../../api/admitCardApi';
 import ExamDropdown from './ExamDropdown';
+import { AppAlert } from '../../components/AppDialog';
 
 const pdfName = (exam: Exam) =>
   `Admit_Card_${(exam.name || 'Exam').replace(/\s+/g, '_')}_${exam.academicYear || ''}`.replace(/_+$/, '');
@@ -115,14 +115,14 @@ const AdmitCardScreen = ({ navigation }: any) => {
     setDownloading(true);
     try {
       await downloadAdmitCardPdf(card.pdf_url, pdfName(exam ?? ({} as Exam)));
-      Alert.alert(
+      AppAlert.alert(
         'Downloaded',
         Platform.OS === 'android'
           ? 'Admit card saved to your Downloads.'
           : 'Admit card saved to your device.',
       );
     } catch (e) {
-      Alert.alert('Download failed', admitCardErrorMessage(e));
+      AppAlert.alert('Download failed', admitCardErrorMessage(e));
     } finally {
       setDownloading(false);
     }

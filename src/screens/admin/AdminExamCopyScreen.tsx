@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import Header from '../../components/Header';
@@ -10,6 +10,7 @@ import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { ExamCopyRow, ExamCopyStats, ExamFilterOptions, getExamCopies } from '../../api/adminExamExtraApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const pctColor = (p?: number | null) => (p == null ? '#9CA3AF' : p >= 75 ? '#22C55E' : p >= 40 ? '#F59E0B' : '#EF4444');
 
@@ -36,7 +37,7 @@ const AdminExamCopyScreen = ({ navigation }: any) => {
       setStats(res.stats);
       setOptions(res.options);
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load exam copies.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load exam copies.'));
     } finally {
       setLoading(false);
     }

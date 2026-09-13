@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   ScrollView,
   StyleSheet,
@@ -34,6 +33,7 @@ import {
   getHomeworks,
   updateHomework,
 } from '../../api/adminHomeworkApi';
+import { AppAlert } from '../../components/AppDialog';
 
 type Tab = 'homework' | 'status';
 
@@ -82,7 +82,7 @@ const AdminHomeworkScreen = ({ navigation }: any) => {
     try {
       const res = await getHomeworks({ search, standard_id: fClass, section_id: fSection, per_page: 30 });
       setItems(res.data);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load homework.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load homework.')); }
     finally { setLoading(false); }
   }, [search, fClass, fSection, hasFilter]);
 
@@ -119,7 +119,7 @@ const AdminHomeworkScreen = ({ navigation }: any) => {
   };
 
   const chooseFile = () => {
-    Alert.alert('Attach file', 'Choose a file type', [
+    AppAlert.alert('Attach file', 'Choose a file type', [
       { text: 'PDF / Document', onPress: async () => { const f = await pickPdf(); if (f) setFmFile(f); } },
       { text: 'Image', onPress: async () => { const f = await pickImage(); if (f) setFmFile(f); } },
       { text: 'Cancel', style: 'cancel' },
@@ -127,25 +127,25 @@ const AdminHomeworkScreen = ({ navigation }: any) => {
   };
 
   const saveForm = async () => {
-    if (!fmClass) return Alert.alert('Required', 'Please select a class.');
+    if (!fmClass) return AppAlert.alert('Required', 'Please select a class.');
     if (mode === 'all' && !editId) {
       const rows = subjects
         .map(s => ({ subject_id: s.id, ...(bulkRows[s.id] ?? { title: '', description: '' }) }))
         .filter(r => r.title.trim() !== '');
-      if (rows.length === 0) return Alert.alert('Required', 'Fill homework for at least one subject.');
+      if (rows.length === 0) return AppAlert.alert('Required', 'Fill homework for at least one subject.');
       setSaving(true);
       try {
         await createHomeworkBulk({ standard_id: fmClass, section_id: fmSection, items: rows });
         setFormOpen(false);
         await Promise.all([loadStats(), loadList()]);
-      } catch (e) { Alert.alert('Error', apiErr(e, 'Could not save homework.')); }
+      } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not save homework.')); }
       finally { setSaving(false); }
       return;
     }
 
-    if (!fmSubject) return Alert.alert('Required', 'Please select a subject.');
-    if (!fmTitle.trim()) return Alert.alert('Required', 'Please enter a title.');
-    if (!fmDesc.trim()) return Alert.alert('Required', 'Please enter a description.');
+    if (!fmSubject) return AppAlert.alert('Required', 'Please select a subject.');
+    if (!fmTitle.trim()) return AppAlert.alert('Required', 'Please enter a title.');
+    if (!fmDesc.trim()) return AppAlert.alert('Required', 'Please enter a description.');
     setSaving(true);
     try {
       const payload = { title: fmTitle.trim(), standard_id: fmClass, section_id: fmSection, subject_id: fmSubject, description: fmDesc.trim(), file: fmFile };
@@ -153,16 +153,16 @@ const AdminHomeworkScreen = ({ navigation }: any) => {
       else await createHomework(payload);
       setFormOpen(false);
       await Promise.all([loadStats(), loadList()]);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not save homework.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not save homework.')); }
     finally { setSaving(false); }
   };
 
   const confirmDelete = (h: HomeworkItem) =>
-    Alert.alert('Delete Homework', `Delete "${h.title}"? This cannot be undone.`, [
+    AppAlert.alert('Delete Homework', `Delete "${h.title}"? This cannot be undone.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await deleteHomework(h.id); await Promise.all([loadStats(), loadList()]); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
+        catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); }
       } },
     ]);
 
@@ -182,7 +182,7 @@ const AdminHomeworkScreen = ({ navigation }: any) => {
     try {
       const res = await getHomeworkStatus({ standard_id: stClass, section_id: stSection, student_id: stStudent, days: 14 });
       setStatusRows(res.rows);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load status.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load status.')); }
     finally { setStatusLoading(false); }
   }, [stClass, stSection, stStudent]);
   useEffect(() => { loadStatus(); }, [loadStatus]);

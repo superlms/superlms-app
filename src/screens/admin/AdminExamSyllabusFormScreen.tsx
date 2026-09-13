@@ -1,6 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import Header from '../../components/Header';
@@ -8,6 +15,7 @@ import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { ChipPicker } from './AdminStandardScreen';
 import { SyllabusGroup, SyllabusOptions, getSyllabusOptions, saveSyllabus } from '../../api/adminExamApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const AdminExamSyllabusFormScreen = ({ navigation, route }: any) => {
   const group: SyllabusGroup | undefined = route.params?.group;
@@ -30,7 +38,7 @@ const AdminExamSyllabusFormScreen = ({ navigation, route }: any) => {
     if (o.selected_chapter_ids) setChapters(o.selected_chapter_ids);
   }, [exam, std, sec, sub]);
 
-  useEffect(() => { refresh().catch(e => Alert.alert('Error', apiErr(e, 'Could not load options.'))); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { refresh().catch(e => AppAlert.alert('Error', apiErr(e, 'Could not load options.'))); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onExam = (id: number) => { setExam(id); refresh({ exam: id }); };
   const onStd = (id: number) => { setStd(id); setSec(null); setSub(null); setChapters([]); refresh({ std: id, sec: null, sub: null }); };
@@ -40,14 +48,14 @@ const AdminExamSyllabusFormScreen = ({ navigation, route }: any) => {
 
   const save = async () => {
     if (!exam || !std || !sub || chapters.length === 0) {
-      return Alert.alert('Required', 'Exam, class, subject and at least one chapter are required.');
+      return AppAlert.alert('Required', 'Exam, class, subject and at least one chapter are required.');
     }
     setSaving(true);
     try {
       await saveSyllabus({ exam_id: exam, standard_id: std, section_id: sec, subject_id: sub, chapter_ids: chapters });
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save syllabus.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not save syllabus.'));
     } finally {
       setSaving(false);
     }

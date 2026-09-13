@@ -1,6 +1,6 @@
-import { Alert } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { PickedFile } from '../api/adminProfileApi';
+import { AppAlert } from '../components/AppDialog';
 
 // Document picker is a native module; require it lazily so the JS bundle still
 // loads on builds that haven't been rebuilt with it yet.
@@ -24,7 +24,7 @@ export const pickImage = (): Promise<PickedFile | null> =>
 
 export const pickPdf = async (): Promise<PickedFile | null> => {
   if (!DocPicker?.pick) {
-    Alert.alert('Picker unavailable', 'Rebuild the app to enable PDF uploads.');
+    AppAlert.alert('Picker unavailable', 'Rebuild the app to enable PDF uploads.');
     return null;
   }
   try {
@@ -37,7 +37,7 @@ export const pickPdf = async (): Promise<PickedFile | null> => {
     return { uri: f.uri, type: f.type ?? 'application/pdf', name: f.name ?? 'document.pdf' };
   } catch (e: any) {
     if (String(e?.code ?? e?.message ?? '').toLowerCase().includes('cancel')) return null;
-    Alert.alert('Could not pick file', e?.message ?? 'Please try again.');
+    AppAlert.alert('Could not pick file', e?.message ?? 'Please try again.');
     return null;
   }
 };

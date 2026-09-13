@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useFocusLoad } from '../../hooks/useRefresh';
@@ -25,6 +25,7 @@ import {
   tasks,
   todayKey,
 } from './homeworkUi';
+import { AppAlert } from '../../components/AppDialog';
 
 const TITLE = 'Homework';
 
@@ -63,7 +64,7 @@ const TeacherHomeworkScreen = ({ navigation }: any) => {
   useFocusLoad(load);
 
   const confirmDelete = (hw: HomeworkItem) => {
-    Alert.alert('Delete homework', `Remove "${hw.title}"?`, [
+    AppAlert.alert('Delete homework', `Remove "${hw.title}"?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -73,7 +74,7 @@ const TeacherHomeworkScreen = ({ navigation }: any) => {
             await deleteHomework(hw.id);
             setItems(prev => prev.filter(h => h.id !== hw.id));
           } catch (e: any) {
-            Alert.alert('Error', homeworkErrorMessage(e));
+            AppAlert.alert('Error', homeworkErrorMessage(e));
           }
         },
       },

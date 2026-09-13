@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -23,6 +22,7 @@ import {
   EnquiryTab,
   getAdminEnquiries,
 } from '../../api/adminContentApi';
+import { AppAlert } from '../../components/AppDialog';
 
 type StatusKey = '' | 'pending' | 'replied';
 
@@ -43,7 +43,7 @@ const AdminEnquiriesScreen = ({ navigation }: any) => {
       setStats(res.stats);
       setTotals(res.tab_totals);
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not load enquiries.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not load enquiries.'));
     } finally {
       setLoading(false);
     }

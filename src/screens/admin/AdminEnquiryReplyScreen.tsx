@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,6 +15,7 @@ import Header from '../../components/Header';
 import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { EnquiryTab, replyEnquiry } from '../../api/adminContentApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const AdminEnquiryReplyScreen = ({ navigation, route }: any) => {
   const tab: EnquiryTab = route.params?.tab ?? 'teacher';
@@ -28,7 +28,7 @@ const AdminEnquiryReplyScreen = ({ navigation, route }: any) => {
 
   const send = async () => {
     if (text.trim().length < 2) {
-      Alert.alert('Required', 'Please write a reply.');
+      AppAlert.alert('Required', 'Please write a reply.');
       return;
     }
     setSending(true);
@@ -37,7 +37,7 @@ const AdminEnquiryReplyScreen = ({ navigation, route }: any) => {
       // Pop back to the list; it refreshes on focus and shows "Replied".
       navigation.navigate('AdminEnquiriesHome');
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not send reply.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not send reply.'));
     } finally {
       setSending(false);
     }

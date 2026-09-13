@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -25,6 +24,7 @@ import {
   type ContentFile,
 } from '../../api/contentApi';
 import { ResourceRow } from './contentUi';
+import { AppAlert } from '../../components/AppDialog';
 
 const TITLE = 'Topic Content';
 
@@ -66,7 +66,7 @@ const EditTopicContentScreen = ({ navigation, route }: any) => {
   const save = async () => {
     if (saving) return;
     if (!content.trim() && !link.trim() && !image && !preview) {
-      Alert.alert('Nothing to save', 'Add some text, a link or an image first.');
+      AppAlert.alert('Nothing to save', 'Add some text, a link or an image first.');
       return;
     }
     setSaving(true);
@@ -80,7 +80,7 @@ const EditTopicContentScreen = ({ navigation, route }: any) => {
       });
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Error', contentErrorMessage(e));
+      AppAlert.alert('Error', contentErrorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -91,7 +91,7 @@ const EditTopicContentScreen = ({ navigation, route }: any) => {
     try {
       await Linking.openURL(existingPdf);
     } catch {
-      Alert.alert('Error', 'Unable to open the PDF on this device.');
+      AppAlert.alert('Error', 'Unable to open the PDF on this device.');
     }
   };
 

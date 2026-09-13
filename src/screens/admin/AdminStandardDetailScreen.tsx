@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,6 +20,7 @@ import {
   getSections,
   getSubjects,
 } from '../../api/adminStandardApi';
+import { AppAlert } from '../../components/AppDialog';
 
 type StdType = 'class' | 'section' | 'subject';
 const TITLES: Record<StdType, string> = { class: 'Class Details', section: 'Section Details', subject: 'Subject Details' };
@@ -69,7 +69,7 @@ const AdminStandardDetailScreen = ({ navigation, route }: any) => {
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
 
   const remove = () =>
-    Alert.alert(`Delete ${type}`, `Delete "${item?.name}"? This cannot be undone.`, [
+    AppAlert.alert(`Delete ${type}`, `Delete "${item?.name}"? This cannot be undone.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -82,7 +82,7 @@ const AdminStandardDetailScreen = ({ navigation, route }: any) => {
             else await deleteSubject(item.id);
             navigation.goBack();
           } catch (e) {
-            Alert.alert('Error', apiErr(e, 'Could not delete.'));
+            AppAlert.alert('Error', apiErr(e, 'Could not delete.'));
           } finally {
             setDeleting(false);
           }

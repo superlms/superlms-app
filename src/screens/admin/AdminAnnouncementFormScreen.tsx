@@ -25,6 +25,7 @@ import {
   updateAnnouncement,
 } from '../../api/adminContentApi';
 import { DocHeader } from '../more/docUi';
+import { AppDialog } from '../../components/AppDialog';
 
 const AUDIENCES: { key: AnnouncementType; label: string }[] = [
   { key: 'all', label: 'Both' },
@@ -277,23 +278,13 @@ const AdminAnnouncementFormScreen = ({ navigation, route }: any) => {
       </Modal>
 
       {/* Saved */}
-      <Modal
-        transparent
+      <AppDialog
         visible={!!successMsg}
-        animationType="fade"
+        title={isEdit ? 'Announcement updated' : 'Announcement posted'}
+        message={successMsg}
+        actions={[{ text: 'Done', onPress: closeSuccess }]}
         onRequestClose={closeSuccess}
-      >
-        <View style={s.modalOverlay}>
-          <View style={s.modalCard}>
-            <VectorIcon iconSet="Ionicons" iconName="checkmark-circle-outline" size={44} color={theme.colors.success} />
-            <Text style={s.modalTitle}>{isEdit ? 'Announcement updated' : 'Announcement posted'}</Text>
-            <Text style={s.modalDesc}>{successMsg}</Text>
-            <TouchableOpacity style={s.modalBtn} activeOpacity={0.85} onPress={closeSuccess}>
-              <Text style={s.modalBtnText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      />
     </View>
   );
 };
@@ -401,47 +392,6 @@ const __mk_s = () => StyleSheet.create({
   sheetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
   sheetRowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   sheetRowText: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
-
-  // Success modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    padding: 24,
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: theme.colors.textPrimary,
-    textAlign: 'center',
-    marginTop: 12,
-  },
-  modalDesc: {
-    marginTop: 6,
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  modalBtn: {
-    marginTop: 22,
-    alignSelf: 'stretch',
-    height: 48,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBtnText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import { theme } from '../../utils/theme';
 import { DocHeader, DocNoData } from '../more/docUi';
@@ -7,6 +7,7 @@ import { DashSection } from '../home/dashboardUi';
 import { MonthRow, PaymentStatusResponse, TransportFees, getTransportFees } from '../../api/feeApi';
 import { usePhonePePayment } from '../../hooks/usePhonePePayment';
 import { AmountField, FeeSkeleton, Note, PayAction, inr } from './feesUi';
+import { AppAlert } from '../../components/AppDialog';
 
 const TITLE = 'Pay Transport Fee';
 
@@ -62,13 +63,13 @@ const TransportPayScreen = ({ navigation }: any) => {
   const onSettled = useCallback(
     (res: PaymentStatusResponse) => {
       if (res.state === 'COMPLETED') {
-        Alert.alert(
+        AppAlert.alert(
           'Payment successful',
           res.receipt_number ? `Receipt: ${res.receipt_number}` : 'Your transport fee was received.',
           [{ text: 'OK', onPress: () => navigation.goBack() }],
         );
       } else if (res.state === 'FAILED') {
-        Alert.alert('Payment failed', 'Your payment did not go through. Please try again.');
+        AppAlert.alert('Payment failed', 'Your payment did not go through. Please try again.');
       }
     },
     [navigation],
@@ -77,12 +78,12 @@ const TransportPayScreen = ({ navigation }: any) => {
   const { phase, payFees, checkStatus, error } = usePhonePePayment(onSettled);
 
   React.useEffect(() => {
-    if (phase === 'error' && error) Alert.alert('Payment error', error);
+    if (phase === 'error' && error) AppAlert.alert('Payment error', error);
   }, [phase, error]);
 
   const onPay = () => {
     if (value <= 0) {
-      Alert.alert('Enter amount', 'Select months or enter an amount to pay.');
+      AppAlert.alert('Enter amount', 'Select months or enter an amount to pay.');
       return;
     }
     const months = payableMonths.filter(m => selected[m.key]).map(m => m.key);

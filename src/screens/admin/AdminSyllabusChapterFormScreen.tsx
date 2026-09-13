@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,6 +15,7 @@ import Header from '../../components/Header';
 import { theme } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { SyllabusChapter, createChapters, updateChapter } from '../../api/adminSyllabusApi';
+import { AppAlert } from '../../components/AppDialog';
 
 // Add many chapters at once, or edit a single one — depending on whether a
 // `chapter` param is passed. Opened from the Syllabus list.
@@ -34,7 +34,7 @@ const AdminSyllabusChapterFormScreen = ({ navigation, route }: any) => {
 
   const save = async () => {
     const clean = rows.filter(r => r.name.trim());
-    if (clean.length === 0) return Alert.alert('Required', 'Add at least one chapter name.');
+    if (clean.length === 0) return AppAlert.alert('Required', 'Add at least one chapter name.');
     setSaving(true);
     try {
       if (isEdit) {
@@ -44,7 +44,7 @@ const AdminSyllabusChapterFormScreen = ({ navigation, route }: any) => {
       }
       navigation.goBack();
     } catch (e) {
-      Alert.alert('Error', apiErr(e, 'Could not save chapters.'));
+      AppAlert.alert('Error', apiErr(e, 'Could not save chapters.'));
     } finally {
       setSaving(false);
     }

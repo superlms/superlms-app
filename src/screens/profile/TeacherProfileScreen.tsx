@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -19,6 +18,7 @@ import { getTeacherProfile, updateTeacherPhoto, type PickedPhoto } from '../../a
 import { apiErr } from '../../utils/filePickers';
 import { DocHeader, DocError } from '../more/docUi';
 import ProfileSkeleton from './ProfileSkeleton';
+import { AppAlert } from '../../components/AppDialog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface TeacherProfile {
@@ -105,7 +105,7 @@ const TeacherProfileScreen = () => {
     launchImageLibrary({ mediaType: 'photo', quality: 0.9, maxWidth: 1600, maxHeight: 1600 }, res => {
       if (res.didCancel) return;
       if (res.errorCode) {
-        Alert.alert('Could not open photos', res.errorMessage ?? 'Please try again.');
+        AppAlert.alert('Could not open photos', res.errorMessage ?? 'Please try again.');
         return;
       }
       const a = res.assets?.[0];
@@ -129,7 +129,7 @@ const TeacherProfileScreen = () => {
       setProfile(await updateTeacherPhoto(photo, crop));
     } catch (e: any) {
       console.log('[TeacherProfile] photo ❌', e?.response?.data ?? e?.message);
-      Alert.alert('Could not update photo', apiErr(e, 'Please try again.'));
+      AppAlert.alert('Could not update photo', apiErr(e, 'Please try again.'));
     } finally {
       setUploading(false);
     }

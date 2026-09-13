@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -39,6 +38,7 @@ import {
   updateCert,
   updateTc,
 } from '../../api/adminTcCertificateApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -157,7 +157,7 @@ const AdminTcCertificateScreen = ({ navigation }: any) => {
     try {
       const res = await getTcList({ tab, search, per_page: 40 });
       setItems(res.data);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load list.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load list.')); }
     finally { setLoading(false); }
   }, [tab, search]);
 
@@ -169,8 +169,8 @@ const AdminTcCertificateScreen = ({ navigation }: any) => {
     setDownloadingId(row.id);
     try {
       await downloadCertificatePdf(row.pdf_url, `${isTc ? 'TC' : 'Certificate'}_${(name || 'student').replace(/\s+/g, '_')}`);
-      Alert.alert('Downloaded', Platform.OS === 'android' ? 'Saved to your Downloads.' : 'Saved to your device.');
-    } catch (e) { Alert.alert('Download failed', apiErr(e, 'Could not download.')); }
+      AppAlert.alert('Downloaded', Platform.OS === 'android' ? 'Saved to your Downloads.' : 'Saved to your device.');
+    } catch (e) { AppAlert.alert('Download failed', apiErr(e, 'Could not download.')); }
     finally { setDownloadingId(null); }
   };
 
@@ -187,9 +187,9 @@ const AdminTcCertificateScreen = ({ navigation }: any) => {
     setCertOpen(true);
   };
   const saveCert = async () => {
-    if (!cStudent) return Alert.alert('Required', 'Select a student.');
-    if (!cEvent.trim()) return Alert.alert('Required', 'Enter an event / achievement name.');
-    if (!cIssuedBy.trim()) return Alert.alert('Required', 'Enter who issued it.');
+    if (!cStudent) return AppAlert.alert('Required', 'Select a student.');
+    if (!cEvent.trim()) return AppAlert.alert('Required', 'Enter an event / achievement name.');
+    if (!cIssuedBy.trim()) return AppAlert.alert('Required', 'Enter who issued it.');
     setSavingCert(true);
     try {
       const payload: CertPayload = {
@@ -201,15 +201,15 @@ const AdminTcCertificateScreen = ({ navigation }: any) => {
       if (certEditId) await updateCert(certEditId, payload); else await createCert(payload);
       setCertOpen(false);
       await Promise.all([loadStats(), loadList()]);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not save certificate.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not save certificate.')); }
     finally { setSavingCert(false); }
   };
   const confirmDeleteCert = (c: CertItem) =>
-    Alert.alert('Delete Certificate', `Delete ${c.student_name}'s certificate?`, [
+    AppAlert.alert('Delete Certificate', `Delete ${c.student_name}'s certificate?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await deleteCert(c.id); await Promise.all([loadStats(), loadList()]); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
+        catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); }
       } },
     ]);
 
@@ -236,22 +236,22 @@ const AdminTcCertificateScreen = ({ navigation }: any) => {
     setTcOpen(true);
   };
   const saveTc = async () => {
-    if (!tStudent) return Alert.alert('Required', 'Select a student.');
+    if (!tStudent) return AppAlert.alert('Required', 'Select a student.');
     setSavingTc(true);
     try {
       const payload: TcPayload = { ...tForm, student_detail_id: tStudent };
       if (tcEditId) await updateTc(tcEditId, payload); else await createTc(payload);
       setTcOpen(false);
       await Promise.all([loadStats(), loadList()]);
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not save TC.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not save TC.')); }
     finally { setSavingTc(false); }
   };
   const confirmDeleteTc = (t: TcItem) =>
-    Alert.alert('Delete TC', `Delete ${t.student_name}'s transfer certificate?`, [
+    AppAlert.alert('Delete TC', `Delete ${t.student_name}'s transfer certificate?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
         try { await deleteTc(t.id); await Promise.all([loadStats(), loadList()]); }
-        catch (e) { Alert.alert('Error', apiErr(e, 'Could not delete.')); }
+        catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not delete.')); }
       } },
     ]);
 

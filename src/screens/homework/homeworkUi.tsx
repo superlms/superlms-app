@@ -1,6 +1,5 @@
 import React, { useRef } from 'react';
 import {
-  Alert,
   Linking,
   ScrollView,
   StyleSheet,
@@ -15,6 +14,7 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { quietCaps } from '../../utils/quietCaps';
 import { fmtTime } from '../../api/timetableApi';
 import type { HomeworkItem } from '../../api/homeworkApi';
+import { AppAlert } from '../../components/AppDialog';
 
 /**
  * The pieces the student and teacher homework screens share.
@@ -57,7 +57,7 @@ export const openFile = async (url?: string | null) => {
   try {
     await Linking.openURL(url);
   } catch {
-    Alert.alert('Error', 'Unable to open this attachment.');
+    AppAlert.alert('Error', 'Unable to open this attachment.');
   }
 };
 

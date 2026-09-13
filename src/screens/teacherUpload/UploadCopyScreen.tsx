@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import ScreenSkeleton from '../../components/Skeleton';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -25,6 +24,7 @@ import {
   MAX_COPY_BYTES,
   MAX_COPY_LABEL,
 } from '../../api/marksApi';
+import { AppAlert } from '../../components/AppDialog';
 
 interface UploadedCopy {
   fileName: string;
@@ -109,7 +109,7 @@ const UploadCopyScreen = ({ navigation }: any) => {
       const asset = response.assets?.[0];
       if (!asset) return;
       if (asset.fileSize != null && asset.fileSize > MAX_COPY_BYTES) {
-        Alert.alert('File too large', `Each copy must be ${MAX_COPY_LABEL} or smaller.`);
+        AppAlert.alert('File too large', `Each copy must be ${MAX_COPY_LABEL} or smaller.`);
         return;
       }
       setUploads(prev => ({
@@ -154,7 +154,7 @@ const UploadCopyScreen = ({ navigation }: any) => {
 
   const handleSubmit = () => {
     if (uploadedCount === 0) {
-      Alert.alert('Nothing to submit', 'Upload at least one copy first.');
+      AppAlert.alert('Nothing to submit', 'Upload at least one copy first.');
       return;
     }
     const entries: UploadEntry[] = students

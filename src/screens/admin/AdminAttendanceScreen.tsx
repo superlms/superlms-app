@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -41,6 +40,7 @@ import {
   submitStudentAttendance,
   submitTeacherAttendance,
 } from '../../api/adminAttendanceApi';
+import { AppAlert } from '../../components/AppDialog';
 
 type MainTab = 'teacher' | 'student' | 'class_teachers';
 type ViewMode = 'by_date' | 'calendar';
@@ -136,7 +136,7 @@ const AdminAttendanceScreen = ({ navigation }: any) => {
         const res = await getTeacherCalendar({ teacher_id: tTeacher, month: tRange === 'monthly' ? tMonth : undefined, year: tRange === 'yearly' ? tYear : undefined });
         setTCal(res.calendar ?? null); setTYearly(res.yearly ?? null);
       } else { setTCal(null); setTYearly(null); }
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load attendance.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load attendance.')); }
     finally { setLoading(false); }
   }, [tView, tDate, tFilter, tTeacher, tRange, tMonth, tYear]);
 
@@ -151,7 +151,7 @@ const AdminAttendanceScreen = ({ navigation }: any) => {
         const res = await getStudentCalendar({ student_id: sStudent, month: sRange === 'monthly' ? sMonth : undefined, year: sRange === 'yearly' ? sYear : undefined });
         setSCal(res.calendar ?? null); setSYearly(res.yearly ?? null);
       } else { setSCal(null); setSYearly(null); }
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load attendance.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load attendance.')); }
     finally { setLoading(false); }
   }, [cls, sec, sView, sDate, sFilter, sStudent, sRange, sMonth, sYear]);
 
@@ -159,7 +159,7 @@ const AdminAttendanceScreen = ({ navigation }: any) => {
     setLoading(true);
     try {
       setAssignments(await getClassTeachers({ mode: ctMode, standard_id: ctMode === 'by_class' ? ctClass : null, section_id: ctMode === 'by_class' ? ctSection : null, teacher_id: ctMode === 'by_teacher' ? ctTeacher : null }));
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not load class teachers.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load class teachers.')); }
     finally { setLoading(false); }
   }, [ctMode, ctClass, ctSection, ctTeacher]);
 
@@ -185,14 +185,14 @@ const AdminAttendanceScreen = ({ navigation }: any) => {
   const openTeacherMark = async () => {
     setMarkKind('teacher'); setMarkDate(tDate); setMarkOpen(true); setMarkLoading(true);
     try { const res = await getTeacherMarkList(tDate); setMarkTeacherRows(res.rows); }
-    catch (e) { Alert.alert('Error', apiErr(e, 'Could not load teachers.')); }
+    catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load teachers.')); }
     finally { setMarkLoading(false); }
   };
   const openStudentMark = async () => {
-    if (!cls || !sec) return Alert.alert('Required', 'Pick class and section first.');
+    if (!cls || !sec) return AppAlert.alert('Required', 'Pick class and section first.');
     setMarkKind('student'); setMarkDate(sDate); setMarkOpen(true); setMarkLoading(true);
     try { const res = await getStudentMarkList(cls, sec, sDate); setMarkStudentRows(res.rows); }
-    catch (e) { Alert.alert('Error', apiErr(e, 'Could not load students.')); }
+    catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load students.')); }
     finally { setMarkLoading(false); }
   };
   const reloadMark = async (d: string) => {
@@ -219,7 +219,7 @@ const AdminAttendanceScreen = ({ navigation }: any) => {
         await submitStudentAttendance({ standard_id: cls, section_id: sec, date: markDate, marks: markStudentRows.map(r => ({ student_detail_id: r.student_detail_id, user_id: r.user_id, status: r.status, remark: r.remark })) });
         setSDate(markDate); setMarkOpen(false); await loadStudent();
       }
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not save attendance.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not save attendance.')); }
     finally { setSaving(false); }
   };
 
@@ -232,17 +232,17 @@ const AdminAttendanceScreen = ({ navigation }: any) => {
     setAssignOpen(true);
   };
   const saveAssign = async () => {
-    if (!aTeacher) return Alert.alert('Required', 'Pick a teacher.');
-    if (!aClass) return Alert.alert('Required', 'Pick a class.');
+    if (!aTeacher) return AppAlert.alert('Required', 'Pick a teacher.');
+    if (!aClass) return AppAlert.alert('Required', 'Pick a class.');
     try {
       await saveClassTeacher({ id: assignId, teacher_detail_id: aTeacher, standard_id: aClass, section_id: aSection });
       setAssignOpen(false); await loadClassTeachers();
-    } catch (e) { Alert.alert('Error', apiErr(e, 'Could not save assignment.')); }
+    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not save assignment.')); }
   };
   const removeAssign = (a: ClassTeacherAssignment) =>
-    Alert.alert('Remove Assignment', `Remove ${a.teacher_name} from ${a.standard}${a.section ? ' ' + a.section : ''}?`, [
+    AppAlert.alert('Remove Assignment', `Remove ${a.teacher_name} from ${a.standard}${a.section ? ' ' + a.section : ''}?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: async () => { try { await deleteClassTeacher(a.id); await loadClassTeachers(); } catch (e) { Alert.alert('Error', apiErr(e, 'Could not remove.')); } } },
+      { text: 'Remove', style: 'destructive', onPress: async () => { try { await deleteClassTeacher(a.id); await loadClassTeachers(); } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not remove.')); } } },
     ]);
 
   // ── Render helpers ──
