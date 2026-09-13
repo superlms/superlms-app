@@ -45,17 +45,13 @@ const ownTriple = (hw: HomeworkItem): ClassSubject => ({
   label: [hw.subject?.name, hw.standard, hw.section].filter(Boolean).join(' · '),
 });
 
-// The attachment already on the homework, as a chip: its file name from the URL.
-const savedFile = (url: string): PickedFile => {
-  const last = url.split('?')[0].split('/').pop() ?? '';
-  let name = last;
-  try {
-    name = decodeURIComponent(last);
-  } catch {
-    // A stray "%" in the name — show it as it is.
-  }
-  return { uri: url, name: name || 'attachment' };
-};
+// The attachment already on the homework, as a chip. Its kind comes from the
+// server; the name from the URL is only read for its extension.
+const savedFile = (hw: HomeworkItem): PickedFile => ({
+  uri: hw.file_url ?? '',
+  name: hw.file_url?.split('?')[0].split('/').pop() ?? '',
+  type: hw.file_type === 'image' ? 'image/*' : hw.file_type === 'pdf' ? 'application/pdf' : undefined,
+});
 
 // "Mathematics · 10th A"
 const tripleLabel = (t: ClassSubject) => {
@@ -66,13 +62,23 @@ const tripleLabel = (t: ClassSubject) => {
 const sameTriple = (a: ClassSubject | null, b: ClassSubject) =>
   !!a && a.standard_id === b.standard_id && a.section_id === b.section_id && a.subject_id === b.subject_id;
 
-// Short type for the attachment chip: the extension ("JPG", "MP4"), or the
-// kind of media when the name has no usable one.
-const fileType = (f: PickedFile) => {
-  const ext = f.name.includes('.') ? f.name.split('.').pop() ?? '' : '';
-  if (ext && ext.length <= 4) return ext.toUpperCase();
-  return (f.type?.split('/')[0] || 'file').toUpperCase();
+// What the attachment chip says — Image, PDF, or File for anything else — and
+// its icon. Never the file's name.
+const fileKind = (f: PickedFile) => {
+  const ext = f.name.includes('.') ? (f.name.split('.').pop() ?? '').toLowerCase() : '';
+  if (f.type?.startsWith('image/') || /^(jpe?g|png|gif|webp|heic|heif|bmp)$/.test(ext)) {
+    return { label: 'Image', icon: 'image' };
+  }
+  if (f.type === 'application/pdf' || ext === 'pdf') return { label: 'PDF', icon: 'file-text' };
+  return { label: 'File', icon: 'file' };
 };
+
+// The form while it loads: each label's width, and the height of its box.
+const SKELETON_FIELDS = [
+  { label: 112, box: 50 }, // Class and subject
+  { label: 32, box: 46 }, // Title
+  { label: 76, box: 120 }, // Description
+];
 
 // Opened with `{ homework }` it edits that homework; without, it adds a new one.
 const AddHomeworkScreen = ({ navigation, route }: any) => {
@@ -93,7 +99,7 @@ const AddHomeworkScreen = ({ navigation, route }: any) => {
   const [file, setFile] = useState<PickedFile | null>(null);
   // The attachment the homework already has, until it is removed or replaced.
   const [keptFile, setKeptFile] = useState<PickedFile | null>(
-    editing?.file_url ? savedFile(editing.file_url) : null,
+    editing?.file_url ? savedFile(editing) : null,
   );
   const [submitting, setSubmitting] = useState(false);
 
@@ -171,14 +177,18 @@ const AddHomeworkScreen = ({ navigation, route }: any) => {
 
   const renderBody = () => {
     if (loadingTriples) {
+      // The form as it will arrive: class, title and description, then Post.
       return (
-        <View style={s.loading}>
-          {[0, 1, 2].map(i => (
-            <View key={i} style={s.loadingField}>
-              <Skeleton width="30%" height={12} />
-              <Skeleton width="100%" height={46} radius={theme.radius.md} />
+        <View style={s.form}>
+          {SKELETON_FIELDS.map((f, i) => (
+            <View key={i}>
+              <View style={s.skLabel}>
+                <Skeleton width={f.label} height={11} />
+              </View>
+              <Skeleton width="100%" height={f.box} radius={theme.radius.md} />
             </View>
           ))}
+          <Skeleton width="100%" height={48} radius={theme.radius.md} />
         </View>
       );
     }
@@ -258,12 +268,8 @@ const AddHomeworkScreen = ({ navigation, route }: any) => {
             <View>
               <Text style={s.label}>Attachment</Text>
               <View style={s.chip}>
-                <View style={s.chipType}>
-                  <Text style={s.chipTypeText}>{fileType(shownFile)}</Text>
-                </View>
-                <Text style={s.chipName} numberOfLines={1} ellipsizeMode="middle">
-                  {shownFile.name}
-                </Text>
+                <VectorIcon iconSet="Feather" iconName={fileKind(shownFile).icon} size={14} color={theme.colors.primary} />
+                <Text style={s.chipText}>{fileKind(shownFile).label}</Text>
                 <TouchableOpacity
                   onPress={() => (file ? setFile(null) : setKeptFile(null))}
                   hitSlop={10}
@@ -388,28 +394,20 @@ const __mk_s = () => StyleSheet.create({
   optionText: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
   optionTextActive: { color: theme.colors.primary, fontWeight: '500' },
 
-  // Attachment chip: file type, then the name
+  // Attachment chip: the file's kind and a cross, as on Contact School
   chip: {
     alignSelf: 'flex-start',
-    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.background,
-    borderRadius: theme.radius.full,
-    paddingLeft: 6,
-    paddingRight: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
-  },
-  chipType: {
-    backgroundColor: theme.colors.background,
     borderRadius: theme.radius.full,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
   },
-  chipTypeText: { fontSize: 11, fontWeight: '700', color: theme.colors.textSecondary, letterSpacing: 0.3 },
-  chipName: { flexShrink: 1, fontSize: 14, color: theme.colors.textPrimary },
+  chipText: { fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
 
   // Post — the Contact School submit button; the form's gap spaces it
   postBtn: {
@@ -422,9 +420,8 @@ const __mk_s = () => StyleSheet.create({
   postBtnBusy: { opacity: 0.7 },
   postText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 
-  // Loading
-  loading: { paddingHorizontal: 20, paddingTop: 20, gap: 22 },
-  loadingField: { gap: 8 },
+  // Loading: a label's line, as tall as the label
+  skLabel: { height: 17, marginBottom: 8, justifyContent: 'center' },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

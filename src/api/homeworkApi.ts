@@ -18,9 +18,12 @@ export interface HomeworkItem {
   days_ago: string | null;
   file_url: string | null;
   file_type: 'pdf' | 'image' | 'doc' | null;
-  // Teacher list only: the class's period in the teacher's timetable ("09:00").
+  // The class's period in the timetable ("09:00") — the teacher's own for
+  // their list, the class's for a student's.
   period_start?: string | null;
   period_end?: string | null;
+  // Student list only: this student has marked it complete.
+  is_completed?: boolean;
 }
 
 export interface TeacherHomeworkResponse {
@@ -120,6 +123,12 @@ export const updateHomework = async (
   }
   const { data } = await apiClient.post(`/homework/update/${id}`, fields);
   return unwrap(data);
+};
+
+// POST /homework/complete/{id} — a student marks a homework complete; the
+// school sees it on its Homework Status tab.
+export const markHomeworkComplete = async (id: number): Promise<void> => {
+  await apiClient.post(`/homework/complete/${id}`, { completed: true });
 };
 
 // DELETE /homework/delete/{id}

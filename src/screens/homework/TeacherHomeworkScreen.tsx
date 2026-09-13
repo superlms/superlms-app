@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
-import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
+import { useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import { quietCaps } from '../../utils/quietCaps';
 import { DocHeader, DocNoData } from '../more/docUi';
@@ -14,7 +14,6 @@ import {
   type HomeworkItem,
 } from '../../api/homeworkApi';
 import { getTeacherClassesSubjects } from '../../api/marksApi';
-import { fmtTime } from '../../api/timetableApi';
 import {
   DateStrip,
   DayHead,
@@ -22,6 +21,7 @@ import {
   HOMEWORK_DAYS,
   HomeworkRow,
   HomeworkSkeleton,
+  periodLabel,
   tasks,
   todayKey,
 } from './homeworkUi';
@@ -36,8 +36,10 @@ const TeacherHomeworkScreen = ({ navigation }: any) => {
   const [selected, setSelected] = useState(todayKey);
   const [preview, setPreview] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // The skeleton shows on the first load, on a pull to refresh and on "Try
+  // again"; coming back from Add updates the list in place.
+  const load = useCallback(async (showSkeleton = false) => {
+    if (showSkeleton) setLoading(true);
     setError(null);
     try {
       const [res, subs] = await Promise.all([
@@ -55,7 +57,7 @@ const TeacherHomeworkScreen = ({ navigation }: any) => {
     }
   }, []);
 
-  const { refreshing, onRefresh } = useRefresh(load);
+  const reload = useCallback(() => load(true), [load]);
 
   // Refetch whenever the screen gains focus (e.g. returning from Add).
   useFocusLoad(load);
@@ -84,10 +86,6 @@ const TeacherHomeworkScreen = ({ navigation }: any) => {
   );
   const dayItems = items.filter(h => h.assigned_date === selected);
 
-  // "09:00 AM – 09:45 AM": the class's period in the teacher's timetable.
-  const periodFor = (hw: HomeworkItem) =>
-    hw.period_start ? [fmtTime(hw.period_start), fmtTime(hw.period_end)].filter(Boolean).join(' – ') : null;
-
   // "Mathematics · 10th (A)" — the section as its last letter.
   const headingFor = (hw: HomeworkItem) => {
     const letter = hw.section?.trim().slice(-1).toUpperCase();
@@ -110,7 +108,7 @@ const TeacherHomeworkScreen = ({ navigation }: any) => {
       {noSubjects && !loading && !error ? (
         <ScrollView
           contentContainerStyle={s.grow}
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={<AppRefreshControl refreshing={false} onRefresh={reload} />}
         >
           <DocNoData
             icon="book-outline"
@@ -123,16 +121,17 @@ const TeacherHomeworkScreen = ({ navigation }: any) => {
           <DateStrip selected={selected} onSelect={setSelected} marked={marked} />
           <View style={s.fullDivider} />
 
-          {loading && !refreshing && items.length === 0 ? (
-            <HomeworkSkeleton />
+          {loading ? (
+            <HomeworkSkeleton trailing="actions" />
           ) : error && items.length === 0 ? (
-            <ErrorBox message={error} onRetry={load} />
+            <ErrorBox message={error} onRetry={reload} />
           ) : (
             <ScrollView
               style={s.fill}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={[s.list, dayItems.length === 0 && s.grow]}
-              refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+              // The skeleton stands in for the spinner.
+              refreshControl={<AppRefreshControl refreshing={false} onRefresh={reload} />}
             >
               <DayHead day={selected} line={dayItems.length > 0 ? tasks(dayItems.length) : null} />
 
@@ -151,9 +150,8 @@ const TeacherHomeworkScreen = ({ navigation }: any) => {
                   <HomeworkRow
                     key={hw.id}
                     hw={hw}
-                    period={periodFor(hw)}
+                    period={periodLabel(hw)}
                     heading={headingFor(hw)}
-                    stacked
                     isLast={i === dayItems.length - 1}
                     onPreviewImage={setPreview}
                     trailing={

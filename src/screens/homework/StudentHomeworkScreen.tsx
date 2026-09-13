@@ -1,8 +1,17 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AppRefreshControl from '../../components/AppRefreshControl';
-import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
+import { useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import { quietCaps } from '../../utils/quietCaps';
 import { DocHeader, DocNoData } from '../more/docUi';
@@ -10,25 +19,43 @@ import AttachmentPreviewModal from '../announcement/AttachmentPreviewModal';
 import {
   getStudentHomework,
   homeworkErrorMessage,
+  markHomeworkComplete,
   type HomeworkItem,
 } from '../../api/homeworkApi';
 import {
+  CompleteTick,
   DateStrip,
   DayHead,
-  DoneTick,
   ErrorBox,
   HOMEWORK_DAYS,
   HomeworkRow,
   HomeworkSkeleton,
+  periodLabel,
   tasks,
   todayKey,
 } from './homeworkUi';
 
 const TITLE = 'Homework';
 
-// Done is the student's own mark — the school never hears of it — so it is kept
-// on the device, per student, so that it survives the app being closed.
-const doneStoreKey = (studentId?: number | null) => `homework_done_${studentId ?? 'me'}`;
+// Completing homework used to be kept only on the device. Whatever is still
+// there is sent to the school once, then forgotten. Returns the ids it sent.
+const sendDeviceCompletions = async (studentId: number | undefined, list: HomeworkItem[]) => {
+  const key = `homework_done_${studentId ?? 'me'}`;
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return [];
+    const saved = JSON.parse(raw);
+    const ids = (Array.isArray(saved) ? saved : []).filter((id: unknown) =>
+      list.some(h => h.id === id && !h.is_completed),
+    ) as number[];
+    await Promise.all(ids.map(id => markHomeworkComplete(id)));
+    await AsyncStorage.removeItem(key);
+    return ids;
+  } catch {
+    // Kept for the next load.
+    return [];
+  }
+};
 
 const StudentHomeworkScreen = ({ navigation }: any) => {
   const [items, setItems] = useState<HomeworkItem[]>([]);
@@ -36,27 +63,20 @@ const StudentHomeworkScreen = ({ navigation }: any) => {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState(todayKey);
 
-  const [doneIds, setDoneIds] = useState<number[]>([]);
-  const [storeKey, setStoreKey] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<HomeworkItem | null>(null);
+  const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // The skeleton shows on the first load, on a pull to refresh and on "Try
+  // again"; coming back to the screen updates the list in place.
+  const load = useCallback(async (showSkeleton = false) => {
+    if (showSkeleton) setLoading(true);
     setError(null);
     try {
       const res = await getStudentHomework(HOMEWORK_DAYS);
-      setItems(res?.homeworks ?? []);
-
-      const key = doneStoreKey(res?.student_info?.id);
-      setStoreKey(key);
-      try {
-        const raw = await AsyncStorage.getItem(key);
-        const saved = raw ? JSON.parse(raw) : [];
-        setDoneIds(Array.isArray(saved) ? saved.filter((x: unknown) => typeof x === 'number') : []);
-      } catch {
-        // An unreadable store only costs the ticks.
-      }
+      const list = res?.homeworks ?? [];
+      const sent = await sendDeviceCompletions(res?.student_info?.id, list);
+      setItems(list.map(h => (sent.includes(h.id) ? { ...h, is_completed: true } : h)));
     } catch (e: any) {
       console.log('[getStudentHomework] Error:', e?.response?.status, e?.message);
       setError(homeworkErrorMessage(e));
@@ -66,21 +86,25 @@ const StudentHomeworkScreen = ({ navigation }: any) => {
     }
   }, []);
 
-  const { refreshing, onRefresh } = useRefresh(load);
+  const reload = useCallback(() => load(true), [load]);
 
   useFocusLoad(load);
 
-  // One-way: once marked done, it stays done.
-  const markDone = () => {
+  // The school sees it on its Homework Status tab; here it moves to Completed.
+  const markComplete = async () => {
     if (!confirm) return;
-    const next = doneIds.includes(confirm.id) ? doneIds : [...doneIds, confirm.id];
-    setDoneIds(next);
-    if (storeKey) {
-      // Only what is still in the fortnight on screen is worth remembering.
-      const kept = next.filter(id => items.some(h => h.id === id));
-      AsyncStorage.setItem(storeKey, JSON.stringify(kept)).catch(() => {});
+    const id = confirm.id;
+    setSaving(true);
+    try {
+      await markHomeworkComplete(id);
+      setItems(prev => prev.map(h => (h.id === id ? { ...h, is_completed: true } : h)));
+      setConfirm(null);
+    } catch (e: any) {
+      setConfirm(null);
+      Alert.alert('Could not mark complete', homeworkErrorMessage(e));
+    } finally {
+      setSaving(false);
     }
-    setConfirm(null);
   };
 
   const marked = useMemo(
@@ -89,11 +113,12 @@ const StudentHomeworkScreen = ({ navigation }: any) => {
   );
 
   const dayItems = items.filter(h => h.assigned_date === selected);
-  const pending = dayItems.filter(h => !doneIds.includes(h.id));
-  const done = dayItems.filter(h => doneIds.includes(h.id));
+  const pending = dayItems.filter(h => !h.is_completed);
+  const completed = dayItems.filter(h => h.is_completed);
 
-  const metaFor = (hw: HomeworkItem) =>
-    [quietCaps(hw.subject?.name), hw.assigned_by, hw.assigned_time].filter(Boolean).join(' · ');
+  // "Mathematics · Ms. Patel"
+  const headingFor = (hw: HomeworkItem) =>
+    [quietCaps(hw.subject?.name), hw.assigned_by].filter(Boolean).join(' · ');
 
   return (
     <View style={s.root}>
@@ -102,22 +127,23 @@ const StudentHomeworkScreen = ({ navigation }: any) => {
       <DateStrip selected={selected} onSelect={setSelected} marked={marked} />
       <View style={s.fullDivider} />
 
-      {loading && !refreshing && items.length === 0 ? (
-        <HomeworkSkeleton />
+      {loading ? (
+        <HomeworkSkeleton trailing="tick" />
       ) : error && items.length === 0 ? (
-        <ErrorBox message={error} onRetry={load} />
+        <ErrorBox message={error} onRetry={reload} />
       ) : (
         <ScrollView
           style={s.fill}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[s.list, dayItems.length === 0 && s.grow]}
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          // The skeleton stands in for the spinner.
+          refreshControl={<AppRefreshControl refreshing={false} onRefresh={reload} />}
         >
           <DayHead
             day={selected}
             line={
               dayItems.length > 0
-                ? [tasks(dayItems.length), done.length > 0 ? `${done.length} done` : null]
+                ? [tasks(dayItems.length), completed.length > 0 ? `${completed.length} completed` : null]
                     .filter(Boolean)
                     .join(' · ')
                 : null
@@ -140,24 +166,26 @@ const StudentHomeworkScreen = ({ navigation }: any) => {
                 <HomeworkRow
                   key={hw.id}
                   hw={hw}
-                  meta={metaFor(hw)}
-                  leading={<DoneTick done={false} onPress={() => setConfirm(hw)} />}
+                  period={periodLabel(hw)}
+                  heading={headingFor(hw)}
+                  trailing={<CompleteTick done={false} onPress={() => setConfirm(hw)} />}
                   isLast={i === pending.length - 1}
                   onPreviewImage={setPreview}
                 />
               ))}
 
-              {done.length > 0 && (
+              {completed.length > 0 && (
                 <>
-                  <Text style={[s.sectionTitle, pending.length === 0 && s.sectionTitleFirst]}>Done</Text>
-                  {done.map((hw, i) => (
+                  <Text style={[s.sectionTitle, pending.length === 0 && s.sectionTitleFirst]}>Completed</Text>
+                  {completed.map((hw, i) => (
                     <HomeworkRow
                       key={hw.id}
                       hw={hw}
-                      meta={metaFor(hw)}
-                      leading={<DoneTick done />}
+                      period={periodLabel(hw)}
+                      heading={headingFor(hw)}
+                      trailing={<CompleteTick done />}
                       done
-                      isLast={i === done.length - 1}
+                      isLast={i === completed.length - 1}
                       onPreviewImage={setPreview}
                     />
                   ))}
@@ -176,24 +204,37 @@ const StudentHomeworkScreen = ({ navigation }: any) => {
         onClose={() => setPreview(null)}
       />
 
-      {/* Marking done */}
-      <Modal transparent visible={!!confirm} animationType="fade" onRequestClose={() => setConfirm(null)}>
+      {/* Marking complete */}
+      <Modal
+        transparent
+        visible={!!confirm}
+        animationType="fade"
+        onRequestClose={() => !saving && setConfirm(null)}
+      >
         <View style={s.modalOverlay}>
           <View style={s.modalCard}>
-            <Text style={s.modalTitle}>Mark as done?</Text>
-            <Text style={s.modalDesc}>
-              “{quietCaps(confirm?.title)}” moves to Done. This can’t be undone.
-            </Text>
+            <Text style={s.modalTitle}>Mark this homework as complete?</Text>
+            <Text style={s.modalDesc}>“{quietCaps(confirm?.title)}” moves to Completed.</Text>
             <View style={s.modalActions}>
               <TouchableOpacity
                 style={[s.modalBtn, s.modalBtnGhost]}
                 activeOpacity={0.7}
+                disabled={saving}
                 onPress={() => setConfirm(null)}
               >
                 <Text style={s.modalBtnGhostText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[s.modalBtn, s.modalBtnPrimary]} activeOpacity={0.85} onPress={markDone}>
-                <Text style={s.modalBtnPrimaryText}>Mark done</Text>
+              <TouchableOpacity
+                style={[s.modalBtn, s.modalBtnPrimary, saving && s.modalBtnBusy]}
+                activeOpacity={0.85}
+                disabled={saving}
+                onPress={markComplete}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color={theme.colors.white} />
+                ) : (
+                  <Text style={s.modalBtnPrimaryText}>Mark complete</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -237,6 +278,7 @@ const __mk_s = () => StyleSheet.create({
   modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
   modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   modalBtnPrimary: { backgroundColor: theme.colors.primary },
+  modalBtnBusy: { opacity: 0.7 },
   modalBtnPrimaryText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
 
