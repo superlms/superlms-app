@@ -592,7 +592,8 @@ const __mk_styles = () => StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    maxWidth: 380,
+    // A little narrower than the screen allows, so it reads as a small prompt.
+    maxWidth: 300,
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.lg,
     padding: 24,
