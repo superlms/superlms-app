@@ -1,22 +1,24 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { AppState, BackHandler, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { BlurView } from '@react-native-community/blur';
 import { Biometrics, isPromptInProgress } from '../utils/biometrics';
 import { theme, onThemeChange } from '../utils/theme';
 
 /**
- * Wraps the app and dims the dashboard while the system biometric prompt is
- * showing. No lock UI of its own — the dashboard underneath shows at ~92%
- * (a thin white veil) and the OS biometric sheet does all the work, like
- * banking / WhatsApp.
+ * Wraps the app and keeps it locked behind the system biometric prompt.
  *
  * The lock only activates after the user has crossed the splash / auth
- * screens (controlled by the `active` prop), so the biometric prompt fires
- * the moment the dashboard appears — not during splash.
+ * screens (controlled by the `active` prop): the dashboard appears and, at the
+ * same moment, the system prompt opens over it with the dashboard lightly
+ * blurred behind.
+ *
+ * Dismissing the prompt (Back, or Cancel) leaves the app locked and shows a
+ * small card — "SuperLMS is locked", why, and "Unlock now", which opens the
+ * prompt again. Back does nothing else while locked, so the screens behind
+ * can't be reached.
  *
  * Locks on first arrival to the main app and whenever the app returns from
- * the background. If the user dismisses the sheet, tapping the dim overlay
- * re-fires it.
+ * the background.
  */
 const AppLock = ({
   active,
@@ -26,9 +28,11 @@ const AppLock = ({
   children: React.ReactNode;
 }) => {
   const [locked, setLocked] = useState(false);
-  // True while the system biometric sheet is open. The sheet (or the
-  // device-credential fallback screen) can briefly background the app on
-  // some devices, which must not re-trigger the lock.
+  // True while the system prompt is (about to be) open; the card waits for it
+  // to close. The ref guards against opening two prompts.
+  const [prompting, setPrompting] = useState(false);
+  // The sheet (or the device-credential fallback screen) can briefly
+  // background the app on some devices, which must not re-trigger the lock.
   const promptActive = useRef(false);
   // Remember the first time the user reaches the main app, so we don't keep
   // re-locking every time they navigate around.
@@ -37,6 +41,7 @@ const AppLock = ({
   const promptUnlock = useCallback(async () => {
     if (promptActive.current) return;
     promptActive.current = true;
+    setPrompting(true);
     try {
       const { available } = await Biometrics.check();
       if (!available) {
@@ -49,12 +54,12 @@ const AppLock = ({
       if (success) setLocked(false);
     } finally {
       promptActive.current = false;
+      setPrompting(false);
     }
   }, []);
 
   // Fire the lock the moment we first land on the main app (after splash /
-  // auth). The same moment the dashboard mounts, the biometric sheet shows
-  // and the dashboard underneath is dimmed.
+  // auth): the dashboard mounts, the prompt opens and the dashboard blurs.
   useEffect(() => {
     if (!active || firstArrivalDone.current) return;
     firstArrivalDone.current = true;
@@ -70,7 +75,8 @@ const AppLock = ({
   }, [active, promptUnlock]);
 
   // Re-lock when the app goes to background (only if we're already in the
-  // main app — never lock the splash / login screens).
+  // main app — never lock the splash / login screens). The prompt reopens on
+  // return, so the card isn't shown in between.
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => {
       if (
@@ -80,16 +86,16 @@ const AppLock = ({
         !isPromptInProgress()
       ) {
         Biometrics.isEnabled().then(enabled => {
-          if (enabled) setLocked(true);
+          if (!enabled) return;
+          setLocked(true);
+          setPrompting(true);
         });
       }
     });
     return () => sub.remove();
   }, [active]);
 
-  // Re-fire the prompt when we come back to the foreground while still
-  // locked (covers the case where the user dismissed the sheet by going
-  // home).
+  // Re-open the prompt when we come back to the foreground while still locked.
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => {
       if (state === 'active' && locked && !promptActive.current) {
@@ -99,25 +105,42 @@ const AppLock = ({
     return () => sub.remove();
   }, [locked, promptUnlock]);
 
+  // While locked, Back stays on the lock — it must not move the app behind it.
+  useEffect(() => {
+    if (!locked) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => sub.remove();
+  }, [locked]);
+
   return (
     <View style={s.flex}>
       {children}
       {locked && (
-        // Real frosted-glass blur over the dashboard at 15% strength; the
-        // system biometric sheet draws on top. Tapping it re-fires the
-        // prompt in case the user dismissed the system sheet.
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={promptUnlock}
-          style={s.overlay}
-        >
+        // A light frosted blur over the dashboard; the system prompt draws on
+        // top of it. It takes every touch, so nothing behind can be used.
+        <View style={s.overlay} onStartShouldSetResponder={() => true}>
           <BlurView
             style={StyleSheet.absoluteFill}
             blurType="light"
-            blurAmount={15}
+            blurAmount={6}
             reducedTransparencyFallbackColor={theme.colors.white}
           />
-        </TouchableOpacity>
+
+          {!prompting && (
+            <View style={s.center}>
+              <View style={s.card}>
+                <View style={s.cardBody}>
+                  <Text style={s.title}>SuperLMS is locked</Text>
+                  <Text style={s.desc}>Authentication is required to access this app.</Text>
+                </View>
+                <View style={s.divider} />
+                <TouchableOpacity style={s.unlock} activeOpacity={0.6} onPress={promptUnlock}>
+                  <Text style={s.unlockText}>Unlock now</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
       )}
     </View>
   );
@@ -136,6 +159,33 @@ const __mk_s = () => StyleSheet.create({
     zIndex: 999,
     elevation: 999,
   },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+
+  // Locked card: title and reason, a full-width rule, then the action across the card
+  card: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  cardBody: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 20 },
+  title: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary, textAlign: 'center' },
+  desc: {
+    marginTop: 8,
+    fontSize: 14,
+    lineHeight: 20,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+  },
+  divider: { height: 1, backgroundColor: theme.colors.border },
+  unlock: { height: 52, alignItems: 'center', justifyContent: 'center' },
+  unlockText: { fontSize: 15, fontWeight: '600', color: theme.colors.primary },
 });
 
 

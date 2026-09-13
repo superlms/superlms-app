@@ -34,6 +34,10 @@ const SettingsScreen = () => {
   const [bioEnabled, setBioEnabled] = useState(false);
   const [bioAvailable, setBioAvailable] = useState(true);
   const [bioBusy, setBioBusy] = useState(false);
+  // The position the user just flipped the switch to, held while the system
+  // prompt confirms it — so the switch stays where they put it instead of
+  // snapping back before the prompt appears. Cleared once it is settled.
+  const [bioPending, setBioPending] = useState<boolean | null>(null);
 
   // ── Notifications (local toggle for now, persisted in AsyncStorage) ─────────
   const [notifEnabled, setNotifEnabled] = useState(true);
@@ -68,6 +72,7 @@ const SettingsScreen = () => {
   const onBioToggle = async (next: boolean) => {
     if (bioBusy) return;
     setBioBusy(true);
+    setBioPending(next);
     try {
       if (next) {
         const { available } = await Biometrics.check();
@@ -92,6 +97,8 @@ const SettingsScreen = () => {
         }
       }
     } finally {
+      // Cancelled or failed: the switch goes back to what is saved.
+      setBioPending(null);
       setBioBusy(false);
     }
   };
@@ -144,9 +151,9 @@ const SettingsScreen = () => {
             description={bioAvailable ? 'Fingerprint or face' : 'Not set up on this phone'}
             trailing={
               <Switch
-                value={bioEnabled}
+                value={bioPending ?? bioEnabled}
                 onValueChange={onBioToggle}
-                disabled={bioBusy || (!bioAvailable && !bioEnabled)}
+                disabled={!bioAvailable && !bioEnabled}
                 {...switchColors}
               />
             }
