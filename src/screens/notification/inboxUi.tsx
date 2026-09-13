@@ -67,10 +67,13 @@ export function FilterPills<K extends string>({
   options,
   active,
   onChange,
+  compact,
 }: {
   options: PillOption<K>[];
   active: K;
   onChange: (key: K) => void;
+  /** Narrower pills — a little less padding either side of the label. */
+  compact?: boolean;
 }) {
   return (
     <View style={s.pills}>
@@ -81,7 +84,7 @@ export function FilterPills<K extends string>({
             key={o.key}
             activeOpacity={0.7}
             onPress={() => onChange(o.key)}
-            style={[s.pill, on && s.pillActive]}
+            style={[s.pill, compact && s.pillCompact, on && s.pillActive]}
           >
             <Text style={[s.pillText, on && s.pillTextActive]}>
               {o.label}
@@ -386,6 +389,7 @@ const __mk_s = () => StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
+  pillCompact: { paddingHorizontal: 8 },
   pillActive: { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primaryLight },
   pillText: { fontSize: 12, fontWeight: '500', color: BODY },
   pillCount: { fontWeight: '700', color: INK },

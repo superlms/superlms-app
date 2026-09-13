@@ -97,7 +97,7 @@ const AnnouncementScreen = ({ navigation }: any) => {
       <DocHeader title="Announcement" onBackPress={() => navigation.goBack()} />
 
       {loading ? (
-        <InboxSkeleton pillWidths={[54, 60, 66, 66]} metaWidth={60} />
+        <InboxSkeleton pillWidths={[50, 56, 62, 62]} metaWidth={60} />
       ) : error ? (
         <View style={s.centeredBox}>
           <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
@@ -111,6 +111,7 @@ const AnnouncementScreen = ({ navigation }: any) => {
           {/* Date window */}
           <View style={ui.metaBar}>
             <FilterPills
+              compact
               options={FILTERS.map(f => ({ key: f.label, label: f.label }))}
               active={activeFilter}
               onChange={setActiveFilter}
