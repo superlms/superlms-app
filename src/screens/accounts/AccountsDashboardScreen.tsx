@@ -71,7 +71,7 @@ const AccountsDashboardScreen = ({ navigation }: any) => {
   const { refreshing, onRefresh } = useRefresh(load);
 
   const onLogout = () => {
-    AppAlert.alert('Logout', 'Sign out of the accounts account?', [
+    AppAlert.alert('Log out?', 'Are you sure you want to log out of this account on this device?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Logout',

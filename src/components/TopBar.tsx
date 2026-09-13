@@ -34,19 +34,11 @@ const getGreeting = () => {
   return 'Good evening';
 };
 
-const initialsOf = (name?: string | null) =>
-  (name || '?')
-    .trim()
-    .split(/\s+/)
-    .map(p => p[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
-
 /**
  * The dashboard's header: the menu, who is signed in (tap to switch account),
  * notifications and the profile photo — plain icons on white, with a thin line
- * under it like every other header.
+ * under it like every other header. Without a photo, the profile is a plain
+ * outline icon like the bell beside it.
  */
 const TopBar = ({ userName, onBellPress, onAvatarPress }: TopBarProps) => {
   const navigation = useNavigation<any>();
@@ -136,7 +128,7 @@ const TopBar = ({ userName, onBellPress, onAvatarPress }: TopBarProps) => {
             <Text style={styles.userName} numberOfLines={1}>
               {displayName || 'Account'}
             </Text>
-            <VectorIcon iconSet="Feather" iconName="chevron-down" size={15} color={theme.colors.textMuted} />
+            <VectorIcon iconSet="Feather" iconName="chevron-down" size={17} color={theme.colors.textMuted} />
           </View>
         </TouchableOpacity>
 
@@ -149,13 +141,15 @@ const TopBar = ({ userName, onBellPress, onAvatarPress }: TopBarProps) => {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={onAvatarPress} activeOpacity={0.7} style={styles.avatar}>
-          {avatarUri && !avatarBroken ? (
+        {avatarUri && !avatarBroken ? (
+          <TouchableOpacity onPress={onAvatarPress} activeOpacity={0.7} style={styles.avatar}>
             <Image source={{ uri: avatarUri }} onError={() => setAvatarBroken(true)} style={styles.avatarImg} />
-          ) : (
-            <Text style={styles.avatarInitials}>{initialsOf(displayName)}</Text>
-          )}
-        </TouchableOpacity>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={onAvatarPress} activeOpacity={0.6} hitSlop={8} style={styles.iconBtn}>
+            <VectorIcon iconSet="Ionicons" iconName="person-circle-outline" size={24} color={theme.colors.textPrimary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       <AccountSwitcherSheet visible={switcherOpen} onClose={onSwitcherClose} />
@@ -246,11 +240,6 @@ const __mk_styles = () => StyleSheet.create({
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
-  },
-  avatarInitials: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.textSecondary,
   },
 });
 

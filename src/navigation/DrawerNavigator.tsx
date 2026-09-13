@@ -66,6 +66,8 @@ type MenuItem = {
   label: string;
   icon: string;
   iconSet?: string;
+  // For a glyph that reads small at the usual 20 (the "More" dots).
+  iconSize?: number;
   params?: Record<string, string>;
   nestedRoute?: string;
 };
@@ -98,7 +100,7 @@ const ITEM = {
   uploadCopy: { name: 'UploadCopy', label: 'Upload Copy', icon: 'document-attach-outline' },
   contact: { name: 'ContactSchool', label: 'Contact School', icon: 'call-outline' },
   settings: { name: 'Settings', label: 'Settings', icon: 'settings-outline' },
-  more: { name: 'More', label: 'More', icon: 'ellipsis-horizontal-outline' },
+  more: { name: 'More', label: 'More', icon: 'ellipsis-horizontal-outline', iconSize: 23 },
 } satisfies Record<string, MenuItem>;
 
 const STUDENT_MENU: MenuItem[] = [
@@ -295,7 +297,7 @@ const DrawerNavigator = ({ route }: any) => {
                     <VectorIcon
                       iconSet={item.iconSet || 'Ionicons'}
                       iconName={item.icon}
-                      size={20}
+                      size={item.iconSize ?? 20}
                       color={isActive ? theme.colors.primary : theme.colors.textSecondary}
                     />
                     <Text style={[styles.menuText, isActive && styles.menuTextActive]}>
@@ -361,7 +363,7 @@ const DrawerNavigator = ({ route }: any) => {
             >
               <Text style={styles.modalTitle}>Log out?</Text>
               <Text style={styles.modalDesc}>
-                You will be signed out of this account on this device.
+                Are you sure you want to log out of this account on this device?
               </Text>
 
               <View style={styles.modalActions}>

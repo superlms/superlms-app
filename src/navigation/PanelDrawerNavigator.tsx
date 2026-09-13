@@ -273,7 +273,7 @@ const PanelDrawerNavigator = ({ route }: any) => {
         <AppDialog
           visible={logoutVisible}
           title="Log out?"
-          message="You will be signed out of this account on this device."
+          message="Are you sure you want to log out of this account on this device?"
           actions={[
             { text: 'Cancel', style: 'cancel', onPress: () => setLogoutVisible(false) },
             { text: 'Log out', style: 'destructive', onPress: doLogout },
