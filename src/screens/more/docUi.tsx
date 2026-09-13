@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -9,6 +10,8 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppAlert } from '../../components/AppDialog';
+import { downloadFile } from '../../api/pdfDownload';
 import Header from '../../components/Header';
 import { Skeleton } from '../../components/Skeleton';
 import VectorIcon from '../../components/VectorIcon';
@@ -321,9 +324,42 @@ export const useDocShape = (key: string, fallback: DocShape[]) => {
   return [shape, remember] as const;
 };
 
+// The name a document is saved under: its title, with the file's own extension.
+const documentFileName = (title: string, url: string, fileType?: string | null) => {
+  const ext = url.split('?')[0].match(/\.([a-z0-9]{2,5})$/i)?.[1] ?? (fileType || 'pdf');
+  const base = title.replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'Document';
+  return `${base}.${String(ext).toLowerCase()}`;
+};
+
+/**
+ * Documents on the More pages download rather than open: `download` saves the
+ * file to the phone's Downloads (the share sheet on iOS) and says so;
+ * `downloading` is the key of the row whose spinner should show meanwhile.
+ */
+export const useDocumentDownload = () => {
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  const download = async (key: string, title: string, url: string, fileType?: string | null) => {
+    if (downloading) return;
+    setDownloading(key);
+    try {
+      const fileName = documentFileName(title, url, fileType);
+      await downloadFile(url, fileName);
+      if (Platform.OS === 'android') AppAlert.alert('Downloaded', `${fileName} is saved in Downloads.`);
+    } catch (e: any) {
+      console.log('[download] ❌', e?.message);
+      AppAlert.alert('Could not download', 'Please check your connection and try again.');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  return { downloading, download };
+};
+
 // About how wide one character is: body 15px, section heading 17px semibold,
-// intro title 22px bold, intro subtitle 14px.
-const CHAR_W = { body: 7.6, head: 9.5, title: 13.5, subtitle: 7.2 };
+// intro title 22px bold, intro subtitle 14px, hero name 20px bold, hero line 13px.
+const CHAR_W = { body: 7.6, head: 9.5, title: 13.5, subtitle: 7.2, heroName: 12.5, heroLine: 6.6 };
 // Heights on the page: header bar, top padding, gap between blocks, a section
 // heading with its margin, one body line.
 const SK_H = { header: 50, top: 16, gap: 28, head: 31, line: 24 };
@@ -353,8 +389,12 @@ export const DocSkeleton = ({
   lists = [],
 }: {
   title: string;
-  /** A centred head instead of the intro: logo, name and `lines` short lines under it, then a full-width rule. */
-  hero?: { logo?: boolean; lines?: number };
+  /**
+   * A centred head instead of the intro: the logo, the name (its length in
+   * characters, when known), the lines under it — how many, or each one's
+   * length in characters — and a full-width rule.
+   */
+  hero?: { logo?: boolean; name?: number; lines?: number | number[] };
   /** The intro's parts; a number for the title or subtitle is its length in characters. */
   intro?: { logo?: boolean; title?: boolean | number; subtitle?: boolean | number; meta?: boolean };
   /** How many text sections, for a page without a `shape`. */
@@ -369,13 +409,32 @@ export const DocSkeleton = ({
   const introW = (part: boolean | number | undefined, charW: number, fallback: string) =>
     typeof part === 'number' ? Math.min(part * charW, textW) : fallback;
 
+  // The hero's lines as drawn: one row each, or each wrapped to the width.
+  const heroW = width - 50;
+  const heroPerLine = Math.max(10, Math.floor(heroW / CHAR_W.heroLine));
+  const heroLines: (number | string)[][] = !hero?.lines
+    ? []
+    : typeof hero.lines === 'number'
+      ? Array.from({ length: hero.lines }, (_, i) => [i % 2 === 0 ? '64%' : '84%'])
+      : hero.lines.map(len => {
+          const count = Math.max(1, Math.ceil(len / heroPerLine));
+          return Array.from({ length: count }, (_, r) =>
+            r < count - 1
+              ? Math.round(heroW * 0.94)
+              : Math.min((len - (count - 1) * heroPerLine) * CHAR_W.heroLine, heroW),
+          );
+        });
+
   // The shaped sections, cut off once they pass the bottom of the screen.
   const shaped: { head: number; rows: (string | null)[] }[] = [];
   if (shape) {
     const perLine = Math.max(20, Math.floor(textW / CHAR_W.body));
     let room = height - SK_H.header - SK_H.top;
-    // Hero: top padding, logo, name, each line, bottom padding, rule.
-    if (hero) room -= 28 + (hero.logo ? 96 : 0) + 41 + 25 * (hero.lines ?? 0) + 24 + 1;
+    // Hero: top padding, logo, name, each line with its rows, bottom padding, rule.
+    if (hero) {
+      room -= 28 + (hero.logo ? 96 : 0) + 41 + 24 + 1;
+      heroLines.forEach(rows => (room -= 6 + 19 * rows.length));
+    }
     if (intro.logo) room -= 70;
     if (intro.title) room -= 28;
     if (intro.subtitle) room -= 24;
@@ -402,11 +461,15 @@ export const DocSkeleton = ({
           <View style={docStyles.hero}>
             {hero.logo && <Skeleton width={96} height={96} radius={14} />}
             <View style={[s.skLine, s.skHeroName]}>
-              <Skeleton width="56%" height={18} />
+              <Skeleton width={hero.name ? Math.min(hero.name * CHAR_W.heroName, heroW) : '56%'} height={18} />
             </View>
-            {Array.from({ length: hero.lines ?? 0 }, (_, i) => (
-              <View key={i} style={[s.skLine, s.skHeroLine]}>
-                <Skeleton width={i % 2 === 0 ? '64%' : '84%'} height={11} />
+            {heroLines.map((rows, i) => (
+              <View key={i} style={s.skHeroText}>
+                {rows.map((w, r) => (
+                  <View key={r} style={[s.skLine, s.skHeroRow]}>
+                    <Skeleton width={w} height={11} />
+                  </View>
+                ))}
               </View>
             ))}
           </View>
@@ -536,6 +599,9 @@ const __mk_docStyles = () => StyleSheet.create({
   heroLine: { fontSize: 13, lineHeight: 19, color: theme.colors.textMuted, textAlign: 'center', marginTop: 6 },
   heroLink: { color: theme.colors.primary, fontWeight: '500' },
   rule: { height: 1, backgroundColor: theme.colors.divider },
+
+  // A small centred note at the foot of a page ("Last updated …").
+  footnote: { fontSize: 12, color: theme.colors.textMuted, textAlign: 'center' },
 });
 
 const __mk_s = () => StyleSheet.create({
@@ -559,7 +625,8 @@ const __mk_s = () => StyleSheet.create({
   skIntroSub: { height: 20, marginTop: 4 },
   skIntroMeta: { height: 16, marginTop: 8 },
   skHeroName: { alignSelf: 'stretch', alignItems: 'center', height: 27, marginTop: 14 },
-  skHeroLine: { alignSelf: 'stretch', alignItems: 'center', height: 19, marginTop: 6 },
+  skHeroText: { alignSelf: 'stretch', marginTop: 6 },
+  skHeroRow: { alignItems: 'center', height: 19 },
   skSectionTitle: { height: 23, marginBottom: 8 },
   skBodyLine: { height: 24 },
   skRowText: { flex: 1 },

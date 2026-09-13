@@ -1,10 +1,8 @@
 import React, { useCallback, useState } from 'react';
-import { Image, Linking, Platform, ScrollView, Text, View } from 'react-native';
+import { Image, Linking, ScrollView, Text, View } from 'react-native';
 import AppRefreshControl from '../../components/AppRefreshControl';
-import { AppAlert } from '../../components/AppDialog';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getSchoolInfo } from '../../api/authApi';
-import { downloadFile } from '../../api/pdfDownload';
 import {
   DocHeader,
   DocSection,
@@ -19,6 +17,7 @@ import {
   DOC_FALLBACK_SHAPE,
   docShapeOf,
   useDocShape,
+  useDocumentDownload,
 } from './docUi';
 
 interface ManagementMember {
@@ -58,22 +57,12 @@ const sectionsOf = (info: SchoolInfo) =>
     { title: 'Website Info', content: info.website_info },
   ].filter(sec => !!sec.content?.trim());
 
-// The name a document is saved under: its title, with the file's own extension.
-const fileNameFor = (doc: any, url: string, i: number) => {
-  const ext = url.split('?')[0].match(/\.([a-z0-9]{2,5})$/i)?.[1] ?? String(doc.file_type ?? 'pdf');
-  const base =
-    String(doc.title ?? doc.name ?? `Document ${i + 1}`)
-      .replace(/[\\/:*?"<>|]+/g, ' ')
-      .trim() || 'Document';
-  return `${base}.${ext.toLowerCase()}`;
-};
-
 const SchoolInfoScreen = () => {
   const [info, setInfo] = useState<SchoolInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [downloading, setDownloading] = useState<string | null>(null);
   const [shape, rememberShape] = useDocShape('school_info', DOC_FALLBACK_SHAPE);
+  const { downloading, download } = useDocumentDownload();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -129,22 +118,6 @@ const SchoolInfoScreen = () => {
     documents.length === 0 &&
     !info.school_address &&
     contacts.length === 0;
-
-  // Saves the document to the phone's Downloads (on iOS, the share sheet).
-  const download = async (doc: any, i: number, url: string) => {
-    if (downloading) return;
-    setDownloading(String(doc.id ?? i));
-    try {
-      const fileName = fileNameFor(doc, url, i);
-      await downloadFile(url, fileName);
-      if (Platform.OS === 'android') AppAlert.alert('Downloaded', `${fileName} is saved in Downloads.`);
-    } catch (e: any) {
-      console.log('[SchoolInfo] download ❌', e?.message);
-      AppAlert.alert('Could not download', 'Please check your connection and try again.');
-    } finally {
-      setDownloading(null);
-    }
-  };
 
   return (
     <View style={docStyles.root}>
@@ -204,15 +177,17 @@ const SchoolInfoScreen = () => {
               <DocList>
                 {documents.map((doc: any, i: number) => {
                   const fileUrl = doc.file_url ?? doc.file_path ?? null;
+                  const key = String(doc.id ?? i);
+                  const title = doc.title ?? doc.name ?? `Document ${i + 1}`;
                   return (
                     <DocRow
-                      key={doc.id ?? i}
+                      key={key}
                       icon="file-text"
-                      title={doc.title ?? doc.name ?? `Document ${i + 1}`}
+                      title={title}
                       sub={doc.file_type ? String(doc.file_type).toUpperCase() : undefined}
                       trailingIcon={fileUrl ? 'download-outline' : undefined}
-                      trailingBusy={downloading === String(doc.id ?? i)}
-                      onPress={fileUrl ? () => download(doc, i, fileUrl) : undefined}
+                      trailingBusy={downloading === key}
+                      onPress={fileUrl ? () => download(key, title, fileUrl, doc.file_type) : undefined}
                       isLast={i === documents.length - 1}
                     />
                   );
