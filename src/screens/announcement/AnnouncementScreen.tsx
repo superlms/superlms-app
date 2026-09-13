@@ -9,6 +9,7 @@ import { theme, onThemeChange } from '../../utils/theme';
 import apiClient from '../../api/apiClient';
 import { FILTERS, mapApiItem } from './announcementData';
 import type { Announcement, FilterKey } from './announcementData';
+import { useAnnouncementReads } from './announcementReads';
 import { DocHeader, DocNoData } from '../more/docUi';
 import {
   BODY,
@@ -47,6 +48,7 @@ const AnnouncementScreen = ({ navigation }: any) => {
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterKey>('15 Days');
   const loadedOnce = useRef(false);
+  const reads = useAnnouncementReads();
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
   // The skeleton shows only until the first load; pulling to refresh or coming
@@ -84,12 +86,6 @@ const AnnouncementScreen = ({ navigation }: any) => {
     [announcements, allowedTags],
   );
 
-  const pillOptions = FILTERS.map(f => ({
-    key: f.label,
-    label: f.label,
-    count: forRole.filter(a => inWindow(a, f.days)).length,
-  }));
-
   const sections = useMemo(() => {
     const window = FILTERS.find(x => x.label === activeFilter)!;
     return groupByDay(forRole.filter(a => inWindow(a, window.days)), postedAt);
@@ -101,7 +97,7 @@ const AnnouncementScreen = ({ navigation }: any) => {
       <DocHeader title="Announcement" onBackPress={() => navigation.goBack()} />
 
       {loading ? (
-        <InboxSkeleton pills={FILTERS.length} />
+        <InboxSkeleton pillWidths={[54, 60, 66, 66]} metaWidth={60} />
       ) : error ? (
         <View style={s.centeredBox}>
           <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
@@ -112,9 +108,13 @@ const AnnouncementScreen = ({ navigation }: any) => {
         </View>
       ) : (
         <>
-          {/* Date window, each with how many it holds */}
+          {/* Date window */}
           <View style={ui.metaBar}>
-            <FilterPills options={pillOptions} active={activeFilter} onChange={setActiveFilter} />
+            <FilterPills
+              options={FILTERS.map(f => ({ key: f.label, label: f.label }))}
+              active={activeFilter}
+              onChange={setActiveFilter}
+            />
           </View>
           <View style={ui.fullDivider} />
 
@@ -135,15 +135,16 @@ const AnnouncementScreen = ({ navigation }: any) => {
             renderSectionHeader={({ section }) => <DayHeading title={section.title} />}
             renderItem={({ item, index, section }) => {
               const at = postedAt(item);
+              // Every row looks alike; a green dot on the icon marks one not
+              // yet opened. Attachments show on the announcement itself.
               return (
                 <InboxRow
                   icon="megaphone"
                   title={item.title}
                   body={item.content}
-                  kind={item.tag === 'All' ? 'Everyone' : item.tag}
                   time={at ? timeLabel(at) : undefined}
-                  highlight={item.isNew}
-                  attachment={item.hasImage || item.hasPdf}
+                  tinted
+                  dot={!!reads && !reads.has(item.id)}
                   isLast={index === section.data.length - 1}
                   onPress={() => navigation.navigate('ViewAnnouncement', { item })}
                 />

@@ -146,7 +146,7 @@ const NotificationScreen = ({ navigation }: any) => {
 
       {!ready ? (
         // The saved inbox is still being read off the device
-        <InboxSkeleton pills={READ_FILTERS.length} trailing />
+        <InboxSkeleton pillWidths={[54, 72, 62]} trailing />
       ) : (
         /* While picking, a tap on any empty part of the screen lets go of the
            selection; rows and links keep their own taps. */

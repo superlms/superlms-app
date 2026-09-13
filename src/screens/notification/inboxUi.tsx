@@ -6,7 +6,7 @@ import { Skeleton } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
 
 // The shared look of the inbox-style lists — Notifications and Announcements:
-// filter pills with their totals, day headings, and rows led by a round icon.
+// filter pills, day headings, and rows led by a round icon.
 
 // A step darker than the theme's text colours, so these lists read crisply.
 export const INK = '#0F172A';   // titles
@@ -53,11 +53,11 @@ export function groupByDay<T>(items: T[], at: (item: T) => number): DaySection<T
   return sections;
 }
 
-// ── Filter pills, each with its total ────────────────────────────────────────
+// ── Filter pills, with their totals when given ───────────────────────────────
 export interface PillOption<K extends string> {
   key: K;
   label: string;
-  count: number;
+  count?: number;
 }
 
 export function FilterPills<K extends string>({
@@ -81,7 +81,11 @@ export function FilterPills<K extends string>({
             style={[s.pill, on && s.pillActive]}
           >
             <Text style={[s.pillText, on && s.pillTextActive]}>
-              {o.label} <Text style={[s.pillCount, on && s.pillTextActive]}>{o.count}</Text>
+              {o.label}
+              {o.count !== undefined && ' '}
+              {o.count !== undefined && (
+                <Text style={[s.pillCount, on && s.pillTextActive]}>{o.count}</Text>
+              )}
             </Text>
           </TouchableOpacity>
         );
@@ -94,9 +98,8 @@ export const DayHeading = ({ title }: { title: string }) => <Text style={s.dayHe
 
 // ── One item ─────────────────────────────────────────────────────────────────
 // A round icon centred on the row, the title, one line of description running
-// to the right edge, and the kind with its time (and a clip when something is
-// attached) on the last line. While picking rows the icon's slot holds a small
-// tick instead, so the text never shifts.
+// to the right edge, and the kind and/or time on the last line. While picking
+// rows the icon's slot holds a small tick instead, so the text never shifts.
 //   (📣)  Exam Schedule Released
 //         The mid-term timetable has been published for all …
 //         Exam · 2 hrs ago
@@ -107,6 +110,8 @@ export const InboxRow = ({
   kind,
   time,
   highlight,
+  tinted,
+  dot,
   attachment,
   isLast,
   selectionMode = false,
@@ -117,65 +122,76 @@ export const InboxRow = ({
   icon: string;
   title: string;
   body?: string;
-  kind: string;
+  kind?: string;
   time?: string;
-  /** Unread or new: tinted icon, bold title, time in the accent colour. */
+  /** Unread: tinted icon, bold title, time in the accent colour. */
   highlight?: boolean;
+  /** Tint the icon circle whatever the state, so every row looks alike. */
+  tinted?: boolean;
+  /** A green dot on the icon — unread, where the row is otherwise alike. */
+  dot?: boolean;
   attachment?: boolean;
   isLast: boolean;
   selectionMode?: boolean;
   selected?: boolean;
   onPress: () => void;
   onLongPress?: () => void;
-}) => (
-  <TouchableOpacity
-    style={[s.row, !isLast && s.rowDivider, selected && s.rowSelected]}
-    activeOpacity={0.6}
-    onPress={onPress}
-    onLongPress={onLongPress}
-    delayLongPress={300}
-  >
-    <View style={s.leadSlot}>
-      {selectionMode ? (
-        <View style={[s.check, selected ? s.checkOn : s.checkOff]}>
-          {selected && (
-            <VectorIcon iconSet="Ionicons" iconName="checkmark" size={13} color={theme.colors.white} />
-          )}
-        </View>
-      ) : (
-        <View style={[s.lead, highlight ? s.leadOn : s.leadOff]}>
-          <VectorIcon
-            iconSet="Ionicons"
-            iconName={icon}
-            size={17}
-            color={highlight ? theme.colors.primary : BODY}
-          />
-        </View>
-      )}
-    </View>
+}) => {
+  const tint = highlight || tinted;
 
-    <View style={s.body}>
-      <Text style={[s.title, highlight && s.titleOn]} numberOfLines={1}>
-        {title}
-      </Text>
-
-      {!!body && (
-        <Text style={s.preview} numberOfLines={1}>
-          {body}
-        </Text>
-      )}
-
-      <View style={s.metaLine}>
-        <Text style={s.meta} numberOfLines={1}>
-          {kind}
-          {!!time && ' · '}
-          {!!time && <Text style={highlight ? s.timeOn : undefined}>{time}</Text>}
-        </Text>
-        {attachment && <VectorIcon iconSet="Feather" iconName="paperclip" size={11} color={QUIET} />}
+  return (
+    <TouchableOpacity
+      style={[s.row, !isLast && s.rowDivider, selected && s.rowSelected]}
+      activeOpacity={0.6}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={300}
+    >
+      <View style={s.leadSlot}>
+        {selectionMode ? (
+          <View style={[s.check, selected ? s.checkOn : s.checkOff]}>
+            {selected && (
+              <VectorIcon iconSet="Ionicons" iconName="checkmark" size={13} color={theme.colors.white} />
+            )}
+          </View>
+        ) : (
+          <View style={[s.lead, tint ? s.leadOn : s.leadOff]}>
+            <VectorIcon
+              iconSet="Ionicons"
+              iconName={icon}
+              size={17}
+              color={tint ? theme.colors.primary : BODY}
+            />
+            {dot && <View style={s.dot} />}
+          </View>
+        )}
       </View>
-    </View>
-  </TouchableOpacity>
-);
+
+      <View style={s.body}>
+        <Text style={[s.title, highlight && s.titleOn]} numberOfLines={1}>
+          {title}
+        </Text>
+
+        {!!body && (
+          <Text style={s.preview} numberOfLines={1}>
+            {body}
+          </Text>
+        )}
+
+        {(!!kind || !!time || attachment) && (
+          <View style={s.metaLine}>
+            <Text style={s.meta} numberOfLines={1}>
+              {kind}
+              {!!kind && !!time && ' · '}
+              {!!time && <Text style={highlight ? s.timeOn : undefined}>{time}</Text>}
+            </Text>
+            {attachment && <VectorIcon iconSet="Feather" iconName="paperclip" size={11} color={QUIET} />}
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 // ── Loading ──────────────────────────────────────────────────────────────────
 // The pills, the rule, a day heading and a run of rows, each box at the height
@@ -184,21 +200,24 @@ const TITLE_W = ['62%', '48%', '70%', '55%', '66%', '44%'];
 const BODY_W = ['88%', '76%', '92%', '70%', '84%', '80%'];
 
 export const InboxSkeleton = ({
-  pills,
+  pillWidths,
   trailing,
+  metaWidth = 96,
   rows = 7,
 }: {
-  /** How many filter pills the screen shows. */
-  pills: number;
+  /** Width of each filter pill the screen shows. */
+  pillWidths: number[];
   /** A link on the right of the pills (e.g. "Mark all read"). */
   trailing?: boolean;
+  /** Width of the last line (kind · time). */
+  metaWidth?: number;
   rows?: number;
 }) => (
   <View>
     <View style={s.metaBar}>
       <View style={s.pills}>
-        {Array.from({ length: pills }, (_, i) => (
-          <Skeleton key={i} width={i === 0 ? 54 : 70} height={28} radius={14} />
+        {pillWidths.map((w, i) => (
+          <Skeleton key={i} width={w} height={28} radius={14} />
         ))}
       </View>
       {trailing && <Skeleton width={84} height={12} />}
@@ -222,7 +241,7 @@ export const InboxSkeleton = ({
               <Skeleton width={BODY_W[i % BODY_W.length]} height={11} />
             </View>
             <View style={s.skMeta}>
-              <Skeleton width={96} height={9} />
+              <Skeleton width={metaWidth} height={9} />
             </View>
           </View>
         </View>
@@ -278,6 +297,18 @@ const __mk_s = () => StyleSheet.create({
   lead: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   leadOff: { backgroundColor: theme.colors.background },
   leadOn: { backgroundColor: theme.colors.primaryLight },
+  // Unread dot on the icon's upper right, ringed in the page colour.
+  dot: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.success,
+    borderWidth: 2,
+    borderColor: theme.colors.card,
+  },
   check: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   checkOff: { borderWidth: 1.5, borderColor: theme.colors.border },
   checkOn: { backgroundColor: theme.colors.primary },

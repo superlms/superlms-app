@@ -15,6 +15,7 @@ import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import type { Announcement } from './announcementData';
+import { markAnnouncementRead } from './announcementReads';
 import apiClient from '../../api/apiClient';
 import constant from '../../utils/constant';
 import { DocHeader, DocSection, DocBody, docStyles } from '../more/docUi';
@@ -53,7 +54,6 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
   const initialItem: Announcement = route.params?.item;
   const [item, setItem] = useState<Announcement>(initialItem);
 
-  const timeLabel = item?.daysAgo === 0 ? 'Today' : `${item?.daysAgo || 0}d ago`;
   const dateLabel = item?.date
     ? moment(item.date).format('DD MMM YYYY, hh:mm A')
     : '';
@@ -96,6 +96,8 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
   };
 
   useEffect(() => {
+    // Opening it is reading it: the green dot in the list goes.
+    if (initialItem?.id) markAnnouncementRead(initialItem.id);
     fetchAnnouncementDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialItem?.id]);
@@ -133,23 +135,13 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
           <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Audience, time, title, date */}
+        {/* When it was posted, then the title */}
         <View>
-          <View style={s.metaRow}>
-            <Text style={s.metaText}>
-              {item.tag === 'All' ? 'Everyone' : item.tag} · {timeLabel}
-            </Text>
-            {item.isNew && (
-              <View style={s.newPill}>
-                <Text style={s.newPillText}>New</Text>
-              </View>
-            )}
-          </View>
-          <Text style={s.title}>{item.title}</Text>
           {!!dateLabel && <Text style={s.dateText}>{dateLabel}</Text>}
+          <Text style={s.title}>{item.title}</Text>
         </View>
 
-        {/* Description, with attachments as chips right under it */}
+        {/* Description, with any attachments right under it */}
         <DocSection title="Description">
           <DocBody>{item.content || 'No description available'}</DocBody>
           {(imageUrl || pdfUrl) && (
@@ -164,7 +156,8 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
           )}
         </DocSection>
 
-        {/* Posted by */}
+        {/* Posted by — the school's admin, by role rather than the school name
+            the admin account carries */}
         {!!item.creatorName && (
           <>
             <View style={s.divider} />
@@ -174,13 +167,11 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
                   <Image source={{ uri: creatorAvatar }} style={s.creatorAvatar} />
                 ) : (
                   <View style={[s.creatorAvatar, s.creatorAvatarFallback]}>
-                    <Text style={s.creatorInitial}>
-                      {item.creatorName.charAt(0).toUpperCase()}
-                    </Text>
+                    <Text style={s.creatorInitial}>A</Text>
                   </View>
                 )}
                 <View style={s.creatorInfo}>
-                  <Text style={s.creatorName}>{item.creatorName}</Text>
+                  <Text style={s.creatorName}>Admin</Text>
                   {!!item.creatorEmail && (
                     <Text style={s.creatorEmail}>{item.creatorEmail}</Text>
                   )}
@@ -200,18 +191,9 @@ const __mk_s = () => StyleSheet.create({
   centeredBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   mutedText: { fontSize: 14, color: theme.colors.textMuted },
 
-  // Meta + title
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  metaText: { fontSize: 13, color: QUIET },
-  newPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.primaryLight,
-  },
-  newPillText: { fontSize: 11, fontWeight: '600', color: theme.colors.primary },
+  // Date + title
+  dateText: { fontSize: 12, color: QUIET, marginBottom: 6 },
   title: { fontSize: 20, fontWeight: '700', color: INK, lineHeight: 27 },
-  dateText: { fontSize: 12, color: QUIET, marginTop: 4 },
 
   // Attachment chips
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
