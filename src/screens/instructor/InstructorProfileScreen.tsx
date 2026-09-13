@@ -7,6 +7,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
@@ -20,6 +21,9 @@ import { DocHeader } from '../more/docUi';
 
 const TITLE = 'Instructor Profile';
 
+// Side padding of the page body.
+const BODY_PAD = 20;
+
 const initials = (name?: string | null) =>
   (name || 'NA')
     .split(' ')
@@ -28,24 +32,31 @@ const initials = (name?: string | null) =>
     .join('')
     .toUpperCase();
 
-// Label in the left half, value from the middle; tappable (brand colour) when
-// it has an action such as calling or emailing.
+// Label in the left half, value from the middle of the screen to its right
+// edge; tappable (brand colour) when it has an action such as calling or
+// emailing. Every row, the last too, has its line under it.
 const InfoRow = ({
   label,
   value,
   onPress,
-  last,
+  labelWidth,
 }: {
   label: string;
   value: string;
   onPress?: () => void;
-  last?: boolean;
+  // Wide enough that the value starts at the middle of the screen.
+  labelWidth: number;
 }) => {
-  const style = [s.infoRow, !last && s.infoRowBorder];
+  const style = [s.infoRow, s.infoRowBorder];
+  const labelStyle = { width: labelWidth };
   const content = (
     <>
-      <Text style={s.infoLabel}>{label}</Text>
-      <Text style={[s.infoValue, !!onPress && s.infoValueLink]}>{value}</Text>
+      <Text style={[s.infoLabel, labelStyle]}>{label}</Text>
+      {/* "simple" fills each line to the edge: a long email otherwise breaks
+          early on Android and leaves a gap on the right. */}
+      <Text style={[s.infoValue, !!onPress && s.infoValueLink]} textBreakStrategy="simple">
+        {value}
+      </Text>
     </>
   );
   return onPress ? (
@@ -91,6 +102,9 @@ const InstructorProfileScreen = ({ navigation, route }: any) => {
   }, [base?.id]);
 
   const { refreshing, onRefresh } = useRefresh(load);
+  // The body's left padding is 20, so a label this wide ends at the middle.
+  const { width } = useWindowDimensions();
+  const labelWidth = width / 2 - BODY_PAD;
 
   if (!base) {
     return (
@@ -126,7 +140,13 @@ const InstructorProfileScreen = ({ navigation, route }: any) => {
 
   return (
     <View style={s.root}>
-      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+      {/* The chat icon, as on each row of the instructors list, opens the chats */}
+      <DocHeader
+        title={TITLE}
+        onBackPress={() => navigation.goBack()}
+        rightIcon="chatbubble-ellipses-outline"
+        onRightPress={() => navigation.navigate('ChatsList')}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -151,14 +171,16 @@ const InstructorProfileScreen = ({ navigation, route }: any) => {
         <View style={s.body}>
           {/* Contact & details */}
           {details.length > 0 ? (
-            <View>
-              {details.map((d, i) => (
+            // Runs to the right edge of the screen — no right padding — and its
+            // last line divides the details from Subjects.
+            <View style={s.details}>
+              {details.map(d => (
                 <InfoRow
                   key={d.label}
                   label={d.label}
                   value={d.value}
                   onPress={d.onPress}
-                  last={i === details.length - 1}
+                  labelWidth={labelWidth}
                 />
               ))}
             </View>
@@ -214,12 +236,13 @@ const __mk_s = () => StyleSheet.create({
   // Full-width line between the head and the details
   divider: { height: 1, backgroundColor: theme.colors.divider },
 
-  body: { paddingHorizontal: 20, paddingTop: 4, gap: 24 },
+  body: { paddingHorizontal: BODY_PAD, paddingTop: 4, gap: 24 },
 
-  // Details
+  // Details — pulled out past the body's right padding to the screen edge
+  details: { marginRight: -BODY_PAD },
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 14 },
   infoRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-  infoLabel: { width: '50%', paddingRight: 12, fontSize: 14, color: theme.colors.textSecondary },
+  infoLabel: { paddingRight: 12, fontSize: 14, color: theme.colors.textSecondary },
   infoValue: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
   infoValueLink: { color: theme.colors.primary },
 
@@ -228,14 +251,14 @@ const __mk_s = () => StyleSheet.create({
   sectionTitle: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: theme.radius.full,
     borderWidth: 1,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.background,
   },
-  chipText: { fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
+  chipText: { fontSize: 12, fontWeight: '500', color: theme.colors.textPrimary },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.
