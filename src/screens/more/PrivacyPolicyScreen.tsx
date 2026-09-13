@@ -13,6 +13,7 @@ import {
   DocError,
   docStyles,
   lastUpdated,
+  type DocShape,
 } from './docUi';
 
 interface Section { head: string; desc: string; }
@@ -22,6 +23,15 @@ interface PrivacyData {
 }
 
 const TITLE = 'Privacy Policy';
+
+// The policy's opening sections as they read — the heading's and each line's
+// length in characters — so the loading page has the policy's own shape.
+const SHAPE: DocShape[] = [
+  // Introduction
+  { head: 12, lines: [57, 24, 103, 50, 28, 0, 447, 0, 327, 0, 191, 94, 87, 131, 97, 116, 123, 138, 157, 216, 99, 0, 241, 0, 207] },
+  // Applicability
+  { head: 13, lines: [84, 44, 35, 19, 19, 19, 15, 30, 33, 71, 27, 27, 51] },
+];
 
 const PrivacyPolicyScreen = () => {
   const [data, setData]       = useState<PrivacyData | null>(null);
@@ -48,7 +58,7 @@ const PrivacyPolicyScreen = () => {
   useFocusLoad(fetchData);
 
   // "Last updated", then the policy's sections.
-  if (loading) return <DocSkeleton title={TITLE} intro={{ meta: true }} sections={3} />;
+  if (loading) return <DocSkeleton title={TITLE} intro={{ meta: true }} shape={SHAPE} />;
   if (error || !data) return <DocError title={TITLE} message={error || 'Something went wrong.'} onRetry={fetchData} />;
 
   const sections = data.metadata?.sections ?? [];

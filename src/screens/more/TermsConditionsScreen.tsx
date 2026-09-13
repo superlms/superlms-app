@@ -15,6 +15,7 @@ import {
   DocError,
   docStyles,
   lastUpdated,
+  type DocShape,
 } from './docUi';
 
 interface Section        { head: string; desc: string; }
@@ -35,6 +36,15 @@ interface TermsData {
 }
 
 const TITLE = 'Terms & Conditions';
+
+// The terms' opening sections as they read — the heading's and each line's
+// length in characters — so the loading page has the terms' own shape.
+const SHAPE: DocShape[] = [
+  // Introduction
+  { head: 12, lines: [57, 24, 103, 50, 29, 0, 459, 0, 230, 0, 225, 0, 97, 32, 67, 49, 115, 94, 119, 171, 52] },
+  // Definitions
+  { head: 11, lines: [144, 142, 148, 177, 124, 92] },
+];
 
 const contactCfg = (key: string) => {
   const k = key.toLowerCase();
@@ -67,13 +77,14 @@ const TermsConditionsScreen = () => {
   const { refreshing, onRefresh } = useRefresh(fetchData);
   useFocusLoad(fetchData);
 
-  // Platform logo, name, company line and "Last updated"; then the sections.
+  // The platform name ("SUPERLMS"), the company line ("Super Learnings Private
+  // Limited") and "Last updated" — there is no platform logo — then the sections.
   if (loading) {
     return (
       <DocSkeleton
         title={TITLE}
-        intro={{ logo: true, title: true, subtitle: true, meta: true }}
-        sections={3}
+        intro={{ title: 8, subtitle: 31, meta: true }}
+        shape={SHAPE}
       />
     );
   }

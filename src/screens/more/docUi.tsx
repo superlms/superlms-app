@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import Header from '../../components/Header';
 import { Skeleton } from '../../components/Skeleton';
 import VectorIcon from '../../components/VectorIcon';
@@ -231,43 +231,110 @@ export const DocLoading = ({ title }: { title: string }) => (
 
 // ── Page skeleton: the header, then the page's own shape ─────────────────────
 // Each More screen says what its page holds — the intro (logo, title, subtitle,
-// "Last updated"), how many text sections, and any bordered lists (contact
-// rows, people, documents) — and gets boxes at the height of the text they
-// stand in for, so nothing moves when the page arrives. It shows on the first
-// load and while pulling to refresh.
+// "Last updated"), its text sections, and any bordered lists (contact rows,
+// people, documents) — and gets boxes at the height of the text they stand in
+// for, so nothing moves when the page arrives. It shows on the first load and
+// while pulling to refresh.
+//
+// A document page (terms, policies) passes `shape`: its sections as they read,
+// the heading's and each line's length in characters. Those lines are wrapped
+// to the screen's width and drawn line for line, blank lines included, down to
+// the bottom of the screen.
 const SK_HEAD_W = [120, 96, 140, 110];
 const SK_BODY_W = ['100%', '96%', '98%', '62%'];
 const SK_ROW_W = ['64%', '52%', '70%'];
+// The wrapped lines of a paragraph before its last one run nearly to the edge.
+const SK_FULL_W = ['100%', '95%', '98%', '92%', '97%'];
+
+/** A text section's shape, in characters: the heading's length and each line's (0 for a blank line). */
+export interface DocShape {
+  head: number;
+  lines: number[];
+}
+
+// About how wide one character is: body 15px, section heading 17px semibold,
+// intro title 22px bold, intro subtitle 14px.
+const CHAR_W = { body: 7.6, head: 9.5, title: 13.5, subtitle: 7.2 };
+// Heights on the page: header bar, top padding, gap between blocks, a section
+// heading with its margin, one body line.
+const SK_H = { header: 50, top: 16, gap: 28, head: 31, line: 24 };
+
+// A paragraph's lines wrapped to the screen: one width per drawn line, null for a blank line.
+const wrapLines = (lines: number[], perLine: number) => {
+  const rows: (string | null)[] = [];
+  lines.forEach(len => {
+    if (len <= 0) {
+      rows.push(null);
+      return;
+    }
+    const count = Math.ceil(len / perLine);
+    for (let i = 1; i < count; i++) rows.push(SK_FULL_W[rows.length % SK_FULL_W.length]);
+    const rest = len - (count - 1) * perLine;
+    rows.push(`${Math.max(12, Math.round((rest / perLine) * 100))}%`);
+  });
+  return rows;
+};
 
 export const DocSkeleton = ({
   title,
   intro = {},
   sections = 3,
+  shape,
   lists = [],
 }: {
   title: string;
-  intro?: { logo?: boolean; title?: boolean; subtitle?: boolean; meta?: boolean };
+  /** The intro's parts; a number for the title or subtitle is its length in characters. */
+  intro?: { logo?: boolean; title?: boolean | number; subtitle?: boolean | number; meta?: boolean };
+  /** How many text sections, for a page without a `shape`. */
   sections?: number;
+  shape?: DocShape[];
   /** Bordered lists after the sections; `people` rows lead with a round photo. */
   lists?: { rows: number; people?: boolean }[];
 }) => {
-  const hasIntro = intro.logo || intro.title || intro.subtitle || intro.meta;
+  const { width, height } = useWindowDimensions();
+  const textW = width - 40;
+  const hasIntro = !!(intro.logo || intro.title || intro.subtitle || intro.meta);
+  const introW = (part: boolean | number | undefined, charW: number, fallback: string) =>
+    typeof part === 'number' ? Math.min(part * charW, textW) : fallback;
+
+  // The shaped sections, cut off once they pass the bottom of the screen.
+  const shaped: { head: number; rows: (string | null)[] }[] = [];
+  if (shape) {
+    const perLine = Math.max(20, Math.floor(textW / CHAR_W.body));
+    let room = height - SK_H.header - SK_H.top;
+    if (intro.logo) room -= 70;
+    if (intro.title) room -= 28;
+    if (intro.subtitle) room -= 24;
+    if (intro.meta) room -= 24;
+
+    for (const sec of shape) {
+      if (room <= 0) break;
+      room -= (hasIntro || shaped.length > 0 ? SK_H.gap : 0) + SK_H.head;
+      const rows: (string | null)[] = [];
+      for (const row of wrapLines(sec.lines, perLine)) {
+        if (room <= 0) break;
+        rows.push(row);
+        room -= SK_H.line;
+      }
+      shaped.push({ head: Math.min(sec.head * CHAR_W.head, textW), rows });
+    }
+  }
 
   return (
-    <View style={s.root}>
+    <View style={s.skRoot}>
       <DocHeader title={title} />
       <View style={docStyles.scroll}>
         {hasIntro && (
           <View>
             {intro.logo && <Skeleton width={56} height={56} radius={12} style={s.skLogo} />}
-            {intro.title && (
+            {!!intro.title && (
               <View style={[s.skLine, s.skIntroTitle]}>
-                <Skeleton width="58%" height={18} />
+                <Skeleton width={introW(intro.title, CHAR_W.title, '58%')} height={18} />
               </View>
             )}
-            {intro.subtitle && (
+            {!!intro.subtitle && (
               <View style={[s.skLine, s.skIntroSub]}>
-                <Skeleton width="44%" height={11} />
+                <Skeleton width={introW(intro.subtitle, CHAR_W.subtitle, '44%')} height={11} />
               </View>
             )}
             {intro.meta && (
@@ -278,18 +345,31 @@ export const DocSkeleton = ({
           </View>
         )}
 
-        {Array.from({ length: sections }, (_, i) => (
-          <View key={`section${i}`}>
-            <View style={[s.skLine, s.skSectionTitle]}>
-              <Skeleton width={SK_HEAD_W[i % SK_HEAD_W.length]} height={14} />
-            </View>
-            {SK_BODY_W.map((w, j) => (
-              <View key={j} style={[s.skLine, s.skBodyLine]}>
-                <Skeleton width={w} height={12} />
+        {shape
+          ? shaped.map((sec, i) => (
+              <View key={`shape${i}`}>
+                <View style={[s.skLine, s.skSectionTitle]}>
+                  <Skeleton width={sec.head} height={14} />
+                </View>
+                {sec.rows.map((w, j) => (
+                  <View key={j} style={[s.skLine, s.skBodyLine]}>
+                    {w !== null && <Skeleton width={w} height={12} />}
+                  </View>
+                ))}
+              </View>
+            ))
+          : Array.from({ length: sections }, (_, i) => (
+              <View key={`section${i}`}>
+                <View style={[s.skLine, s.skSectionTitle]}>
+                  <Skeleton width={SK_HEAD_W[i % SK_HEAD_W.length]} height={14} />
+                </View>
+                {SK_BODY_W.map((w, j) => (
+                  <View key={j} style={[s.skLine, s.skBodyLine]}>
+                    <Skeleton width={w} height={12} />
+                  </View>
+                ))}
               </View>
             ))}
-          </View>
-        ))}
 
         {lists.map((list, i) => (
           <View key={`list${i}`}>
@@ -365,6 +445,8 @@ const __mk_s = () => StyleSheet.create({
   // Page skeleton boxes, at the heights of the real lines: intro title 22/28,
   // subtitle 14/20, meta 12px, section heading 17px, body 15/24, list row title
   // 15px and sub 12px.
+  // Runs past the bottom of the screen, clipped there.
+  skRoot: { flex: 1, backgroundColor: theme.colors.card, overflow: 'hidden' },
   skLine: { justifyContent: 'center' },
   skLogo: { marginBottom: 14 },
   skIntroTitle: { height: 28 },

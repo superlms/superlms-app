@@ -13,6 +13,7 @@ import {
   DocError,
   docStyles,
   lastUpdated,
+  type DocShape,
 } from './docUi';
 
 interface Section { head: string; desc: string; }
@@ -22,6 +23,15 @@ interface TermsOfUseData {
 }
 
 const TITLE = 'Terms of Use';
+
+// The terms' opening sections as they read — the heading's and each line's
+// length in characters — so the loading page has the terms' own shape.
+const SHAPE: DocShape[] = [
+  // Introduction and Acceptance
+  { head: 27, lines: [57, 24, 103, 50, 28, 0, 323, 0, 277, 0, 327, 0, 84, 32, 68, 97, 49, 57, 97, 52] },
+  // Who May Use the Site
+  { head: 20, lines: [164, 171, 248, 253] },
+];
 
 const TermsOfUseScreen = () => {
   const [data, setData]       = useState<TermsOfUseData | null>(null);
@@ -48,7 +58,7 @@ const TermsOfUseScreen = () => {
   useFocusLoad(fetchData);
 
   // "Last updated", then the terms' sections.
-  if (loading) return <DocSkeleton title={TITLE} intro={{ meta: true }} sections={3} />;
+  if (loading) return <DocSkeleton title={TITLE} intro={{ meta: true }} shape={SHAPE} />;
   if (error || !data) return <DocError title={TITLE} message={error || 'Something went wrong.'} onRetry={fetchData} />;
 
   const sections = data.metadata?.sections ?? [];
