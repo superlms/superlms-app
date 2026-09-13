@@ -9,24 +9,31 @@ import {
 } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import { AppAlert } from '../../components/AppDialog';
+import { Skeleton } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
 import { downloadPdf } from '../../api/pdfDownload';
 import { transportReceiptUrl, type TransportPayment } from '../../api/transportApi';
 import { inr } from './feesUi';
 
-// One detail of a payment — a small label over its value, half the width.
-const PayField = ({ label, value }: { label: string; value?: string | null }) => (
-  <View style={s.field}>
-    <Text style={s.fieldLabel}>{label}</Text>
-    <Text style={s.fieldValue}>{value || '—'}</Text>
+// The green of a settled payment — its tick, and the "Paid" chip.
+const PAID_INK = '#16A34A';
+const PAID_BG = '#DCFCE7';
+
+// A detail of the payment: the label on the left, its value on the right.
+const DetailRow = ({ label, value }: { label: string; value?: string | null }) => (
+  <View style={s.detailRow}>
+    <Text style={s.detailLabel}>{label}</Text>
+    <Text style={s.detailValue} numberOfLines={1}>
+      {value || '—'}
+    </Text>
   </View>
 );
 
 /**
- * The student's transport fee payments, in the order they were paid — the
- * serial number, amount, date, day, who submitted it, type, mode and receipt
- * number of each, with its receipt to download. Shared by the Transport screen
- * and the Transport tab of Fees.
+ * The student's transport fee payments, in the order they were paid, each as
+ * a payment card: the tick, the amount with its date and day, then the serial
+ * number, mode, type, who submitted it and the receipt number, and the receipt
+ * to download. Shared by the Transport screen and the Transport tab of Fees.
  */
 export const TransportPayments = ({
   payments,
@@ -60,78 +67,149 @@ export const TransportPayments = ({
 
   return (
     <View>
-      {list.map((p, i) => (
-        <View key={p.id} style={[s.payment, i < list.length - 1 && s.rowDivider]}>
-          <View style={s.head}>
-            <View style={s.serial}>
-              <Text style={s.serialText}>{p.serial}</Text>
+      {list.map((p, i) => {
+        const busy = downloading === p.id;
+        return (
+          <View key={p.id} style={[s.card, i < list.length - 1 && s.cardGap]}>
+            <View style={s.top}>
+              <View style={s.tick}>
+                <VectorIcon iconSet="Ionicons" iconName="checkmark" size={20} color={PAID_INK} />
+              </View>
+              <View style={s.topBody}>
+                <Text style={s.amount}>{inr(p.amount)}</Text>
+                <Text style={s.when}>{[p.date, p.day].filter(Boolean).join(' · ') || '—'}</Text>
+              </View>
+              <View style={s.paidChip}>
+                <Text style={s.paidText}>Paid</Text>
+              </View>
             </View>
-            <Text style={s.amount}>{inr(p.amount)}</Text>
+
+            <View style={s.details}>
+              <DetailRow label="Serial No." value={`#${p.serial}`} />
+              <DetailRow label="Mode" value={p.mode} />
+              <DetailRow label="Type" value={p.type} />
+              <DetailRow label="Submitted By" value={p.submitted_by} />
+              <DetailRow label="Receipt No." value={p.receipt_number} />
+            </View>
+
             <TouchableOpacity
-              style={s.receiptBtn}
+              style={s.download}
               onPress={() => download(p)}
               disabled={downloading !== null}
-              activeOpacity={0.7}
+              activeOpacity={0.6}
             >
-              {downloading === p.id ? (
+              {busy ? (
                 <ActivityIndicator size="small" color={theme.colors.primary} />
               ) : (
-                <VectorIcon iconSet="Ionicons" iconName="download-outline" size={16} color={theme.colors.primary} />
+                <VectorIcon iconSet="Ionicons" iconName="download-outline" size={17} color={theme.colors.primary} />
               )}
-              <Text style={s.receiptBtnText}>Receipt</Text>
+              <Text style={s.downloadText}>{busy ? 'Downloading…' : 'Download Receipt'}</Text>
             </TouchableOpacity>
           </View>
-
-          <View style={s.grid}>
-            <PayField label="Date" value={p.date} />
-            <PayField label="Day" value={p.day} />
-            <PayField label="Submitted By" value={p.submitted_by} />
-            <PayField label="Type" value={p.type} />
-            <PayField label="Mode" value={p.mode} />
-            <PayField label="Receipt No" value={p.receipt_number} />
-          </View>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 };
 
+// The detail values' widths in the skeleton: serial, mode, type, name, receipt.
+const DETAIL_WIDTHS = [26, 40, 58, 92, 128];
+
+/** Payment cards while the page loads — the same card, in boxes. */
+export const TransportPaymentsSkeleton = ({ count = 1 }: { count?: number }) => (
+  <View>
+    {Array.from({ length: count }, (_, i) => (
+      <View key={i} style={[s.card, i < count - 1 && s.cardGap]}>
+        <View style={s.top}>
+          <Skeleton width={40} height={40} radius={20} />
+          <View style={s.topBody}>
+            <Skeleton width="42%" height={18} />
+            <Skeleton width="58%" height={12} style={s.skWhen} />
+          </View>
+          <Skeleton width={46} height={22} radius={11} />
+        </View>
+        <View style={s.details}>
+          {DETAIL_WIDTHS.map((w, j) => (
+            <View key={j} style={s.detailRow}>
+              <Skeleton width={78} height={13} style={s.skLine} />
+              <View style={s.skValue}>
+                <Skeleton width={w} height={13} style={s.skLine} />
+              </View>
+            </View>
+          ))}
+        </View>
+        <View style={s.download}>
+          <Skeleton width={136} height={14} style={s.skLine} />
+        </View>
+      </View>
+    ))}
+  </View>
+);
+
 const __mk_s = () => StyleSheet.create({
   empty: { fontSize: 13, color: theme.colors.textMuted, paddingVertical: 12 },
-  rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
 
-  payment: { paddingVertical: 14 },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  serial: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  // One payment
+  card: {
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.card,
+    overflow: 'hidden',
+  },
+  cardGap: { marginBottom: 12 },
+
+  // Tick, amount with its date and day, and the Paid chip
+  top: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 12 },
+  tick: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.background,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.border,
+    backgroundColor: PAID_BG,
   },
-  serialText: { fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary },
-  amount: { flex: 1, fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary },
-  receiptBtn: {
+  topBody: { flex: 1 },
+  amount: { fontSize: 18, fontWeight: '700', color: theme.colors.textPrimary },
+  when: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
+  paidChip: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: theme.radius.full, backgroundColor: PAID_BG },
+  paidText: { fontSize: 12, fontWeight: '600', color: PAID_INK },
+
+  // The details, label left and value right
+  details: {
+    marginHorizontal: 14,
+    paddingVertical: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.border,
+  },
+  detailRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5 },
+  detailLabel: { fontSize: 13, color: theme.colors.textSecondary },
+  detailValue: {
+    flex: 1,
+    marginLeft: 16,
+    textAlign: 'right',
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.colors.textPrimary,
+  },
+
+  // Download Receipt, across the foot of the card
+  download: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-    minWidth: 96,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: theme.radius.full,
-    backgroundColor: theme.colors.primaryLight,
+    gap: 6,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
   },
-  receiptBtnText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
+  downloadText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
 
-  // Details under the amount, two to a line, lined up with it
-  grid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, paddingLeft: 34, rowGap: 10 },
-  field: { width: '50%', paddingRight: 8 },
-  fieldLabel: { fontSize: 11, color: theme.colors.textMuted },
-  fieldValue: { fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary, marginTop: 2 },
+  // Skeleton — boxes the height of the text they stand in for
+  skWhen: { marginTop: 5 },
+  skLine: { marginVertical: 2.5 },
+  skValue: { flex: 1, alignItems: 'flex-end', marginLeft: 16 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

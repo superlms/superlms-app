@@ -10,11 +10,12 @@ import {
 } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
+import { Skeleton } from '../../components/Skeleton';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import constant from '../../utils/constant';
-import { DocHeader, DocLoading, DocNoData } from '../more/docUi';
-import { TransportPayments } from '../fees/TransportPayments';
+import { DocHeader, DocNoData } from '../more/docUi';
+import { TransportPayments, TransportPaymentsSkeleton } from '../fees/TransportPayments';
 import {
   getMyTransport,
   type FeeStatus,
@@ -106,6 +107,128 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
   </>
 );
 
+// ── Loading ──────────────────────────────────────────────────────────────────
+// What the page held when it last loaded — the skeleton draws the same blocks
+// (the driver's lines, the months so far, the payments), so nothing jumps when
+// the page arrives. Before anything has loaded it assumes a driver with four
+// lines, the fees up to this month and one payment.
+type PageShape = {
+  driverLines: number | null;
+  places: boolean;
+  fees: boolean;
+  feeRows: number;
+  payments: number;
+};
+let lastShape: PageShape | null = null;
+
+// This month's place in the fee year, April being the first.
+const monthsSoFar = () => ((new Date().getMonth() + 9) % 12) + 1;
+
+const shapeOf = (d: TransportRoute): PageShape => {
+  const driver = d.driver;
+  const vehicle = driver?.vehicle_no || d.vehicle_no || d.vehicle_type || driver?.vehicle_type;
+  return {
+    driverLines: driver ? [driver.phone, driver.email, driver.license_no, vehicle].filter(Boolean).length : null,
+    places: !!(d.pickup_location || d.drop_location),
+    fees: !!d.fees,
+    feeRows: d.fees ? Math.min(monthsSoFar(), d.fees.schedule?.length ?? 0) : 0,
+    payments: d.fees?.payments?.length ?? 0,
+  };
+};
+
+// The driver's values run to different lengths — phone, email, licence, vehicle.
+const LINE_WIDTHS = ['36%', '58%', '16%', '34%'];
+
+const TimeColSkeleton = ({ place }: { place: boolean }) => (
+  <View style={s.timeCol}>
+    <Skeleton width={42} height={11} style={s.skLine} />
+    <Skeleton width={80} height={16} style={s.skTime} />
+    {place && <Skeleton width={92} height={11} style={s.skTime} />}
+  </View>
+);
+
+const TransportSkeleton = ({ onBack }: { onBack: () => void }) => {
+  const shape = lastShape ?? { driverLines: 4, places: false, fees: true, feeRows: monthsSoFar(), payments: 1 };
+  const rows = shape.feeRows;
+
+  return (
+    <View style={s.root}>
+      <DocHeader title={TITLE} onBackPress={onBack} />
+      <ScrollView scrollEnabled={false} contentContainerStyle={s.scroll}>
+        {/* Bus, route, pickup and drop */}
+        <View style={s.head}>
+          <Skeleton width={88} height={88} radius={44} />
+          <Skeleton width="42%" height={22} style={s.skTitle} />
+          <View style={s.times}>
+            <TimeColSkeleton place={shape.places} />
+            <View style={s.timesSep} />
+            <TimeColSkeleton place={shape.places} />
+          </View>
+        </View>
+
+        {/* Driver */}
+        {shape.driverLines !== null && (
+          <>
+            <View style={s.divider} />
+            <View style={s.section}>
+              <Skeleton width={46} height={12} style={s.skSectionTitle} />
+              <View style={s.driverRow}>
+                <Skeleton width={44} height={44} radius={22} />
+                <Skeleton width="32%" height={15} />
+              </View>
+              <View style={s.driverRows}>
+                {Array.from({ length: shape.driverLines }, (_, i) => (
+                  <View key={i} style={s.infoRow}>
+                    <Skeleton width={72} height={14} style={[s.skLine, s.skLabel]} />
+                    <Skeleton width={LINE_WIDTHS[i % LINE_WIDTHS.length]} height={14} style={s.skLine} />
+                  </View>
+                ))}
+              </View>
+            </View>
+          </>
+        )}
+
+        {/* Transport Fees, up to this month */}
+        {rows > 0 && (
+          <>
+            <View style={s.divider} />
+            <View style={s.section}>
+              <Skeleton width={96} height={12} style={s.skSectionTitle} />
+              <Skeleton width="46%" height={13} style={s.skSummary} />
+              <View style={s.schedule}>
+                {Array.from({ length: rows }, (_, i) => (
+                  <View key={i} style={[s.feeRow, i < rows - 1 && s.rowDivider]}>
+                    <View style={s.skMonth}>
+                      <Skeleton width={i % 3 === 2 ? 118 : 94} height={14} style={s.skLine} />
+                    </View>
+                    <Skeleton width={62} height={14} style={[s.skLine, s.skAmount]} />
+                    <Skeleton width={52} height={13} style={s.skLine} />
+                  </View>
+                ))}
+              </View>
+            </View>
+          </>
+        )}
+
+        {/* Payments */}
+        {shape.fees && (
+          <>
+            <View style={s.divider} />
+            <View style={s.section}>
+              <Skeleton width={68} height={12} style={s.skSectionTitle} />
+              {shape.payments > 0 ? (
+                <TransportPaymentsSkeleton count={Math.min(shape.payments, 3)} />
+              ) : (
+                <Skeleton width="48%" height={13} style={s.skEmpty} />
+              )}
+            </View>
+          </>
+        )}
+      </ScrollView>
+    </View>
+  );
+};
+
 const TransportScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
   // `notUsing` = the student simply has no route (informational, no retry).
@@ -126,6 +249,7 @@ const TransportScreen = ({ navigation }: any) => {
         setData(null);
       } else {
         setData(res);
+        lastShape = shapeOf(res);
       }
     } catch (e: any) {
       const status = e?.response?.status;
@@ -155,7 +279,8 @@ const TransportScreen = ({ navigation }: any) => {
 
   useFocusLoad(load);
 
-  if (loading && !refreshing) return <DocLoading title={TITLE} />;
+  // The skeleton on the way in; coming back to a loaded page refetches quietly.
+  if (loading && !refreshing && !data) return <TransportSkeleton onBack={() => navigation.goBack()} />;
 
   const refreshControl = <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />;
 
@@ -383,6 +508,17 @@ const __mk_s = () => StyleSheet.create({
   feeStatus: { width: 72, textAlign: 'right', fontSize: 13, color: theme.colors.textMuted },
   feeStatusDue: { color: theme.colors.danger, fontWeight: '500' },
   feeStatusPartial: { color: theme.colors.textPrimary, fontWeight: '500' },
+
+  // Skeleton — boxes the height of the text they stand in for
+  skLine: { marginVertical: 2.5 },
+  skTitle: { marginTop: 17, marginBottom: 2 },
+  skTime: { marginTop: 5 },
+  skSectionTitle: { marginTop: 2, marginBottom: 13 },
+  skLabel: { marginRight: 26 },
+  skSummary: { marginTop: 2, marginBottom: 8 },
+  skMonth: { flex: 1 },
+  skAmount: { marginRight: 20 },
+  skEmpty: { marginVertical: 14 },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
