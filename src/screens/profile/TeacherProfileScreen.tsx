@@ -44,12 +44,32 @@ const hasVal = (v: any) => val(v) !== '—';
 // Gender is stored lower-case ("male").
 const capitalize = (v: any) => (hasVal(v) ? val(v).charAt(0).toUpperCase() + val(v).slice(1) : v);
 
-// The detail list, in page order: professional ID first, then personal, then
-// address. Name and email sit at the top, so they aren't repeated. The loading
-// skeleton draws one row per entry.
+// A second number only when it differs from the first.
+const unlessSame = (v: any, other: any) => (val(v) === val(other) ? null : v);
+
+// The classes the teacher is class teacher of: "10th (A), Nursery" — the
+// section without a leading "Section", or just the class when set for all of it.
+const classTeacherOf = (classes?: any[]) =>
+  [
+    ...new Set(
+      (classes ?? []).map(c => {
+        const section = hasVal(c.section_name) ? val(c.section_name).replace(/^section\s*/i, '') : '';
+        return [val(c.standard_name), section && `(${section})`].filter(x => x && x !== '—').join(' ');
+      }),
+    ),
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+// Every field the school can fill, in page order: professional ID first, then
+// personal, then address, and the classes they are class teacher of last. Name
+// and email sit at the top, so they aren't repeated. A field with nothing in it
+// is left out, and appears once the school fills it in. The loading skeleton
+// draws one row per entry.
 const ROWS: [string, (d: TeacherProfile) => any][] = [
   ['Employee ID', d => d.professional_info.employee_id],
   ['Mobile', d => d.personal_info.mobile_number],
+  ['Phone', d => unlessSame(d.personal_info.phone, d.personal_info.mobile_number)],
   ['Emergency Contact', d => d.personal_info.emergency_contact],
   ['DOB', d => d.personal_info.dob],
   ['Gender', d => capitalize(d.personal_info.gender)],
@@ -59,6 +79,7 @@ const ROWS: [string, (d: TeacherProfile) => any][] = [
   ['City', d => d.address_info.city],
   ['State', d => d.address_info.state],
   ['Pincode', d => d.address_info.pincode],
+  ['Class Teacher', d => classTeacherOf(d.assignments?.classes)],
 ];
 
 // ─── Info Row: label, then value from the middle ──────────────────────────────

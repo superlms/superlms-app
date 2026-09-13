@@ -35,16 +35,29 @@ const val = (v: any): string => {
 
 const hasVal = (v: any) => val(v) !== '—';
 
-// The detail list, in page order: personal, then academic, then address. Name
-// and admission no. sit at the top, so they aren't repeated. The loading
-// skeleton draws one row per entry.
+// "Main Gate · 07:30 AM" — whichever parts are there.
+const joined = (...parts: any[]) => parts.filter(hasVal).map(val).join(' · ');
+
+// A second number only when it differs from the first.
+const unlessSame = (v: any, other: any) => (val(v) === val(other) ? null : v);
+
+const route = (d: ProfileData) => d.transport_info?.active_transport ?? {};
+
+// Every field the school can fill, in page order: personal, family, academic,
+// address, the transport route, and the class teacher last. Name and admission
+// no. sit at the top, so they aren't repeated. A field with nothing in it is
+// left out, and appears once the school fills it in. The loading skeleton draws
+// one row per entry.
 const ROWS: [string, (d: ProfileData) => any][] = [
   ['Email', d => d.personal_info.email],
   ['Mobile', d => d.personal_info.mobile_number],
+  ['Phone', d => unlessSame(d.personal_info.phone, d.personal_info.mobile_number)],
   ['DOB', d => d.personal_info.dob],
   ['Gender', d => d.personal_info.gender],
   ['Religion', d => d.personal_info.religion],
   ['Aadhar No', d => d.personal_info.aadhar_no],
+  ['APAAR ID', d => d.personal_info.appar_id],
+  ['Registration No', d => d.personal_info.registration_number],
   ['Father Name', d => d.family_info.father_name],
   ['Mother Name', d => d.family_info.mother_name],
   ['Class', d => d.academic_info.standard_name],
@@ -57,6 +70,12 @@ const ROWS: [string, (d: ProfileData) => any][] = [
   ['City', d => d.address_info.city],
   ['State', d => d.address_info.state],
   ['Pincode', d => d.address_info.pincode],
+  ['Transport Route', d => route(d).route_name],
+  ['Vehicle', d => joined(route(d).vehicle_type, route(d).vehicle_no)],
+  ['Pickup', d => joined(route(d).pickup_location, route(d).pickup_time)],
+  ['Drop', d => joined(route(d).drop_location, route(d).drop_time)],
+  ['Driver', d => joined(route(d).driver_name, route(d).driver_phone)],
+  ['Class Teacher', d => d.academic_info.class_teacher],
 ];
 
 // ─── Info Row: label, then value from the middle ──────────────────────────────
