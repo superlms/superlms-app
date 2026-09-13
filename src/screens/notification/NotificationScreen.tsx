@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -13,7 +13,6 @@ import { usePreventRemove } from '@react-navigation/native';
 import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
-import { useRefresh } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import {
   CATEGORY_CONFIG,
@@ -80,9 +79,19 @@ const NotificationScreen = ({ navigation }: any) => {
   );
   const sections = useMemo(() => groupByDay(filtered, i => i.createdAt), [filtered]);
 
-  // Pull-to-refresh has nothing to fetch yet (local store); kept for parity and
-  // so push-synced inboxes (Phase 2) can hook a real loader here.
-  const { refreshing, onRefresh } = useRefresh(async () => {});
+  // Pulling to refresh brings the skeleton back for a moment. The inbox lives on
+  // this device, so there is nothing to fetch yet (push-synced inboxes can hook
+  // a real loader here); the pause is what shows it reloaded. The skeleton
+  // stands in for the spinner, which is never turned on.
+  const [reloading, setReloading] = useState(false);
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(reloadTimer.current), []);
+  const reload = useCallback(() => {
+    setSelectedIds([]);
+    setReloading(true);
+    clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => setReloading(false), 600);
+  }, []);
 
   const selectionMode = selectedIds.length > 0;
   // Selecting everything means everything currently on screen, not the whole
@@ -144,8 +153,8 @@ const NotificationScreen = ({ navigation }: any) => {
         }
       />
 
-      {!ready ? (
-        // The saved inbox is still being read off the device
+      {!ready || reloading ? (
+        // The saved inbox is still being read off the device, or was pulled to refresh
         <InboxSkeleton pillWidths={[54, 72, 62]} trailing />
       ) : (
         /* While picking, a tap on any empty part of the screen lets go of the
@@ -215,7 +224,11 @@ const NotificationScreen = ({ navigation }: any) => {
             stickySectionHeadersEnabled={false}
             contentContainerStyle={ui.list}
             showsVerticalScrollIndicator={false}
-            refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            // Off while picking rows, so a press that drifts down selects
+            // without pulling the list.
+            refreshControl={
+              <AppRefreshControl refreshing={false} onRefresh={reload} enabled={!selectionMode} />
+            }
             ListEmptyComponent={
               readFilter === 'unread' && readCounts.all > 0 ? (
                 <DocNoData
