@@ -1,5 +1,14 @@
-import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Header from '../../components/Header';
 import { Skeleton } from '../../components/Skeleton';
 import VectorIcon from '../../components/VectorIcon';
@@ -104,6 +113,7 @@ export const DocRow = ({
   sub,
   trailingIcon,
   trailingIconSet = 'Ionicons',
+  trailingBusy,
   onPress,
   isLast,
 }: {
@@ -113,6 +123,8 @@ export const DocRow = ({
   sub?: string;
   trailingIcon?: string;
   trailingIconSet?: IconSet;
+  /** A spinner in place of the trailing icon, e.g. while a download runs. */
+  trailingBusy?: boolean;
   onPress?: () => void;
   isLast?: boolean;
 }) => (
@@ -130,13 +142,17 @@ export const DocRow = ({
         <Text style={s.rowTitle} numberOfLines={2}>{title}</Text>
         {!!sub && <Text style={s.rowSub}>{sub}</Text>}
       </View>
-      {!!trailingIcon && (
-        <VectorIcon
-          iconSet={trailingIconSet as any}
-          iconName={trailingIcon}
-          size={16}
-          color={theme.colors.textMuted}
-        />
+      {trailingBusy ? (
+        <ActivityIndicator size="small" color={theme.colors.textMuted} />
+      ) : (
+        !!trailingIcon && (
+          <VectorIcon
+            iconSet={trailingIconSet as any}
+            iconName={trailingIcon}
+            size={16}
+            color={theme.colors.textMuted}
+          />
+        )
       )}
     </View>
   </TouchableOpacity>
@@ -252,6 +268,59 @@ export interface DocShape {
   lines: number[];
 }
 
+// The shape of a page's text sections as they read. The first few sections are
+// plenty to fill a screen.
+export const docShapeOf = (sections: { head?: string | null; desc?: string | null }[]): DocShape[] =>
+  sections.slice(0, 4).map(sec => ({
+    head: (sec.head ?? '').trim().length,
+    lines: (sec.desc ?? '').split('\n').slice(0, 60).map(line => line.trim().length),
+  }));
+
+// Paragraphs of ordinary length, for a school page never loaded on this phone.
+export const DOC_FALLBACK_SHAPE: DocShape[] = [
+  { head: 14, lines: [236, 0, 188] },
+  { head: 11, lines: [96, 142, 120, 88] },
+  { head: 16, lines: [210, 0, 164] },
+  { head: 12, lines: [130, 175, 64] },
+  { head: 15, lines: [220, 0, 150] },
+];
+
+const shapeCache: Record<string, DocShape[]> = {};
+
+/**
+ * The skeleton shape for a page whose text is the school's own (Rules, School
+ * Info): the shape of what it held the last time it loaded on this phone, or
+ * `fallback` before then. Pass what loads to `remember`.
+ */
+export const useDocShape = (key: string, fallback: DocShape[]) => {
+  const [shape, setShape] = useState<DocShape[]>(shapeCache[key] ?? fallback);
+
+  useEffect(() => {
+    if (shapeCache[key]) return;
+    AsyncStorage.getItem(`doc_shape:${key}`)
+      .then(raw => {
+        const saved = raw ? JSON.parse(raw) : null;
+        if (Array.isArray(saved) && saved.length > 0) {
+          shapeCache[key] = saved;
+          setShape(saved);
+        }
+      })
+      .catch(() => {});
+  }, [key]);
+
+  const remember = useCallback(
+    (next: DocShape[]) => {
+      if (next.length === 0) return;
+      shapeCache[key] = next;
+      setShape(next);
+      AsyncStorage.setItem(`doc_shape:${key}`, JSON.stringify(next)).catch(() => {});
+    },
+    [key],
+  );
+
+  return [shape, remember] as const;
+};
+
 // About how wide one character is: body 15px, section heading 17px semibold,
 // intro title 22px bold, intro subtitle 14px.
 const CHAR_W = { body: 7.6, head: 9.5, title: 13.5, subtitle: 7.2 };
@@ -280,9 +349,12 @@ export const DocSkeleton = ({
   intro = {},
   sections = 3,
   shape,
+  hero,
   lists = [],
 }: {
   title: string;
+  /** A centred head instead of the intro: logo, name and `lines` short lines under it, then a full-width rule. */
+  hero?: { logo?: boolean; lines?: number };
   /** The intro's parts; a number for the title or subtitle is its length in characters. */
   intro?: { logo?: boolean; title?: boolean | number; subtitle?: boolean | number; meta?: boolean };
   /** How many text sections, for a page without a `shape`. */
@@ -302,6 +374,8 @@ export const DocSkeleton = ({
   if (shape) {
     const perLine = Math.max(20, Math.floor(textW / CHAR_W.body));
     let room = height - SK_H.header - SK_H.top;
+    // Hero: top padding, logo, name, each line, bottom padding, rule.
+    if (hero) room -= 28 + (hero.logo ? 96 : 0) + 41 + 25 * (hero.lines ?? 0) + 24 + 1;
     if (intro.logo) room -= 70;
     if (intro.title) room -= 28;
     if (intro.subtitle) room -= 24;
@@ -323,6 +397,22 @@ export const DocSkeleton = ({
   return (
     <View style={s.skRoot}>
       <DocHeader title={title} />
+      {hero && (
+        <>
+          <View style={docStyles.hero}>
+            {hero.logo && <Skeleton width={96} height={96} radius={14} />}
+            <View style={[s.skLine, s.skHeroName]}>
+              <Skeleton width="56%" height={18} />
+            </View>
+            {Array.from({ length: hero.lines ?? 0 }, (_, i) => (
+              <View key={i} style={[s.skLine, s.skHeroLine]}>
+                <Skeleton width={i % 2 === 0 ? '64%' : '84%'} height={11} />
+              </View>
+            ))}
+          </View>
+          <View style={docStyles.rule} />
+        </>
+      )}
       <View style={docStyles.scroll}>
         {hasIntro && (
           <View>
@@ -430,6 +520,21 @@ export const DocError = ({
 const __mk_docStyles = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
   scroll: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 48, gap: 28 },
+
+  // A page that opens on a centred head (School Info): the logo, the name, short
+  // lines under it, then a full-width rule.
+  hero: { alignItems: 'center', paddingTop: 28, paddingBottom: 24, paddingHorizontal: 20 },
+  heroLogo: { width: 96, height: 96 },
+  heroName: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: theme.colors.textPrimary,
+    textAlign: 'center',
+    marginTop: 14,
+  },
+  heroLine: { fontSize: 13, lineHeight: 19, color: theme.colors.textMuted, textAlign: 'center', marginTop: 6 },
+  heroLink: { color: theme.colors.primary, fontWeight: '500' },
+  rule: { height: 1, backgroundColor: theme.colors.divider },
 });
 
 const __mk_s = () => StyleSheet.create({
@@ -452,6 +557,8 @@ const __mk_s = () => StyleSheet.create({
   skIntroTitle: { height: 28 },
   skIntroSub: { height: 20, marginTop: 4 },
   skIntroMeta: { height: 16, marginTop: 8 },
+  skHeroName: { alignSelf: 'stretch', alignItems: 'center', height: 27, marginTop: 14 },
+  skHeroLine: { alignSelf: 'stretch', alignItems: 'center', height: 19, marginTop: 6 },
   skSectionTitle: { height: 23, marginBottom: 8 },
   skBodyLine: { height: 24 },
   skRowText: { flex: 1 },

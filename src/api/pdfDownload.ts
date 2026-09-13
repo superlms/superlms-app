@@ -14,35 +14,60 @@ export const authHeader = async (): Promise<Record<string, string>> => {
   };
 };
 
+// A file's type from its extension, for the Downloads listing.
+const MIME: Record<string, string> = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  txt: 'text/plain',
+  csv: 'text/csv',
+};
+
 /**
- * Download a (Sanctum-protected) PDF to the device.
+ * Download a file to the device.
  *
  * We deliberately do NOT use Android's DownloadManager: it doesn't reliably
- * forward our auth header, so the request would hang and the spinner never
- * stops. Instead we fetch the bytes ourselves (header is sent, promise resolves
- * once the file is on disk), then surface the file:
+ * forward an auth header, so the request would hang and the spinner never
+ * stops. Instead we fetch the bytes ourselves (the promise resolves once the
+ * file is on disk), then surface the file:
  *   • Android → copy into the public Downloads via MediaStore (API 29+),
  *     falling back to DownloadManager registration / a view intent.
  *   • iOS     → open the share/preview sheet so the user can save to Files.
  *
- * Returns the local file path.
+ * No header is sent unless given, so a public link (e.g. S3) never sees the
+ * app's token. Throws when the server answers with an error. Returns the local
+ * file path.
  */
-export const downloadPdf = async (url: string, fileName: string): Promise<string> => {
-  const headers = await authHeader();
+export const downloadFile = async (
+  url: string,
+  fileName: string,
+  headers: Record<string, string> = {},
+): Promise<string> => {
   const { config, fs, android, ios, MediaCollection } = ReactNativeBlobUtil;
-  const safeName = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+  const ext = fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : '';
+  const mimeType = MIME[ext] ?? 'application/octet-stream';
 
-  // App-private dir is always writable (no scoped-storage issues) and the
-  // authenticated fetch resolves as soon as the bytes land — fixing the hang.
-  const localPath = `${fs.dirs.DocumentDir}/${safeName}`;
+  // App-private dir is always writable (no scoped-storage issues).
+  const localPath = `${fs.dirs.DocumentDir}/${fileName}`;
   const res = await config({ path: localPath, fileCache: true }).fetch('GET', url, headers);
+  const status = res.info().status;
+  if (status >= 400) throw new Error(`Download failed (HTTP ${status})`);
   const path = res.path();
 
   if (Platform.OS === 'android') {
     try {
       // Android 10+ : publish to the public Downloads collection.
       await MediaCollection.copyToMediaStore(
-        { name: safeName, parentFolder: '', mimeType: 'application/pdf' },
+        { name: fileName, parentFolder: '', mimeType },
         'Download',
         path,
       );
@@ -52,15 +77,15 @@ export const downloadPdf = async (url: string, fileName: string): Promise<string
       // Downloads UI, else just open it so the user can save it manually.
       try {
         await android.addCompleteDownload({
-          title: safeName,
+          title: fileName,
           description: 'Downloaded',
-          mime: 'application/pdf',
+          mime: mimeType,
           path,
           showNotification: true,
         });
       } catch {
         try {
-          await android.actionViewIntent(path, 'application/pdf');
+          await android.actionViewIntent(path, mimeType);
         } catch {
           // give up silently — the file is still saved at `path`
         }
@@ -73,6 +98,10 @@ export const downloadPdf = async (url: string, fileName: string): Promise<string
   await ios.openDocument(path);
   return path;
 };
+
+/** Download a (Sanctum-protected) PDF to the device — see downloadFile. */
+export const downloadPdf = async (url: string, fileName: string): Promise<string> =>
+  downloadFile(url, fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`, await authHeader());
 
 /**
  * Write a CSV string to a file and surface it the same way as a downloaded PDF

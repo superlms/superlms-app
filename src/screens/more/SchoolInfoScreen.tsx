@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from 'react';
-import { Linking, ScrollView, View } from 'react-native';
+import { Image, Linking, Platform, ScrollView, Text, View } from 'react-native';
 import AppRefreshControl from '../../components/AppRefreshControl';
+import { AppAlert } from '../../components/AppDialog';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getSchoolInfo } from '../../api/authApi';
+import { downloadFile } from '../../api/pdfDownload';
 import {
   DocHeader,
-  DocIntro,
   DocSection,
   DocList,
   DocBody,
@@ -15,6 +16,9 @@ import {
   DocSkeleton,
   DocError,
   docStyles,
+  DOC_FALLBACK_SHAPE,
+  docShapeOf,
+  useDocShape,
 } from './docUi';
 
 interface ManagementMember {
@@ -43,15 +47,45 @@ interface SchoolInfo {
 
 const TITLE = 'School Info';
 
+// The text sections that have something in them, in page order.
+const sectionsOf = (info: SchoolInfo) =>
+  [
+    { title: 'About School', content: info.about_school },
+    { title: 'Our Vision', content: info.usm_vision },
+    { title: 'Our Mission', content: info.usm_mission },
+    { title: 'Our Values', content: info.usm_values },
+    { title: 'Our Goals', content: info.usm_goals },
+    { title: 'Website Info', content: info.website_info },
+  ].filter(sec => !!sec.content?.trim());
+
+// "https://www.school.in/" reads "www.school.in"; a bare address opens over https.
+const siteLabel = (url: string) => url.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+const siteHref = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${url}`);
+
+// The name a document is saved under: its title, with the file's own extension.
+const fileNameFor = (doc: any, url: string, i: number) => {
+  const ext = url.split('?')[0].match(/\.([a-z0-9]{2,5})$/i)?.[1] ?? String(doc.file_type ?? 'pdf');
+  const base =
+    String(doc.title ?? doc.name ?? `Document ${i + 1}`)
+      .replace(/[\\/:*?"<>|]+/g, ' ')
+      .trim() || 'Document';
+  return `${base}.${ext.toLowerCase()}`;
+};
+
 const SchoolInfoScreen = () => {
   const [info, setInfo] = useState<SchoolInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [shape, rememberShape] = useDocShape('school_info', DOC_FALLBACK_SHAPE);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setInfo(await getSchoolInfo());
+      const data: SchoolInfo = await getSchoolInfo();
+      setInfo(data);
+      // The next loading skeleton takes the shape of these sections.
+      rememberShape(docShapeOf(sectionsOf(data ?? ({} as SchoolInfo)).map(sec => ({ head: sec.title, desc: sec.content }))));
       setError('');
     } catch (e: any) {
       if (e?.response?.status === 404) {
@@ -63,129 +97,136 @@ const SchoolInfoScreen = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [rememberShape]);
 
   const { refreshing, onRefresh } = useRefresh(load);
   useFocusLoad(load);
 
-  // Logo and school name; a couple of sections; the management team; contacts.
-  if (loading) {
-    return (
-      <DocSkeleton
-        title={TITLE}
-        intro={{ logo: true, title: true }}
-        sections={2}
-        lists={[{ rows: 3, people: true }, { rows: 3 }]}
-      />
-    );
-  }
+  // The centred head — logo, name, address, and the phone · email · website
+  // line — and its rule; then the school's sections as they read last time,
+  // down to the bottom of the screen.
+  if (loading) return <DocSkeleton title={TITLE} hero={{ logo: true, lines: 2 }} shape={shape} />;
   if (error || !info) return <DocError title={TITLE} message={error || 'Something went wrong.'} onRetry={load} />;
 
-  const sections: { title: string; content: string }[] = [
-    { title: 'About School', content: info.about_school },
-    { title: 'Our Vision', content: info.usm_vision },
-    { title: 'Our Mission', content: info.usm_mission },
-    { title: 'Our Values', content: info.usm_values },
-    { title: 'Our Goals', content: info.usm_goals },
-    { title: 'Website Info', content: info.website_info },
-  ].filter(sec => !!sec.content?.trim());
-
+  const sections = sectionsOf(info);
   const team = info.management_team ?? [];
   const documents = info.documents ?? [];
-  const hasContact = !!(info.website_url || info.school_mobile || info.school_email || info.school_address);
+  const name = info.organization?.name;
+  const logo = info.organization?.logo_url;
+
+  const contacts = [
+    info.school_mobile && {
+      key: 'mobile',
+      label: info.school_mobile,
+      onPress: () => Linking.openURL(`tel:${info.school_mobile}`),
+    },
+    info.school_email && {
+      key: 'email',
+      label: info.school_email,
+      onPress: () => Linking.openURL(`mailto:${info.school_email}`),
+    },
+    info.website_url && {
+      key: 'website',
+      label: siteLabel(info.website_url),
+      onPress: () => Linking.openURL(siteHref(info.website_url)),
+    },
+  ].filter(Boolean) as { key: string; label: string; onPress: () => void }[];
+
   const isEmpty =
-    sections.length === 0 && team.length === 0 && documents.length === 0 && !hasContact;
+    sections.length === 0 &&
+    team.length === 0 &&
+    documents.length === 0 &&
+    !info.school_address &&
+    contacts.length === 0;
+
+  // Saves the document to the phone's Downloads (on iOS, the share sheet).
+  const download = async (doc: any, i: number, url: string) => {
+    if (downloading) return;
+    setDownloading(String(doc.id ?? i));
+    try {
+      const fileName = fileNameFor(doc, url, i);
+      await downloadFile(url, fileName);
+      if (Platform.OS === 'android') AppAlert.alert('Downloaded', `${fileName} is saved in Downloads.`);
+    } catch (e: any) {
+      console.log('[SchoolInfo] download ❌', e?.message);
+      AppAlert.alert('Could not download', 'Please check your connection and try again.');
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   return (
     <View style={docStyles.root}>
       <DocHeader title={TITLE} />
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={docStyles.scroll}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <DocIntro logoUrl={info.organization?.logo_url} title={info.organization?.name} />
+        {/* Logo, name, address, then phone · email · website — centred */}
+        <View style={docStyles.hero}>
+          {!!logo && <Image source={{ uri: logo }} style={docStyles.heroLogo} resizeMode="contain" />}
+          {!!name && <Text style={docStyles.heroName}>{name}</Text>}
+          {!!info.school_address && <Text style={docStyles.heroLine}>{info.school_address}</Text>}
+          {contacts.length > 0 && (
+            <Text style={docStyles.heroLine}>
+              {contacts.map((c, i) => (
+                <Text key={c.key}>
+                  {i > 0 ? '  ·  ' : ''}
+                  <Text style={docStyles.heroLink} onPress={c.onPress}>
+                    {c.label}
+                  </Text>
+                </Text>
+              ))}
+            </Text>
+          )}
+        </View>
 
-        {isEmpty && (
-          <DocNoData
-            icon="school-outline"
-            subtitle="The school info hasn’t been added yet. Pull down to refresh."
-          />
-        )}
+        <View style={docStyles.rule} />
 
-        {sections.map((sec, i) => (
-          <DocSection key={i} title={sec.title}>
-            <DocBody>{sec.content}</DocBody>
-          </DocSection>
-        ))}
+        <View style={docStyles.scroll}>
+          {isEmpty && (
+            <DocNoData
+              icon="school-outline"
+              subtitle="The school info hasn’t been added yet. Pull down to refresh."
+            />
+          )}
 
-        {team.length > 0 && (
-          <DocSection title="School Management">
-            <DocList>
-              <DocPeople people={team} />
-            </DocList>
-          </DocSection>
-        )}
+          {sections.map((sec, i) => (
+            <DocSection key={i} title={sec.title}>
+              <DocBody>{sec.content}</DocBody>
+            </DocSection>
+          ))}
 
-        {documents.length > 0 && (
-          <DocSection title="Documents">
-            <DocList>
-              {documents.map((doc: any, i: number) => {
-                const fileUrl = doc.file_url ?? doc.file_path ?? null;
-                return (
-                  <DocRow
-                    key={doc.id ?? i}
-                    icon="file-text"
-                    title={doc.title ?? doc.name ?? `Document ${i + 1}`}
-                    sub={doc.file_type ? String(doc.file_type).toUpperCase() : undefined}
-                    trailingIcon={fileUrl ? 'download-outline' : undefined}
-                    onPress={fileUrl ? () => Linking.openURL(fileUrl) : undefined}
-                    isLast={i === documents.length - 1}
-                  />
-                );
-              })}
-            </DocList>
-          </DocSection>
-        )}
+          {team.length > 0 && (
+            <DocSection title="School Management">
+              <DocList>
+                <DocPeople people={team} />
+              </DocList>
+            </DocSection>
+          )}
 
-        {hasContact && (
-          <DocSection title="Contact">
-            <DocList>
-              {!!info.website_url && (
-                <DocRow
-                  icon="globe"
-                  title="Visit website"
-                  trailingIcon="open-outline"
-                  onPress={() => Linking.openURL(info.website_url)}
-                  isLast={!info.school_mobile && !info.school_email && !info.school_address}
-                />
-              )}
-              {!!info.school_mobile && (
-                <DocRow
-                  icon="phone"
-                  title={info.school_mobile}
-                  sub="Phone"
-                  trailingIcon="chevron-forward"
-                  onPress={() => Linking.openURL(`tel:${info.school_mobile}`)}
-                  isLast={!info.school_email && !info.school_address}
-                />
-              )}
-              {!!info.school_email && (
-                <DocRow
-                  icon="mail"
-                  title={info.school_email}
-                  sub="Email"
-                  trailingIcon="chevron-forward"
-                  onPress={() => Linking.openURL(`mailto:${info.school_email}`)}
-                  isLast={!info.school_address}
-                />
-              )}
-              {!!info.school_address && (
-                <DocRow icon="map-pin" title={info.school_address} sub="Address" isLast />
-              )}
-            </DocList>
-          </DocSection>
-        )}
+          {documents.length > 0 && (
+            <DocSection title="Documents">
+              <DocList>
+                {documents.map((doc: any, i: number) => {
+                  const fileUrl = doc.file_url ?? doc.file_path ?? null;
+                  return (
+                    <DocRow
+                      key={doc.id ?? i}
+                      icon="file-text"
+                      title={doc.title ?? doc.name ?? `Document ${i + 1}`}
+                      sub={doc.file_type ? String(doc.file_type).toUpperCase() : undefined}
+                      trailingIcon={fileUrl ? 'download-outline' : undefined}
+                      trailingBusy={downloading === String(doc.id ?? i)}
+                      onPress={fileUrl ? () => download(doc, i, fileUrl) : undefined}
+                      isLast={i === documents.length - 1}
+                    />
+                  );
+                })}
+              </DocList>
+            </DocSection>
+          )}
+        </View>
       </ScrollView>
     </View>
   );

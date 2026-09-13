@@ -15,6 +15,9 @@ import {
   DocError,
   docStyles,
   lastUpdated,
+  DOC_FALLBACK_SHAPE,
+  docShapeOf,
+  useDocShape,
 } from './docUi';
 
 interface Section      { head: string; desc: string; }
@@ -41,12 +44,16 @@ const RulesRegulationsScreen = () => {
   const [data, setData]       = useState<RulesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
+  const [shape, rememberShape] = useDocShape('rules', DOC_FALLBACK_SHAPE);
 
   const fetchData = async () => {
     setLoading(true);
     setError('');
     try {
-      setData(await getRulesRegulations());
+      const res = await getRulesRegulations();
+      setData(res);
+      // The next loading skeleton takes the shape of these rules.
+      rememberShape(docShapeOf(res?.sections ?? []));
     } catch (e: any) {
       if (e?.response?.status === 404) {
         setData({} as RulesData);
@@ -61,9 +68,10 @@ const RulesRegulationsScreen = () => {
   const { refreshing, onRefresh } = useRefresh(fetchData);
   useFocusLoad(fetchData);
 
-  // "Last updated"; the rule sections; then the documents list.
+  // "Last updated", then the school's rules line for line as they read last
+  // time, down to the bottom of the screen; the documents list after them.
   if (loading) {
-    return <DocSkeleton title={TITLE} intro={{ meta: true }} sections={3} lists={[{ rows: 2 }]} />;
+    return <DocSkeleton title={TITLE} intro={{ meta: true }} shape={shape} lists={[{ rows: 2 }]} />;
   }
   if (error || !data) return <DocError title={TITLE} message={error || 'Something went wrong.'} onRetry={fetchData} />;
 
