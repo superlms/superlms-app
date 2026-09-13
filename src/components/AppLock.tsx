@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, BackHandler, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { BlurView } from '@react-native-community/blur';
 import { Biometrics, isPromptInProgress } from '../utils/biometrics';
 import { theme, onThemeChange } from '../utils/theme';
 
@@ -9,13 +8,17 @@ import { theme, onThemeChange } from '../utils/theme';
  *
  * The lock only activates after the user has crossed the splash / auth
  * screens (controlled by the `active` prop): the dashboard appears and, at the
- * same moment, the system prompt opens over it with the dashboard lightly
- * blurred behind.
+ * same moment, the system prompt opens over it with the dashboard faintly
+ * veiled behind.
  *
  * Dismissing the prompt (Back, or Cancel) leaves the app locked and shows a
  * small card — "SuperLMS is locked", why, and "Unlock now", which opens the
  * prompt again. Back does nothing else while locked, so the screens behind
- * can't be reached.
+ * can't be reached. Once unlocked the veil is gone at once.
+ *
+ * The veil is a plain translucent view, not a native blur: on Android the blur
+ * view snapshots the screen (grey if it was taken mid-transition) and could stay
+ * drawn after it was removed, leaving the dashboard dull after unlocking.
  *
  * Locks on first arrival to the main app and whenever the app returns from
  * the background.
@@ -29,14 +32,32 @@ const AppLock = ({
 }) => {
   const [locked, setLocked] = useState(false);
   // True while the system prompt is (about to be) open; the card waits for it
-  // to close. The ref guards against opening two prompts.
+  // to close.
   const [prompting, setPrompting] = useState(false);
-  // The sheet (or the device-credential fallback screen) can briefly
-  // background the app on some devices, which must not re-trigger the lock.
+
+  // Read by the AppState listener, which outlives renders: the latest lock
+  // state, and whether a prompt is open (so two are never opened). The sheet
+  // or the device-credential fallback screen can briefly background the app on
+  // some devices, which must not re-trigger the lock.
+  const lockedRef = useRef(false);
   const promptActive = useRef(false);
+  const activeRef = useRef(active);
+  activeRef.current = active;
   // Remember the first time the user reaches the main app, so we don't keep
   // re-locking every time they navigate around.
   const firstArrivalDone = useRef(false);
+
+  const lock = useCallback((withPrompt: boolean) => {
+    lockedRef.current = true;
+    setLocked(true);
+    if (withPrompt) setPrompting(true);
+  }, []);
+
+  const unlock = useCallback(() => {
+    lockedRef.current = false;
+    setLocked(false);
+    setPrompting(false);
+  }, []);
 
   const promptUnlock = useCallback(async () => {
     if (promptActive.current) return;
@@ -47,63 +68,49 @@ const AppLock = ({
       if (!available) {
         // Nothing left to authenticate with (biometrics removed and no
         // device PIN). Fail open instead of locking the user out forever.
-        setLocked(false);
+        unlock();
         return;
       }
       const success = await Biometrics.authenticate('Unlock SuperLMS');
-      if (success) setLocked(false);
+      if (success) unlock();
     } finally {
       promptActive.current = false;
       setPrompting(false);
     }
-  }, []);
+  }, [unlock]);
 
   // Fire the lock the moment we first land on the main app (after splash /
-  // auth): the dashboard mounts, the prompt opens and the dashboard blurs.
+  // auth): the dashboard mounts and the prompt opens over it.
   useEffect(() => {
     if (!active || firstArrivalDone.current) return;
     firstArrivalDone.current = true;
     let cancelled = false;
     Biometrics.isEnabled().then(enabled => {
       if (cancelled || !enabled) return;
-      setLocked(true);
+      lock(true);
       promptUnlock();
     });
     return () => {
       cancelled = true;
     };
-  }, [active, promptUnlock]);
+  }, [active, lock, promptUnlock]);
 
-  // Re-lock when the app goes to background (only if we're already in the
-  // main app — never lock the splash / login screens). The prompt reopens on
-  // return, so the card isn't shown in between.
+  // Background: re-lock (only once in the main app — never on splash / login).
+  // The prompt reopens on return, so the card isn't shown in between.
+  // Foreground while still locked: open the prompt again.
   useEffect(() => {
     const sub = AppState.addEventListener('change', state => {
-      if (
-        state === 'background' &&
-        active &&
-        !promptActive.current &&
-        !isPromptInProgress()
-      ) {
+      if (state === 'background') {
+        if (!activeRef.current || promptActive.current || isPromptInProgress()) return;
         Biometrics.isEnabled().then(enabled => {
-          if (!enabled) return;
-          setLocked(true);
-          setPrompting(true);
+          if (enabled) lock(true);
         });
-      }
-    });
-    return () => sub.remove();
-  }, [active]);
-
-  // Re-open the prompt when we come back to the foreground while still locked.
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', state => {
-      if (state === 'active' && locked && !promptActive.current) {
+      } else if (state === 'active' && lockedRef.current && !promptActive.current) {
         promptUnlock();
       }
     });
     return () => sub.remove();
-  }, [locked, promptUnlock]);
+  }, [lock, promptUnlock]);
 
   // While locked, Back stays on the lock — it must not move the app behind it.
   useEffect(() => {
@@ -116,15 +123,10 @@ const AppLock = ({
     <View style={s.flex}>
       {children}
       {locked && (
-        // A light frosted blur over the dashboard; the system prompt draws on
+        // A faint frosted veil over the dashboard; the system prompt draws on
         // top of it. It takes every touch, so nothing behind can be used.
         <View style={s.overlay} onStartShouldSetResponder={() => true}>
-          <BlurView
-            style={StyleSheet.absoluteFill}
-            blurType="light"
-            blurAmount={6}
-            reducedTransparencyFallbackColor={theme.colors.white}
-          />
+          <View style={[StyleSheet.absoluteFill, s.veil]} />
 
           {!prompting && (
             <View style={s.center}>
@@ -159,6 +161,8 @@ const __mk_s = () => StyleSheet.create({
     zIndex: 999,
     elevation: 999,
   },
+  // The page colour at 70%: the dashboard shows through, softened.
+  veil: { backgroundColor: 'rgba(248, 250, 252, 0.7)' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
 
   // Locked card: title and reason, a full-width rule, then the action across the card

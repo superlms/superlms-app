@@ -35,6 +35,17 @@ export const CHANNEL_ID = 'superlms-default';
 export const SOUND_ANDROID = 'notification_tone';       // res/raw/notification_tone.wav
 export const SOUND_IOS = 'notification_tone.wav';        // bundled file
 
+/** The Settings switch for notification banners and sound — on until it is turned off. */
+export const NOTIFICATIONS_ENABLED_KEY = 'notifications_enabled';
+
+export async function notificationsEnabled(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(NOTIFICATIONS_ENABLED_KEY)) !== '0';
+  } catch {
+    return true;
+  }
+}
+
 let channelReady = false;
 
 /** Create the high-importance channel that carries our custom sound (Android). */
@@ -65,6 +76,10 @@ export async function requestNotifPermission(): Promise<boolean> {
 
 /** Show a heads-up / tray notification with the custom sound. */
 export async function displaySystemNotification(item: NotificationItem): Promise<void> {
+  // Turned off in Settings: the notification still lands in the in-app inbox,
+  // but the phone shows no banner and plays no sound. Push messages are
+  // data-only, so every one — foreground or background — passes through here.
+  if (!(await notificationsEnabled())) return;
   try {
     await ensureChannel();
     await notifee.displayNotification({

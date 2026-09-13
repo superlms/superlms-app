@@ -14,8 +14,8 @@ import { Biometrics } from '../../utils/biometrics';
 import { DocHeader } from '../more/docUi';
 import { MenuRow, MenuRowSkeleton, menuStyles } from '../more/menuUi';
 import { AppAlert } from '../../components/AppDialog';
-
-const NOTIFICATIONS_KEY = 'notifications_enabled';
+// The same key the notification display checks before showing a banner.
+import { NOTIFICATIONS_ENABLED_KEY as NOTIFICATIONS_KEY } from '../../notifications/service';
 
 // The rows in page order, for the skeleton: two switches, then a sub-screen.
 const SKELETON_ROWS: ('switch' | 'chevron')[] = ['switch', 'switch', 'chevron'];
