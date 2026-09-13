@@ -84,6 +84,41 @@ export const createHomework = async (
   return unwrap(data);
 };
 
+// POST /homework/update/{id} — the same fields as create. `removeFile` drops
+// the current attachment when no new file is sent; a new file replaces it.
+export const updateHomework = async (
+  id: number,
+  payload: CreateHomeworkPayload,
+  file?: HomeworkFile | null,
+  removeFile = false,
+): Promise<HomeworkItem> => {
+  const fields: Record<string, string> = {
+    standard_id: String(payload.standard_id),
+    section_id: String(payload.section_id),
+    subject_id: String(payload.subject_id),
+    title: payload.title,
+    // Always sent, so clearing the description clears it on the server too.
+    description: payload.description ?? '',
+  };
+  if (removeFile && !file?.uri) fields.remove_file = '1';
+
+  if (file?.uri) {
+    const fd = new FormData();
+    Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
+    fd.append('file', {
+      uri: file.uri,
+      name: file.name,
+      type: file.type ?? 'application/octet-stream',
+    } as any);
+    const { data } = await apiClient.post(`/homework/update/${id}`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return unwrap(data);
+  }
+  const { data } = await apiClient.post(`/homework/update/${id}`, fields);
+  return unwrap(data);
+};
+
 // DELETE /homework/delete/{id}
 export const deleteHomework = async (id: number): Promise<void> => {
   await apiClient.delete(`/homework/delete/${id}`);

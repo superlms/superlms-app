@@ -19,16 +19,43 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { quietCaps } from '../../utils/quietCaps';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { getTeacherClassesSubjects, marksErrorMessage, type ClassSubject } from '../../api/marksApi';
-import { createHomework, homeworkErrorMessage } from '../../api/homeworkApi';
+import {
+  createHomework,
+  updateHomework,
+  homeworkErrorMessage,
+  type HomeworkItem,
+} from '../../api/homeworkApi';
 import { ErrorBox } from './homeworkUi';
-
-const TITLE = 'New Homework';
 
 interface PickedFile {
   uri: string;
   name: string;
   type?: string;
 }
+
+// The class of homework being edited, as a picker option — used when it is no
+// longer in the teacher's timetable, so the form can still show and keep it.
+const ownTriple = (hw: HomeworkItem): ClassSubject => ({
+  standard_id: hw.standard_id ?? 0,
+  standard_name: hw.standard ?? '',
+  section_id: hw.section_id ?? 0,
+  section_name: hw.section ?? '',
+  subject_id: hw.subject?.id ?? 0,
+  subject_name: hw.subject?.name ?? '',
+  label: [hw.subject?.name, hw.standard, hw.section].filter(Boolean).join(' · '),
+});
+
+// The attachment already on the homework, as a chip: its file name from the URL.
+const savedFile = (url: string): PickedFile => {
+  const last = url.split('?')[0].split('/').pop() ?? '';
+  let name = last;
+  try {
+    name = decodeURIComponent(last);
+  } catch {
+    // A stray "%" in the name — show it as it is.
+  }
+  return { uri: url, name: name || 'attachment' };
+};
 
 // "Mathematics · 10th A"
 const tripleLabel = (t: ClassSubject) => {
@@ -47,7 +74,10 @@ const fileType = (f: PickedFile) => {
   return (f.type?.split('/')[0] || 'file').toUpperCase();
 };
 
-const AddHomeworkScreen = ({ navigation }: any) => {
+// Opened with `{ homework }` it edits that homework; without, it adds a new one.
+const AddHomeworkScreen = ({ navigation, route }: any) => {
+  const editing: HomeworkItem | undefined = route?.params?.homework;
+
   const [triples, setTriples] = useState<ClassSubject[]>([]);
   const [loadingTriples, setLoadingTriples] = useState(true);
   const [triplesError, setTriplesError] = useState<string | null>(null);
@@ -57,22 +87,34 @@ const AddHomeworkScreen = ({ navigation }: any) => {
   // Where the class field sits in the form, so its menu can open over it.
   const [pickerY, setPickerY] = useState(0);
   const [pickerFieldY, setPickerFieldY] = useState(0);
-  const [title, setTitle] = useState('');
-  const [desc, setDesc] = useState('');
+  const [title, setTitle] = useState(editing?.title ?? '');
+  const [desc, setDesc] = useState(editing?.description ?? '');
   const [file, setFile] = useState<PickedFile | null>(null);
+  // The attachment the homework already has, until it is removed or replaced.
+  const [keptFile, setKeptFile] = useState<PickedFile | null>(
+    editing?.file_url ? savedFile(editing.file_url) : null,
+  );
   const [submitting, setSubmitting] = useState(false);
 
   const loadTriples = useCallback(async () => {
     setLoadingTriples(true);
     setTriplesError(null);
     try {
-      setTriples(await getTeacherClassesSubjects());
+      const list = await getTeacherClassesSubjects();
+      if (!editing) {
+        setTriples(list);
+        return;
+      }
+      const own = ownTriple(editing);
+      const match = list.find(t => sameTriple(own, t));
+      setTriples(match ? list : [own, ...list]);
+      setSelected(match ?? own);
     } catch (e: any) {
       setTriplesError(marksErrorMessage(e));
     } finally {
       setLoadingTriples(false);
     }
-  }, []);
+  }, [editing]);
 
   useEffect(() => {
     loadTriples();
@@ -95,29 +137,36 @@ const AddHomeworkScreen = ({ navigation }: any) => {
     if (!selected) return Alert.alert('Select a class', 'Please choose a class & subject.');
     if (!title.trim()) return Alert.alert('Missing title', 'Please enter a homework title.');
 
+    const payload = {
+      standard_id: selected.standard_id,
+      section_id: selected.section_id,
+      subject_id: selected.subject_id,
+      title: title.trim(),
+      description: desc.trim() || undefined,
+    };
+
     setSubmitting(true);
     try {
-      await createHomework(
-        {
-          standard_id: selected.standard_id,
-          section_id: selected.section_id,
-          subject_id: selected.subject_id,
-          title: title.trim(),
-          description: desc.trim() || undefined,
-        },
-        file,
-      );
-      Alert.alert('Homework added', 'The homework was posted successfully.', [
-        { text: 'Done', onPress: () => navigation.goBack() },
-      ]);
+      if (editing) {
+        await updateHomework(editing.id, payload, file, !!editing.file_url && !keptFile);
+        Alert.alert('Homework updated', 'Your changes were saved.', [
+          { text: 'Done', onPress: () => navigation.goBack() },
+        ]);
+      } else {
+        await createHomework(payload, file);
+        Alert.alert('Homework added', 'The homework was posted successfully.', [
+          { text: 'Done', onPress: () => navigation.goBack() },
+        ]);
+      }
     } catch (e: any) {
-      Alert.alert('Could not add homework', homeworkErrorMessage(e));
+      Alert.alert(editing ? 'Could not save homework' : 'Could not add homework', homeworkErrorMessage(e));
     } finally {
       setSubmitting(false);
     }
   };
 
   const formReady = !loadingTriples && !triplesError && triples.length > 0;
+  const shownFile = file ?? keptFile;
 
   const renderBody = () => {
     if (loadingTriples) {
@@ -193,18 +242,23 @@ const AddHomeworkScreen = ({ navigation }: any) => {
             />
           </View>
 
-          {/* Attachment — added from the header; shown here as a chip */}
-          {file && (
+          {/* Attachment — added from the header; shown here as a chip. A new
+              file stands in for the one the homework already has. */}
+          {!!shownFile && (
             <View>
               <Text style={s.label}>Attachment</Text>
               <View style={s.chip}>
                 <View style={s.chipType}>
-                  <Text style={s.chipTypeText}>{fileType(file)}</Text>
+                  <Text style={s.chipTypeText}>{fileType(shownFile)}</Text>
                 </View>
                 <Text style={s.chipName} numberOfLines={1} ellipsizeMode="middle">
-                  {file.name}
+                  {shownFile.name}
                 </Text>
-                <TouchableOpacity onPress={() => setFile(null)} hitSlop={10} activeOpacity={0.6}>
+                <TouchableOpacity
+                  onPress={() => (file ? setFile(null) : setKeptFile(null))}
+                  hitSlop={10}
+                  activeOpacity={0.6}
+                >
                   <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={theme.colors.textMuted} />
                 </TouchableOpacity>
               </View>
@@ -255,7 +309,7 @@ const AddHomeworkScreen = ({ navigation }: any) => {
             {submitting ? (
               <ActivityIndicator size="small" color={theme.colors.white} />
             ) : (
-              <Text style={s.postText}>Post homework</Text>
+              <Text style={s.postText}>{editing ? 'Save changes' : 'Post homework'}</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -266,7 +320,7 @@ const AddHomeworkScreen = ({ navigation }: any) => {
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <DocHeader
-        title={TITLE}
+        title={editing ? 'Edit Homework' : 'New Homework'}
         onBackPress={() => navigation.goBack()}
         rightIcon={formReady ? 'attach-outline' : undefined}
         onRightPress={formReady ? pickFile : undefined}

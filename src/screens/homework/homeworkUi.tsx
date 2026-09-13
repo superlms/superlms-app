@@ -132,7 +132,7 @@ export const DoneTick = ({ done, onPress }: { done: boolean; onPress?: () => voi
 );
 
 // ── One homework ─────────────────────────────────────────────────────────────
-//   ◯  Chapter 3 Exercise                                         🗑
+//   ◯  Chapter 3 Exercise                                      ✎  🗑
 //      Mathematics · Ms. Patel · 09:30 AM
 //      Solve problems 1–10 from chapter 3 …
 //      Open attachment

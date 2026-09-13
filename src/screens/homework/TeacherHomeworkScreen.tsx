@@ -151,14 +151,18 @@ const TeacherHomeworkScreen = ({ navigation }: any) => {
                     isLast={i === dayItems.length - 1}
                     onPreviewImage={setPreview}
                     trailing={
-                      <TouchableOpacity
-                        style={s.delete}
-                        onPress={() => confirmDelete(hw)}
-                        hitSlop={10}
-                        activeOpacity={0.6}
-                      >
-                        <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={17} color={theme.colors.textMuted} />
-                      </TouchableOpacity>
+                      <View style={s.actions}>
+                        <TouchableOpacity
+                          onPress={() => navigation.navigate('AddHomework', { homework: hw })}
+                          hitSlop={10}
+                          activeOpacity={0.6}
+                        >
+                          <VectorIcon iconSet="Ionicons" iconName="create-outline" size={17} color={theme.colors.textMuted} />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => confirmDelete(hw)} hitSlop={10} activeOpacity={0.6}>
+                          <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={17} color={theme.colors.textMuted} />
+                        </TouchableOpacity>
+                      </View>
                     }
                   />
                 ))
@@ -186,7 +190,8 @@ const __mk_s = () => StyleSheet.create({
   grow: { flexGrow: 1 },
   fullDivider: { height: 1, backgroundColor: theme.colors.border },
   list: { paddingHorizontal: 20, paddingBottom: 40 },
-  delete: { paddingTop: 2 },
+  // Edit and delete, side by side
+  actions: { flexDirection: 'row', gap: 18, paddingTop: 2 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.
