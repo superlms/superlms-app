@@ -17,6 +17,10 @@ import { updatePassword } from '../../api/authApi';
 import { DocHeader } from '../more/docUi';
 import { AppDialog } from '../../components/AppDialog';
 
+// A met rule's tick and text: a deeper green than the theme's success colour,
+// which is too light to read as text on white.
+const MET = '#15803D';
+
 // Mirrors the backend update-password validation rules so the checklist
 // and the API accept exactly the same passwords.
 const passwordRules: { label: string; test: (p: string) => boolean }[] = [
@@ -62,7 +66,7 @@ const PasswordField = ({
             iconSet="Ionicons"
             iconName={show ? 'eye-off-outline' : 'eye-outline'}
             size={20}
-            color={theme.colors.textMuted}
+            color={theme.colors.textSecondary}
           />
         </TouchableOpacity>
       </View>
@@ -153,7 +157,7 @@ const ChangePasswordScreen = () => {
                   iconSet="Ionicons"
                   iconName={met ? 'checkmark' : 'ellipse-outline'}
                   size={14}
-                  color={met ? theme.colors.success : theme.colors.textMuted}
+                  color={met ? MET : theme.colors.textSecondary}
                 />
                 <Text style={[s.ruleText, met && s.ruleTextMet]}>{rule.label}</Text>
               </View>
@@ -165,7 +169,7 @@ const ChangePasswordScreen = () => {
                 iconSet="Ionicons"
                 iconName={matches ? 'checkmark' : 'close'}
                 size={14}
-                color={matches ? theme.colors.success : theme.colors.danger}
+                color={matches ? MET : theme.colors.danger}
               />
               <Text style={[s.ruleText, matches ? s.ruleTextMet : s.ruleTextFail]}>
                 Passwords match
@@ -216,8 +220,8 @@ const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
   scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 18 },
 
-  // Fields
-  label: { fontSize: 13, color: theme.colors.textSecondary, marginBottom: 6 },
+  // Fields — labels in the main text colour, a touch heavier, so they read clearly
+  label: { fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary, marginBottom: 6 },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -235,8 +239,9 @@ const __mk_s = () => StyleSheet.create({
   // Rules
   rules: { gap: 6 },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  ruleText: { fontSize: 13, color: theme.colors.textMuted, lineHeight: 18 },
-  ruleTextMet: { color: theme.colors.success },
+  // Unmet rules in the secondary text colour (not the faint muted one)
+  ruleText: { fontSize: 13, color: theme.colors.textSecondary, lineHeight: 18 },
+  ruleTextMet: { color: MET },
   ruleTextFail: { color: theme.colors.danger },
 
   // Error
