@@ -74,13 +74,13 @@ const byDay = (items: NotificationItem[]): DaySection[] => {
 };
 
 // ── One notification ─────────────────────────────────────────────────────────
-// A round icon centred on the row (tinted while unread), the title with its
-// time, a two-line preview and the kind; a round ✕ on the right, centred like
-// the chat button on Instructors. While picking rows, the circle becomes the
-// tick and the ✕ steps aside.
-//   ( 🎓 )  Exam Schedule Released           2 hrs ago    ( ✕ )
-//           The mid-term timetable has been published.
-//           Exam
+// A round icon centred on the row (tinted while unread), then the title, the
+// description running all the way to the right edge, and the kind with its
+// time on the last line. While picking rows, the icon's slot holds a small
+// tick instead, so the text never shifts.
+//   (🎓)  Exam Schedule Released
+//         The mid-term timetable has been published for all the classes.
+//         Exam · 2 hrs ago
 const NotificationRow = ({
   item,
   isLast,
@@ -88,7 +88,6 @@ const NotificationRow = ({
   selected,
   onPress,
   onLongPress,
-  onDismiss,
 }: {
   item: NotificationItem;
   isLast: boolean;
@@ -96,10 +95,11 @@ const NotificationRow = ({
   selected: boolean;
   onPress: () => void;
   onLongPress: () => void;
-  onDismiss: () => void;
 }) => {
   const cfg = CATEGORY_CONFIG[item.category] ?? CATEGORY_CONFIG.General;
   const unread = !item.read;
+  // The filled glyph reads better than the outline inside the small circle.
+  const icon = cfg.icon.replace(/-outline$/, '');
 
   return (
     <TouchableOpacity
@@ -109,30 +109,29 @@ const NotificationRow = ({
       onLongPress={onLongPress}
       delayLongPress={300}
     >
-      {selectionMode ? (
-        <View style={[s.lead, selected ? s.leadSelected : s.leadIdle]}>
-          {selected && (
-            <VectorIcon iconSet="Ionicons" iconName="checkmark" size={20} color={theme.colors.white} />
-          )}
-        </View>
-      ) : (
-        <View style={[s.lead, unread ? s.leadUnread : s.leadRead]}>
-          <VectorIcon
-            iconSet="Ionicons"
-            iconName={cfg.icon}
-            size={19}
-            color={unread ? theme.colors.primary : BODY}
-          />
-        </View>
-      )}
+      <View style={s.leadSlot}>
+        {selectionMode ? (
+          <View style={[s.check, selected ? s.checkOn : s.checkOff]}>
+            {selected && (
+              <VectorIcon iconSet="Ionicons" iconName="checkmark" size={13} color={theme.colors.white} />
+            )}
+          </View>
+        ) : (
+          <View style={[s.lead, unread ? s.leadUnread : s.leadRead]}>
+            <VectorIcon
+              iconSet="Ionicons"
+              iconName={icon}
+              size={17}
+              color={unread ? theme.colors.primary : BODY}
+            />
+          </View>
+        )}
+      </View>
 
       <View style={s.body}>
-        <View style={s.titleLine}>
-          <Text style={[s.title, unread && s.titleUnread]} numberOfLines={1}>
-            {item.title}
-          </Text>
-          <Text style={[s.time, unread && s.timeUnread]}>{timeLabel(item.createdAt)}</Text>
-        </View>
+        <Text style={[s.title, unread && s.titleUnread]} numberOfLines={1}>
+          {item.title}
+        </Text>
 
         {!!item.body && (
           <Text style={s.preview} numberOfLines={2}>
@@ -141,21 +140,16 @@ const NotificationRow = ({
         )}
 
         <Text style={s.meta} numberOfLines={1}>
-          {item.category}
+          {item.category} ·{' '}
+          <Text style={unread ? s.timeUnread : undefined}>{timeLabel(item.createdAt)}</Text>
         </Text>
       </View>
-
-      {!selectionMode && (
-        <TouchableOpacity style={s.dismissBtn} onPress={onDismiss} activeOpacity={0.7} hitSlop={6}>
-          <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={QUIET} />
-        </TouchableOpacity>
-      )}
     </TouchableOpacity>
   );
 };
 
 const NotificationScreen = ({ navigation }: any) => {
-  const { items, unreadCount, markRead, markAllRead, remove, removeMany } = useNotifications();
+  const { items, unreadCount, markRead, markAllRead, removeMany } = useNotifications();
   const [activeFilter, setActiveFilter] = useState<NotifCategory | 'All'>('All');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -312,7 +306,6 @@ const NotificationScreen = ({ navigation }: any) => {
               selected={selectedIds.includes(item.id)}
               onPress={() => (selectionMode ? toggleSelect(item.id) : open(item))}
               onLongPress={() => toggleSelect(item.id)}
-              onDismiss={() => remove(item.id)}
             />
           )}
         />
@@ -395,7 +388,7 @@ const __mk_s = () => StyleSheet.create({
   list: { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 30 },
   dayHead: { paddingTop: 18, paddingBottom: 2, fontSize: 13, fontWeight: '600', color: BODY },
 
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   // Full-bleed highlight: the row's own padding stops at the page margin.
   rowSelected: {
@@ -404,32 +397,22 @@ const __mk_s = () => StyleSheet.create({
     paddingHorizontal: 20,
   },
 
-  // Leading circle: the kind's icon, or the tick while picking
-  lead: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  // Leading slot: the kind's icon in a circle, or a small tick while picking
+  leadSlot: { width: 36, alignItems: 'center', justifyContent: 'center' },
+  lead: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   leadRead: { backgroundColor: theme.colors.background },
   leadUnread: { backgroundColor: theme.colors.primaryLight },
-  leadIdle: { borderWidth: 1.5, borderColor: theme.colors.border, backgroundColor: theme.colors.card },
-  leadSelected: { backgroundColor: theme.colors.primary },
+  check: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  checkOff: { borderWidth: 1.5, borderColor: theme.colors.border },
+  checkOn: { backgroundColor: theme.colors.primary },
 
-  body: { flex: 1, gap: 3 },
-  titleLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { flex: 1, fontSize: 15, fontWeight: '500', color: INK },
+  body: { flex: 1, gap: 2 },
+  title: { fontSize: 15, fontWeight: '500', color: INK },
   titleUnread: { fontWeight: '700' },
-  time: { fontSize: 12, color: QUIET },
+  preview: { fontSize: 13, lineHeight: 18, color: BODY },
+  // Kind and time share the last line, in small type.
+  meta: { fontSize: 11, color: QUIET, marginTop: 1 },
   timeUnread: { color: theme.colors.primary, fontWeight: '500' },
-  preview: { fontSize: 13, lineHeight: 19, color: BODY },
-  meta: { fontSize: 12, color: QUIET },
-
-  // Round ✕, like the chat button on Instructors
-  dismissBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 
   // Confirm modal
   modalOverlay: {
