@@ -58,10 +58,6 @@ const sectionsOf = (info: SchoolInfo) =>
     { title: 'Website Info', content: info.website_info },
   ].filter(sec => !!sec.content?.trim());
 
-// "https://www.school.in/" reads "www.school.in"; a bare address opens over https.
-const siteLabel = (url: string) => url.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
-const siteHref = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${url}`);
-
 // The name a document is saved under: its title, with the file's own extension.
 const fileNameFor = (doc: any, url: string, i: number) => {
   const ext = url.split('?')[0].match(/\.([a-z0-9]{2,5})$/i)?.[1] ?? String(doc.file_type ?? 'pdf');
@@ -102,9 +98,9 @@ const SchoolInfoScreen = () => {
   const { refreshing, onRefresh } = useRefresh(load);
   useFocusLoad(load);
 
-  // The centred head — logo, name, address, and the phone · email · website
-  // line — and its rule; then the school's sections as they read last time,
-  // down to the bottom of the screen.
+  // The centred head — logo, name, address, and the phone · email line — and
+  // its rule; then the school's sections as they read last time, down to the
+  // bottom of the screen.
   if (loading) return <DocSkeleton title={TITLE} hero={{ logo: true, lines: 2 }} shape={shape} />;
   if (error || !info) return <DocError title={TITLE} message={error || 'Something went wrong.'} onRetry={load} />;
 
@@ -124,11 +120,6 @@ const SchoolInfoScreen = () => {
       key: 'email',
       label: info.school_email,
       onPress: () => Linking.openURL(`mailto:${info.school_email}`),
-    },
-    info.website_url && {
-      key: 'website',
-      label: siteLabel(info.website_url),
-      onPress: () => Linking.openURL(siteHref(info.website_url)),
     },
   ].filter(Boolean) as { key: string; label: string; onPress: () => void }[];
 
@@ -162,11 +153,14 @@ const SchoolInfoScreen = () => {
         showsVerticalScrollIndicator={false}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Logo, name, address, then phone · email · website — centred */}
+        {/* Logo, name, address, then phone · email — centred */}
         <View style={docStyles.hero}>
           {!!logo && <Image source={{ uri: logo }} style={docStyles.heroLogo} resizeMode="contain" />}
           {!!name && <Text style={docStyles.heroName}>{name}</Text>}
-          {!!info.school_address && <Text style={docStyles.heroLine}>{info.school_address}</Text>}
+          {/* One run across the width, even when the address was typed on several lines */}
+          {!!info.school_address?.trim() && (
+            <Text style={docStyles.heroLine}>{info.school_address.trim().replace(/\s*\n\s*/g, ', ')}</Text>
+          )}
           {contacts.length > 0 && (
             <Text style={docStyles.heroLine}>
               {contacts.map((c, i) => (
