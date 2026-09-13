@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Modal,
   Pressable,
-  ScrollView,
   SectionList,
   StyleSheet,
   Text,
@@ -14,11 +13,7 @@ import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { theme, onThemeChange } from '../../utils/theme';
-import {
-  NotifCategory,
-  useNotifications,
-  type NotificationItem,
-} from '../../notifications';
+import { useNotifications, type NotificationItem } from '../../notifications';
 import { navigateToScreen } from '../../navigation/navigationRef';
 import { DocNoData } from '../more/docUi';
 import {
@@ -48,33 +43,21 @@ const NOTIFICATION_ICON = 'notifications';
 
 const NotificationScreen = ({ navigation }: any) => {
   const { items, ready, unreadCount, markRead, markAllRead, removeMany } = useNotifications();
-  const [activeFilter, setActiveFilter] = useState<NotifCategory | 'All'>('All');
   const [readFilter, setReadFilter] = useState<ReadFilter>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // The tabs are built from whatever categories actually turned up in the inbox.
-  const categories = useMemo(() => {
-    const set = new Set<NotifCategory>();
-    items.forEach(i => set.add(i.category));
-    return ['All', ...Array.from(set)] as (NotifCategory | 'All')[];
-  }, [items]);
-
-  const inCategory = useMemo(
-    () => (activeFilter === 'All' ? items : items.filter(i => i.category === activeFilter)),
-    [items, activeFilter],
-  );
-  // Totals for the All / Unread / Read selector, within the chosen tab.
+  // Totals for the All / Unread / Read selector.
   const readCounts = useMemo(() => {
-    const unread = inCategory.filter(i => !i.read).length;
-    return { all: inCategory.length, unread, read: inCategory.length - unread };
-  }, [inCategory]);
+    const unread = items.filter(i => !i.read).length;
+    return { all: items.length, unread, read: items.length - unread };
+  }, [items]);
   const filtered = useMemo(
     () =>
       readFilter === 'all'
-        ? inCategory
-        : inCategory.filter(i => (readFilter === 'unread' ? !i.read : i.read)),
-    [inCategory, readFilter],
+        ? items
+        : items.filter(i => (readFilter === 'unread' ? !i.read : i.read)),
+    [items, readFilter],
   );
   const sections = useMemo(() => groupByDay(filtered, i => i.createdAt), [filtered]);
 
@@ -108,11 +91,6 @@ const NotificationScreen = ({ navigation }: any) => {
 
   const toggleSelectAll = () =>
     setSelectedIds(allSelected ? [] : filtered.map(i => i.id));
-
-  const chooseFilter = (f: NotifCategory | 'All') => {
-    setActiveFilter(f);
-    clearSelection();
-  };
 
   const chooseReadFilter = (f: ReadFilter) => {
     setReadFilter(f);
@@ -191,30 +169,6 @@ const NotificationScreen = ({ navigation }: any) => {
             )}
           </View>
 
-          {/* Category tabs, only once there is more than one kind to choose from */}
-          {categories.length > 2 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              // A horizontal ScrollView grows to fill a column by default.
-              style={s.tabsBar}
-              contentContainerStyle={s.tabs}
-            >
-              {categories.map(f => {
-                const active = activeFilter === f;
-                return (
-                  <TouchableOpacity
-                    key={f}
-                    activeOpacity={0.6}
-                    onPress={() => chooseFilter(f)}
-                    style={[s.tab, active && s.tabActive]}
-                  >
-                    <Text style={[s.tabText, active && s.tabTextActive]}>{f}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          )}
           <View style={ui.fullDivider} />
 
           <SectionList
@@ -318,14 +272,6 @@ const __mk_s = () => StyleSheet.create({
   fill: { flex: 1 },
 
   headBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
-
-  // Category tabs
-  tabsBar: { flexGrow: 0 },
-  tabs: { paddingHorizontal: 20, gap: 20 },
-  tab: { paddingBottom: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabActive: { borderBottomColor: theme.colors.primary },
-  tabText: { fontSize: 14, fontWeight: '500', color: BODY },
-  tabTextActive: { color: theme.colors.primary, fontWeight: '600' },
 
   // Confirm modal
   modalOverlay: {
