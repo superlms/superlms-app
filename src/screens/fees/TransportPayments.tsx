@@ -15,25 +15,178 @@ import { downloadPdf } from '../../api/pdfDownload';
 import { transportReceiptUrl, type TransportPayment } from '../../api/transportApi';
 import { inr } from './feesUi';
 
-// The green of a settled payment — its tick, and the "Paid" chip.
+// The green of a settled payment — its tick, and the "Paid" chip — and the
+// soft red behind money still owed.
 const PAID_INK = '#16A34A';
 const PAID_BG = '#DCFCE7';
+const DUE_BG = '#FEE2E2';
 
-// A detail of the payment: the label on the left, its value on the right.
-const DetailRow = ({ label, value }: { label: string; value?: string | null }) => (
-  <View style={s.detailRow}>
+// ── The transport card ───────────────────────────────────────────────────────
+// One look for every block on the Transport screen — each payment, the fees
+// and the driver: a bordered card with a head (a round lead, a big line, a
+// small line under it and an optional chip), label/value details under a
+// hairline, and an optional action across its foot.
+
+export const TransportCard = ({ children, gap }: { children: React.ReactNode; gap?: boolean }) => (
+  <View style={[s.card, gap && s.cardGap]}>{children}</View>
+);
+
+/** The head's round lead: an icon on a soft tint. */
+export const CardLeadIcon = ({ icon, tone = 'primary' }: { icon: string; tone?: 'primary' | 'paid' }) => (
+  <View style={[s.lead, tone === 'paid' ? s.leadPaid : s.leadPrimary]}>
+    <VectorIcon
+      iconSet="Ionicons"
+      iconName={icon}
+      size={20}
+      color={tone === 'paid' ? PAID_INK : theme.colors.primary}
+    />
+  </View>
+);
+
+export const CardHead = ({
+  lead,
+  title,
+  sub,
+  chip,
+}: {
+  lead: React.ReactNode;
+  title: string;
+  sub?: string | null;
+  chip?: { label: string; tone: 'paid' | 'due' } | null;
+}) => (
+  <View style={s.top}>
+    {lead}
+    <View style={s.topBody}>
+      <Text style={s.title} numberOfLines={1}>
+        {title}
+      </Text>
+      {!!sub && (
+        <Text style={s.sub} numberOfLines={1}>
+          {sub}
+        </Text>
+      )}
+    </View>
+    {!!chip && (
+      <View style={[s.chip, chip.tone === 'due' ? s.chipDue : s.chipPaid]}>
+        <Text style={[s.chipText, chip.tone === 'due' ? s.chipTextDue : s.chipTextPaid]}>{chip.label}</Text>
+      </View>
+    )}
+  </View>
+);
+
+export const CardDetails = ({ children }: { children: React.ReactNode }) => (
+  <View style={s.details}>{children}</View>
+);
+
+/**
+ * A detail: the label on the left, its value on the right — in the accent
+ * colour when it can be tapped — and anything `aside` in a column after it.
+ */
+export const CardDetailRow = ({
+  label,
+  value,
+  onPress,
+  aside,
+}: {
+  label: string;
+  value?: string | null;
+  onPress?: () => void;
+  aside?: React.ReactNode;
+}) => (
+  <TouchableOpacity style={s.detailRow} activeOpacity={onPress ? 0.6 : 1} disabled={!onPress} onPress={onPress}>
     <Text style={s.detailLabel}>{label}</Text>
-    <Text style={s.detailValue} numberOfLines={1}>
+    <Text style={[s.detailValue, !!onPress && s.detailLink]} numberOfLines={1}>
       {value || '—'}
     </Text>
+    {aside !== undefined && <View style={s.aside}>{aside}</View>}
+  </TouchableOpacity>
+);
+
+/** The card's action, across its foot. */
+export const CardFooter = ({
+  icon,
+  label,
+  onPress,
+  busy,
+  busyLabel,
+  disabled,
+}: {
+  icon: string;
+  label: string;
+  onPress: () => void;
+  busy?: boolean;
+  busyLabel?: string;
+  disabled?: boolean;
+}) => (
+  <TouchableOpacity style={s.footer} onPress={onPress} disabled={disabled || busy} activeOpacity={0.6}>
+    {busy ? (
+      <ActivityIndicator size="small" color={theme.colors.primary} />
+    ) : (
+      <VectorIcon iconSet="Ionicons" iconName={icon} size={17} color={theme.colors.primary} />
+    )}
+    <Text style={s.footerText}>{busy && busyLabel ? busyLabel : label}</Text>
+  </TouchableOpacity>
+);
+
+// ── The card in boxes, for the loading skeleton ──────────────────────────────
+export const CardHeadSkeleton = ({
+  titleWidth = '42%',
+  subWidth = '58%',
+  chipWidth,
+}: {
+  titleWidth?: number | string;
+  subWidth?: number | string;
+  chipWidth?: number;
+}) => (
+  <View style={s.top}>
+    <Skeleton width={40} height={40} radius={20} />
+    <View style={s.topBody}>
+      <Skeleton width={titleWidth} height={18} />
+      <Skeleton width={subWidth} height={12} style={s.skSub} />
+    </View>
+    {!!chipWidth && <Skeleton width={chipWidth} height={22} radius={11} />}
+  </View>
+);
+
+/** One row per value width; the labels' widths repeat in turn. */
+export const CardDetailsSkeleton = ({
+  widths,
+  labels = [78],
+  aside,
+}: {
+  widths: (number | string)[];
+  labels?: number[];
+  /** Width of a box in the aside column, when the rows have one. */
+  aside?: number;
+}) => (
+  <View style={s.details}>
+    {widths.map((w, i) => (
+      <View key={i} style={s.detailRow}>
+        <Skeleton width={labels[i % labels.length]} height={13} style={s.skLine} />
+        <View style={s.skValue}>
+          <Skeleton width={w} height={13} style={s.skLine} />
+        </View>
+        {!!aside && (
+          <View style={s.aside}>
+            <Skeleton width={aside} height={13} style={s.skLine} />
+          </View>
+        )}
+      </View>
+    ))}
+  </View>
+);
+
+export const CardFooterSkeleton = ({ width = 136 }: { width?: number }) => (
+  <View style={s.footer}>
+    <Skeleton width={width} height={14} style={s.skLine} />
   </View>
 );
 
 /**
  * The student's transport fee payments, in the order they were paid, each as
- * a payment card: the tick, the amount with its date and day, then the serial
- * number, mode, type, who submitted it and the receipt number, and the receipt
- * to download. Shared by the Transport screen and the Transport tab of Fees.
+ * a payment card: the tick, the amount with its date and day, then the mode,
+ * who submitted it and the receipt number, and the receipt to download.
+ * Shared by the Transport screen and the Transport tab of Fees.
  */
 export const TransportPayments = ({
   payments,
@@ -67,81 +220,45 @@ export const TransportPayments = ({
 
   return (
     <View>
-      {list.map((p, i) => {
-        const busy = downloading === p.id;
-        return (
-          <View key={p.id} style={[s.card, i < list.length - 1 && s.cardGap]}>
-            <View style={s.top}>
-              <View style={s.tick}>
-                <VectorIcon iconSet="Ionicons" iconName="checkmark" size={20} color={PAID_INK} />
-              </View>
-              <View style={s.topBody}>
-                <Text style={s.amount}>{inr(p.amount)}</Text>
-                <Text style={s.when}>{[p.date, p.day].filter(Boolean).join(' · ') || '—'}</Text>
-              </View>
-              <View style={s.paidChip}>
-                <Text style={s.paidText}>Paid</Text>
-              </View>
-            </View>
-
-            <View style={s.details}>
-              <DetailRow label="Serial No." value={`#${p.serial}`} />
-              <DetailRow label="Mode" value={p.mode} />
-              <DetailRow label="Type" value={p.type} />
-              <DetailRow label="Submitted By" value={p.submitted_by} />
-              <DetailRow label="Receipt No." value={p.receipt_number} />
-            </View>
-
-            <TouchableOpacity
-              style={s.download}
-              onPress={() => download(p)}
-              disabled={downloading !== null}
-              activeOpacity={0.6}
-            >
-              {busy ? (
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-              ) : (
-                <VectorIcon iconSet="Ionicons" iconName="download-outline" size={17} color={theme.colors.primary} />
-              )}
-              <Text style={s.downloadText}>{busy ? 'Downloading…' : 'Download Receipt'}</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      })}
+      {list.map((p, i) => (
+        <TransportCard key={p.id} gap={i < list.length - 1}>
+          <CardHead
+            lead={<CardLeadIcon icon="checkmark" tone="paid" />}
+            title={inr(p.amount)}
+            sub={[p.date, p.day].filter(Boolean).join(' · ') || '—'}
+            chip={{ label: 'Paid', tone: 'paid' }}
+          />
+          <CardDetails>
+            <CardDetailRow label="Mode" value={p.mode} />
+            <CardDetailRow label="Submitted By" value={p.submitted_by} />
+            <CardDetailRow label="Receipt No." value={p.receipt_number} />
+          </CardDetails>
+          <CardFooter
+            icon="download-outline"
+            label="Download Receipt"
+            busyLabel="Downloading…"
+            busy={downloading === p.id}
+            disabled={downloading !== null}
+            onPress={() => download(p)}
+          />
+        </TransportCard>
+      ))}
     </View>
   );
 };
 
-// The detail values' widths in the skeleton: serial, mode, type, name, receipt.
-const DETAIL_WIDTHS = [26, 40, 58, 92, 128];
+// The detail values' widths in the skeleton: mode, name, receipt.
+const DETAIL_WIDTHS = [40, 92, 128];
 
 /** Payment cards while the page loads — the same card, in boxes. */
 export const TransportPaymentsSkeleton = ({ count = 1 }: { count?: number }) => (
   <View>
     {Array.from({ length: count }, (_, i) => (
-      <View key={i} style={[s.card, i < count - 1 && s.cardGap]}>
-        <View style={s.top}>
-          <Skeleton width={40} height={40} radius={20} />
-          <View style={s.topBody}>
-            <Skeleton width="42%" height={18} />
-            <Skeleton width="58%" height={12} style={s.skWhen} />
-          </View>
-          <Skeleton width={46} height={22} radius={11} />
-        </View>
-        <View style={s.details}>
-          {DETAIL_WIDTHS.map((w, j) => (
-            <View key={j} style={s.detailRow}>
-              <Skeleton width={78} height={13} style={s.skLine} />
-              <View style={s.skValue}>
-                <Skeleton width={w} height={13} style={s.skLine} />
-              </View>
-            </View>
-          ))}
-        </View>
-        <View style={s.download}>
-          <Skeleton width={136} height={14} style={s.skLine} />
-        </View>
-      </View>
+      <TransportCard key={i} gap={i < count - 1}>
+        <CardHeadSkeleton chipWidth={46} />
+        <CardDetailsSkeleton widths={DETAIL_WIDTHS} />
+        <CardFooterSkeleton />
+      </TransportCard>
     ))}
   </View>
 );
@@ -149,7 +266,6 @@ export const TransportPaymentsSkeleton = ({ count = 1 }: { count?: number }) => 
 const __mk_s = () => StyleSheet.create({
   empty: { fontSize: 13, color: theme.colors.textMuted, paddingVertical: 12 },
 
-  // One payment
   card: {
     borderWidth: 1,
     borderColor: theme.colors.border,
@@ -159,21 +275,20 @@ const __mk_s = () => StyleSheet.create({
   },
   cardGap: { marginBottom: 12 },
 
-  // Tick, amount with its date and day, and the Paid chip
+  // Head: the round lead, the big line and the small one, the chip
   top: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 12 },
-  tick: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: PAID_BG,
-  },
+  lead: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  leadPaid: { backgroundColor: PAID_BG },
+  leadPrimary: { backgroundColor: theme.colors.primaryLight },
   topBody: { flex: 1 },
-  amount: { fontSize: 18, fontWeight: '700', color: theme.colors.textPrimary },
-  when: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
-  paidChip: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: theme.radius.full, backgroundColor: PAID_BG },
-  paidText: { fontSize: 12, fontWeight: '600', color: PAID_INK },
+  title: { fontSize: 18, fontWeight: '700', color: theme.colors.textPrimary },
+  sub: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
+  chip: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: theme.radius.full },
+  chipPaid: { backgroundColor: PAID_BG },
+  chipDue: { backgroundColor: DUE_BG },
+  chipText: { fontSize: 12, fontWeight: '600' },
+  chipTextPaid: { color: PAID_INK },
+  chipTextDue: { color: theme.colors.danger },
 
   // The details, label left and value right
   details: {
@@ -192,9 +307,11 @@ const __mk_s = () => StyleSheet.create({
     fontWeight: '500',
     color: theme.colors.textPrimary,
   },
+  detailLink: { color: theme.colors.primary },
+  aside: { width: 64, alignItems: 'flex-end', marginLeft: 12 },
 
-  // Download Receipt, across the foot of the card
-  download: {
+  // The action, across the foot of the card
+  footer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -204,10 +321,10 @@ const __mk_s = () => StyleSheet.create({
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.background,
   },
-  downloadText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
+  footerText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
 
   // Skeleton — boxes the height of the text they stand in for
-  skWhen: { marginTop: 5 },
+  skSub: { marginTop: 5 },
   skLine: { marginVertical: 2.5 },
   skValue: { flex: 1, alignItems: 'flex-end', marginLeft: 16 },
 });

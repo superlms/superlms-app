@@ -15,7 +15,19 @@ import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import constant from '../../utils/constant';
 import { DocHeader, DocNoData } from '../more/docUi';
-import { TransportPayments, TransportPaymentsSkeleton } from '../fees/TransportPayments';
+import {
+  CardDetailRow,
+  CardDetails,
+  CardDetailsSkeleton,
+  CardFooter,
+  CardFooterSkeleton,
+  CardHead,
+  CardHeadSkeleton,
+  CardLeadIcon,
+  TransportCard,
+  TransportPayments,
+  TransportPaymentsSkeleton,
+} from '../fees/TransportPayments';
 import {
   getMyTransport,
   type FeeStatus,
@@ -62,31 +74,6 @@ const initialsOf = (name?: string | null) =>
     .join('')
     .toUpperCase();
 
-// ── Label : value line ───────────────────────────────────────────────────────
-const InfoRow = ({
-  label,
-  value,
-  onPress,
-}: {
-  label: string;
-  value?: string | null;
-  onPress?: () => void;
-}) => {
-  if (!value) return null;
-  return (
-    <TouchableOpacity
-      style={s.infoRow}
-      activeOpacity={onPress ? 0.6 : 1}
-      disabled={!onPress}
-      onPress={onPress}
-    >
-      <Text style={s.infoLabel}>{label}</Text>
-      <Text style={s.infoColon}>:</Text>
-      <Text style={[s.infoValue, !!onPress && s.infoValueLink]}>{value}</Text>
-    </TouchableOpacity>
-  );
-};
-
 // Pickup or drop — its time (a dash when not set) and, if known, the place.
 const TimeCol = ({ label, time, place }: { label: string; time: string | null; place?: string | null }) => (
   <View style={s.timeCol}>
@@ -96,7 +83,7 @@ const TimeCol = ({ label, time, place }: { label: string; time: string | null; p
   </View>
 );
 
-// A block of rows under a plain heading, separated from the last by a line.
+// A card (or cards) under a plain heading, separated from the last by a line.
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <>
     <View style={s.divider} />
@@ -108,12 +95,14 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 );
 
 // ── Loading ──────────────────────────────────────────────────────────────────
-// What the page held when it last loaded — the skeleton draws the same blocks
-// (the driver's lines, the months so far, the payments), so nothing jumps when
-// the page arrives. Before anything has loaded it assumes a driver with four
-// lines, the fees up to this month and one payment.
+// What the page held when it last loaded — the skeleton draws the same cards
+// (the driver's details and call button, the months so far, the payments), so
+// nothing jumps when the page arrives. Before anything has loaded it assumes a
+// driver with four details and a phone, the fees up to this month and one
+// payment.
 type PageShape = {
   driverLines: number | null;
+  driverPhone: boolean;
   places: boolean;
   fees: boolean;
   feeRows: number;
@@ -129,6 +118,7 @@ const shapeOf = (d: TransportRoute): PageShape => {
   const vehicle = driver?.vehicle_no || d.vehicle_no || d.vehicle_type || driver?.vehicle_type;
   return {
     driverLines: driver ? [driver.phone, driver.email, driver.license_no, vehicle].filter(Boolean).length : null,
+    driverPhone: !!driver?.phone,
     places: !!(d.pickup_location || d.drop_location),
     fees: !!d.fees,
     feeRows: d.fees ? Math.min(monthsSoFar(), d.fees.schedule?.length ?? 0) : 0,
@@ -137,7 +127,8 @@ const shapeOf = (d: TransportRoute): PageShape => {
 };
 
 // The driver's values run to different lengths — phone, email, licence, vehicle.
-const LINE_WIDTHS = ['36%', '58%', '16%', '34%'];
+const DRIVER_WIDTHS = [96, 150, 104, 124];
+const DRIVER_LABELS = [44, 40, 76, 52];
 
 const TimeColSkeleton = ({ place }: { place: boolean }) => (
   <View style={s.timeCol}>
@@ -148,7 +139,14 @@ const TimeColSkeleton = ({ place }: { place: boolean }) => (
 );
 
 const TransportSkeleton = ({ onBack }: { onBack: () => void }) => {
-  const shape = lastShape ?? { driverLines: 4, places: false, fees: true, feeRows: monthsSoFar(), payments: 1 };
+  const shape = lastShape ?? {
+    driverLines: 4,
+    driverPhone: true,
+    places: false,
+    fees: true,
+    feeRows: monthsSoFar(),
+    payments: 1,
+  };
   const rows = shape.feeRows;
 
   return (
@@ -172,18 +170,16 @@ const TransportSkeleton = ({ onBack }: { onBack: () => void }) => {
             <View style={s.divider} />
             <View style={s.section}>
               <Skeleton width={46} height={12} style={s.skSectionTitle} />
-              <View style={s.driverRow}>
-                <Skeleton width={44} height={44} radius={22} />
-                <Skeleton width="32%" height={15} />
-              </View>
-              <View style={s.driverRows}>
-                {Array.from({ length: shape.driverLines }, (_, i) => (
-                  <View key={i} style={s.infoRow}>
-                    <Skeleton width={72} height={14} style={[s.skLine, s.skLabel]} />
-                    <Skeleton width={LINE_WIDTHS[i % LINE_WIDTHS.length]} height={14} style={s.skLine} />
-                  </View>
-                ))}
-              </View>
+              <TransportCard>
+                <CardHeadSkeleton titleWidth="46%" subWidth={40} />
+                {shape.driverLines > 0 && (
+                  <CardDetailsSkeleton
+                    widths={DRIVER_WIDTHS.slice(0, shape.driverLines)}
+                    labels={DRIVER_LABELS}
+                  />
+                )}
+                {shape.driverPhone && <CardFooterSkeleton width={96} />}
+              </TransportCard>
             </View>
           </>
         )}
@@ -194,18 +190,14 @@ const TransportSkeleton = ({ onBack }: { onBack: () => void }) => {
             <View style={s.divider} />
             <View style={s.section}>
               <Skeleton width={96} height={12} style={s.skSectionTitle} />
-              <Skeleton width="46%" height={13} style={s.skSummary} />
-              <View style={s.schedule}>
-                {Array.from({ length: rows }, (_, i) => (
-                  <View key={i} style={[s.feeRow, i < rows - 1 && s.rowDivider]}>
-                    <View style={s.skMonth}>
-                      <Skeleton width={i % 3 === 2 ? 118 : 94} height={14} style={s.skLine} />
-                    </View>
-                    <Skeleton width={62} height={14} style={[s.skLine, s.skAmount]} />
-                    <Skeleton width={52} height={13} style={s.skLine} />
-                  </View>
-                ))}
-              </View>
+              <TransportCard>
+                <CardHeadSkeleton titleWidth="34%" subWidth={62} chipWidth={92} />
+                <CardDetailsSkeleton
+                  widths={Array.from({ length: rows }, () => 62)}
+                  labels={[80, 70, 104]}
+                  aside={46}
+                />
+              </TransportCard>
             </View>
           </>
         )}
@@ -343,6 +335,9 @@ const TransportScreen = ({ navigation }: any) => {
   const dueSoFar = Math.max(0, billedSoFar - Number(fees?.total_paid || 0));
   const payments = fees?.payments ?? [];
 
+  const callDriver = driver?.phone ? () => Linking.openURL(`tel:${driver.phone}`) : undefined;
+  const mailDriver = driver?.email ? () => Linking.openURL(`mailto:${driver.email}`) : undefined;
+
   return (
     <View style={s.root}>
       <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
@@ -365,69 +360,74 @@ const TransportScreen = ({ navigation }: any) => {
           </View>
         </View>
 
-        {/* Who drives it, and the vehicle */}
+        {/* Who drives it, and the vehicle — a card like a payment's, with a
+            call button across its foot */}
         {!!driver && (
           <Section title="Driver">
-            <View style={s.driverRow}>
-              {driverPhoto ? (
-                <Image source={{ uri: driverPhoto }} style={s.driverAvatar} />
-              ) : (
-                <View style={[s.driverAvatar, s.driverAvatarFallback]}>
-                  <Text style={s.driverInitials}>{initialsOf(driver.name)}</Text>
-                </View>
+            <TransportCard>
+              <CardHead
+                lead={
+                  driverPhoto ? (
+                    <Image source={{ uri: driverPhoto }} style={s.driverAvatar} />
+                  ) : (
+                    <View style={[s.driverAvatar, s.driverAvatarFallback]}>
+                      <Text style={s.driverInitials}>{initialsOf(driver.name)}</Text>
+                    </View>
+                  )
+                }
+                title={driver.name || '—'}
+                sub="Driver"
+              />
+              {!!(driver.phone || driver.email || driver.license_no || vehicle) && (
+                <CardDetails>
+                  {!!driver.phone && <CardDetailRow label="Phone" value={driver.phone} onPress={callDriver} />}
+                  {!!driver.email && <CardDetailRow label="Email" value={driver.email} onPress={mailDriver} />}
+                  {!!driver.license_no && <CardDetailRow label="Licence No." value={driver.license_no} />}
+                  {!!vehicle && <CardDetailRow label="Vehicle" value={vehicle} />}
+                </CardDetails>
               )}
-              <Text style={s.driverName}>{driver.name || '—'}</Text>
-            </View>
-
-            <View style={s.driverRows}>
-              <InfoRow
-                label="Phone"
-                value={driver.phone}
-                onPress={driver.phone ? () => Linking.openURL(`tel:${driver.phone}`) : undefined}
-              />
-              <InfoRow
-                label="Email"
-                value={driver.email}
-                onPress={driver.email ? () => Linking.openURL(`mailto:${driver.email}`) : undefined}
-              />
-              <InfoRow label="Licence No" value={driver.license_no} />
-              <InfoRow label="Vehicle" value={vehicle} />
-            </View>
+              {!!callDriver && <CardFooter icon="call-outline" label="Call Driver" onPress={callDriver} />}
+            </TransportCard>
           </Section>
         )}
 
-        {/* What has been paid, month by month, up to this month */}
+        {/* What has been paid, and each month up to this one — a card like a
+            payment's */}
         {!!fees && schedule.length > 0 && (
           <Section title="Transport Fees">
-            <Text style={s.feeSummary}>
-              Paid <Text style={s.feePaid}>{formatINR(fees.total_paid)}</Text>
-              {'   ·   '}
-              Due{' '}
-              <Text style={dueSoFar > 0 ? s.feeDue : s.feePaid}>{formatINR(dueSoFar)}</Text>
-            </Text>
-
-            <View style={s.schedule}>
-              {schedule.map((row, i) => (
-                <View
-                  key={row.key}
-                  style={[s.feeRow, i < schedule.length - 1 && s.rowDivider]}
-                >
-                  <Text style={s.feeMonth}>{row.label}</Text>
-                  <Text style={s.feeAmount}>
-                    {row.amount > 0 ? formatINR(row.amount) : '—'}
-                  </Text>
-                  <Text
-                    style={[
-                      s.feeStatus,
-                      row.status === 'pending' && s.feeStatusDue,
-                      row.status === 'partial' && s.feeStatusPartial,
-                    ]}
-                  >
-                    {STATUS_LABEL[row.status] ?? '—'}
-                  </Text>
-                </View>
-              ))}
-            </View>
+            <TransportCard>
+              <CardHead
+                lead={<CardLeadIcon icon="wallet-outline" />}
+                title={formatINR(fees.total_paid)}
+                sub="Total paid"
+                chip={
+                  dueSoFar > 0
+                    ? { label: `Due ${formatINR(dueSoFar)}`, tone: 'due' }
+                    : { label: 'No dues', tone: 'paid' }
+                }
+              />
+              <CardDetails>
+                {schedule.map(row => (
+                  <CardDetailRow
+                    key={row.key}
+                    label={row.label}
+                    value={row.amount > 0 ? formatINR(row.amount) : '—'}
+                    aside={
+                      <Text
+                        style={[
+                          s.feeStatus,
+                          row.status === 'paid' && s.feeStatusPaid,
+                          row.status === 'pending' && s.feeStatusDue,
+                          row.status === 'partial' && s.feeStatusPartial,
+                        ]}
+                      >
+                        {STATUS_LABEL[row.status] ?? '—'}
+                      </Text>
+                    }
+                  />
+                ))}
+              </CardDetails>
+            </TransportCard>
           </Section>
         )}
 
@@ -476,48 +476,27 @@ const __mk_s = () => StyleSheet.create({
 
   // Full-width lines between the blocks
   divider: { height: 1, backgroundColor: theme.colors.divider },
-  rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-
-  // Label : value lines
-  infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 7 },
-  infoLabel: { width: 84, fontSize: 14, color: theme.colors.textSecondary },
-  infoColon: { width: 14, fontSize: 14, color: theme.colors.textSecondary },
-  infoValue: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
-  infoValueLink: { color: theme.colors.primary },
 
   // Sections
-  section: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 6 },
+  section: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 20 },
   sectionTitle: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 10 },
 
-  // Driver
-  driverRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  driverAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.colors.background },
-  driverAvatarFallback: { alignItems: 'center', justifyContent: 'center' },
-  driverInitials: { fontSize: 15, fontWeight: '600', color: theme.colors.textSecondary },
-  driverName: { flex: 1, fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  driverRows: { marginTop: 10, paddingBottom: 8 },
+  // Driver — the photo, or initials on the accent tint, in the card's lead
+  driverAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.background },
+  driverAvatarFallback: { alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.primaryLight },
+  driverInitials: { fontSize: 14, fontWeight: '700', color: theme.colors.primary },
 
-  // Fees
-  feeSummary: { fontSize: 13, color: theme.colors.textSecondary, marginBottom: 6 },
-  feePaid: { fontWeight: '600', color: theme.colors.textPrimary },
-  feeDue: { fontWeight: '600', color: theme.colors.danger },
-  schedule: { marginTop: 2 },
-  feeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 13 },
-  feeMonth: { flex: 1, fontSize: 14, color: theme.colors.textPrimary },
-  feeAmount: { width: 90, textAlign: 'right', fontSize: 14, color: theme.colors.textSecondary },
-  feeStatus: { width: 72, textAlign: 'right', fontSize: 13, color: theme.colors.textMuted },
-  feeStatusDue: { color: theme.colors.danger, fontWeight: '500' },
-  feeStatusPartial: { color: theme.colors.textPrimary, fontWeight: '500' },
+  // A month's status, in the fee card's last column
+  feeStatus: { fontSize: 13, fontWeight: '500', color: theme.colors.textMuted },
+  feeStatusPaid: { color: theme.colors.success },
+  feeStatusDue: { color: theme.colors.danger },
+  feeStatusPartial: { color: theme.colors.textPrimary },
 
   // Skeleton — boxes the height of the text they stand in for
   skLine: { marginVertical: 2.5 },
   skTitle: { marginTop: 17, marginBottom: 2 },
   skTime: { marginTop: 5 },
   skSectionTitle: { marginTop: 2, marginBottom: 13 },
-  skLabel: { marginRight: 26 },
-  skSummary: { marginTop: 2, marginBottom: 8 },
-  skMonth: { flex: 1 },
-  skAmount: { marginRight: 20 },
   skEmpty: { marginVertical: 14 },
 
   // Error
