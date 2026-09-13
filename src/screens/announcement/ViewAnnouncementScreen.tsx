@@ -147,6 +147,8 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
                 creatorName: d.creator_name || prev.creatorName,
                 creatorEmail: d.creator_email || prev.creatorEmail,
                 creatorAvatar: d.creator_avatar || prev.creatorAvatar,
+                organizationName:
+                  d.organization_name || d.organization?.name || prev.organizationName,
               }
             : mapApiItem(d),
         );
@@ -233,8 +235,7 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
           )}
         </DocSection>
 
-        {/* Posted by — the school's admin, by role rather than the school name
-            the admin account carries */}
+        {/* Posted by — "Admin", with the school's name under it */}
         {!!item.creatorName && (
           <>
             <View style={s.divider} />
@@ -249,8 +250,10 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
                 )}
                 <View style={s.creatorInfo}>
                   <Text style={s.creatorName}>Admin</Text>
-                  {!!item.creatorEmail && (
-                    <Text style={s.creatorEmail}>{item.creatorEmail}</Text>
+                  {/* Older servers send no school name; the admin account's
+                      own name is the school's there. */}
+                  {!!(item.organizationName || item.creatorName) && (
+                    <Text style={s.creatorEmail}>{item.organizationName || item.creatorName}</Text>
                   )}
                 </View>
               </View>

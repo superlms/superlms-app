@@ -139,7 +139,13 @@ export const MonthGrid = ({
                 disabled={!tappable}
                 onPress={tappable ? () => onSelectDate!(day) : undefined}
               >
-                <View style={[s.dayInner, isSelected && s.dayInnerSelected]}>
+                <View
+                  // Remounted when it turns selected: on Android a view whose
+                  // background is switched on later can lose its border radius
+                  // and draw as a square instead of a circle.
+                  key={isSelected ? 'selected' : 'plain'}
+                  style={[s.dayInner, isSelected && s.dayInnerSelected]}
+                >
                   <Text
                     style={[
                       s.dayNum,
@@ -251,7 +257,7 @@ const __mk_s = () => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dayInnerSelected: { backgroundColor: theme.colors.primary },
+  dayInnerSelected: { backgroundColor: theme.colors.primary, borderRadius: DAY / 2 },
   dayNum: { fontSize: 14, color: theme.colors.textPrimary },
   dayNumSunday: { color: theme.colors.textMuted },
   dayNumToday: { color: theme.colors.primary, fontWeight: '700' },

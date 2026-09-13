@@ -16,6 +16,7 @@ export type Announcement = {
   creatorName?: string;
   creatorEmail?: string;
   creatorAvatar?: string;
+  organizationName?: string;
 };
 
 export type FilterKey = 'Today' | '7 Days' | '15 Days' | '30 Days';
@@ -64,6 +65,7 @@ export const mapApiItem = (apiItem: any): Announcement => {
     creatorName: apiItem.creator_name,
     creatorEmail: apiItem.creator_email,
     creatorAvatar: apiItem.creator_avatar,
+    organizationName: apiItem.organization_name ?? apiItem.organization?.name,
   };
 };
 

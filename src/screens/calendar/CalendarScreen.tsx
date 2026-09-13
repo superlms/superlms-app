@@ -15,11 +15,20 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { FILTERS } from './calendarTypes';
 import type { FilterType, CalEvent } from './calendarTypes';
 import MonthYearPicker from './MonthYearPicker';
-import { MonthBar, MonthGrid, EventRow, FullDivider } from './calendarUi';
-import { DocHeader, DocNoData } from '../more/docUi';
+import { MonthBar, MonthGrid, FullDivider } from './calendarUi';
+import { BODY, INK, QUIET, InboxRow } from '../notification/inboxUi';
+import { DocHeader } from '../more/docUi';
 import { getCalendarEvents, mapApiEventToCalEvent } from '../../api/calendarApi';
 
 const TITLE = 'Calendar';
+
+// Each kind of event leads its row with its own filled icon.
+const TYPE_ICON: Record<CalEvent['type'], string> = {
+  Holiday: 'sunny',
+  Exam: 'school',
+  Event: 'calendar',
+  Assignment: 'document-text',
+};
 
 const CalendarScreen = ({ navigation }: any) => {
   const today = moment().format('YYYY-MM-DD');
@@ -73,11 +82,18 @@ const CalendarScreen = ({ navigation }: any) => {
     return map;
   }, [eventsByDate]);
 
-  const filteredEvents = useMemo(() => {
-    const dayEvents = eventsByDate[selectedDate] ?? [];
-    if (activeFilter === 'All') return dayEvents;
-    return dayEvents.filter(e => e.type === activeFilter);
-  }, [eventsByDate, selectedDate, activeFilter]);
+  const dayEvents = useMemo(() => eventsByDate[selectedDate] ?? [], [eventsByDate, selectedDate]);
+
+  const filteredEvents = useMemo(
+    () => (activeFilter === 'All' ? dayEvents : dayEvents.filter(e => e.type === activeFilter)),
+    [dayEvents, activeFilter],
+  );
+
+  // A new day starts from every kind of event again.
+  const selectDate = (date: string) => {
+    setSelectedDate(date);
+    setActiveFilter('All');
+  };
 
   // A month the user pages to always starts on its first day.
   const shiftMonth = (delta: number) =>
@@ -127,65 +143,75 @@ const CalendarScreen = ({ navigation }: any) => {
               month={currentMonth}
               selected={selectedDate}
               marked={marked}
-              onSelectDate={setSelectedDate}
+              onSelectDate={selectDate}
             />
           </View>
 
           <FullDivider />
 
-          {/* The selected day, and the type filter under it */}
+          {/* The selected day */}
           <View style={s.dayHead}>
             <Text style={s.dayTitle}>{moment(selectedDate).format('dddd, D MMMM')}</Text>
-            <Text style={s.dayCount}>
-              {filteredEvents.length} {filteredEvents.length === 1 ? 'event' : 'events'}
-            </Text>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.tabs}
-          >
-            {FILTERS.map(f => {
-              const active = activeFilter === f;
-              return (
-                <TouchableOpacity
-                  key={f}
-                  activeOpacity={0.6}
-                  onPress={() => setActiveFilter(f)}
-                  style={[s.tab, active && s.tabActive]}
-                >
-                  <Text style={[s.tabText, active && s.tabTextActive]}>{f}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          {/* Line between the day selector and what is on that day */}
-          <FullDivider />
-
-          {/* Events on that day */}
-          <View style={s.list}>
-            {filteredEvents.length === 0 ? (
-              <DocNoData
-                icon="calendar-outline"
-                title="Nothing scheduled"
-                subtitle="No events on this date."
-              />
-            ) : (
-              filteredEvents.map((event, i) => (
-                <EventRow
-                  key={event.id}
-                  type={event.type}
-                  title={event.title}
-                  description={event.description}
-                  meta={event.time}
-                  isLast={i === filteredEvents.length - 1}
-                  onPress={() => navigation.navigate('ViewEvent', { event })}
-                />
-              ))
+            {dayEvents.length > 0 && (
+              <Text style={s.dayCount}>
+                {filteredEvents.length} {filteredEvents.length === 1 ? 'event' : 'events'}
+              </Text>
             )}
           </View>
+
+          {dayEvents.length === 0 ? (
+            // Nothing that day: say so under the date, with no type filter to pick
+            <Text style={s.noEvent}>No event</Text>
+          ) : (
+            <>
+              {/* Type filter */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                // A horizontal ScrollView grows to fill a column by default.
+                style={s.tabsBar}
+                contentContainerStyle={s.tabs}
+              >
+                {FILTERS.map(f => {
+                  const active = activeFilter === f;
+                  return (
+                    <TouchableOpacity
+                      key={f}
+                      activeOpacity={0.6}
+                      onPress={() => setActiveFilter(f)}
+                      style={[s.tab, active && s.tabActive]}
+                    >
+                      <Text style={[s.tabText, active && s.tabTextActive]}>{f}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Line between the day selector and what is on that day */}
+              <FullDivider />
+
+              {/* Events on that day, as rows like Announcements */}
+              <View style={s.list}>
+                {filteredEvents.length === 0 ? (
+                  <Text style={s.noneOfType}>No {activeFilter.toLowerCase()} on this date</Text>
+                ) : (
+                  filteredEvents.map((event, i) => (
+                    <InboxRow
+                      key={event.id}
+                      icon={TYPE_ICON[event.type] ?? 'calendar'}
+                      title={event.title}
+                      body={event.description}
+                      kind={event.type}
+                      time={event.time}
+                      tinted
+                      isLast={i === filteredEvents.length - 1}
+                      onPress={() => navigation.navigate('ViewEvent', { event })}
+                    />
+                  ))
+                )}
+              </View>
+            </>
+          )}
         </ScrollView>
       )}
 
@@ -216,17 +242,20 @@ const __mk_s = () => StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 18,
   },
-  dayTitle: { flex: 1, fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary },
-  dayCount: { fontSize: 12, color: theme.colors.textMuted },
+  dayTitle: { flex: 1, fontSize: 16, fontWeight: '600', color: INK },
+  dayCount: { fontSize: 12, color: QUIET },
+  noEvent: { paddingHorizontal: 20, paddingTop: 6, fontSize: 14, color: QUIET },
 
   // Type filter tabs
+  tabsBar: { flexGrow: 0 },
   tabs: { paddingHorizontal: 20, paddingTop: 14, gap: 18 },
   tab: { paddingBottom: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabActive: { borderBottomColor: theme.colors.primary },
-  tabText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
+  tabText: { fontSize: 13, fontWeight: '500', color: BODY },
   tabTextActive: { color: theme.colors.primary, fontWeight: '600' },
 
   list: { paddingHorizontal: 20, paddingTop: 2 },
+  noneOfType: { paddingVertical: 18, fontSize: 14, color: QUIET },
 
   // Loading
   loading: { paddingHorizontal: 20, paddingTop: 16 },
@@ -235,7 +264,7 @@ const __mk_s = () => StyleSheet.create({
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
-  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  errorText: { fontSize: 14, color: BODY, textAlign: 'center', lineHeight: 20 },
   linkText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 });
 

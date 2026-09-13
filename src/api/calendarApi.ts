@@ -125,6 +125,8 @@ export interface EventDetail {
   creator_name: string | null;
   creator_email: string | null;
   creator_avatar: string | null;
+  /** The school's name; absent on servers that predate it. */
+  organization_name?: string | null;
   created_at: string;
   updated_at: string;
 }
