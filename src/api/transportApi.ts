@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import constant from '../utils/constant';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type FeeStatus = 'paid' | 'partial' | 'pending' | 'no_transport';
@@ -21,6 +22,18 @@ export interface TransportFeeRow {
   status: FeeStatus;
 }
 
+export interface TransportPayment {
+  id: number;
+  serial: number;
+  amount: number;
+  date: string | null;
+  day: string | null;
+  submitted_by: string;
+  type: string;
+  mode: string;
+  receipt_number: string;
+}
+
 export interface TransportFees {
   monthly_fee: number;
   annual_fee: number;
@@ -28,6 +41,7 @@ export interface TransportFees {
   total_paid: number;
   total_due: number;
   schedule: TransportFeeRow[];
+  payments?: TransportPayment[];
 }
 
 export interface TransportRoute {
@@ -51,3 +65,7 @@ export const getMyTransport = async (): Promise<TransportRoute> => {
   const { data } = await apiClient.get('/transport/my-route');
   return data?.data ?? data;
 };
+
+// GET /transport/receipt/{id}/pdf — one of the student's transport fee receipts
+export const transportReceiptUrl = (id: number) =>
+  `${constant.API_BASE_URL}/transport/receipt/${id}/pdf`;
