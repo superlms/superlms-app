@@ -24,6 +24,7 @@ import TabNavigator from './TabNavigator';
 import SettingsScreen from '../screens/setting/SettingsScreen';
 import { theme, onThemeChange } from '../utils/theme';
 import VectorIcon from '../components/VectorIcon';
+import { DrawerShadeBridge } from './drawerShade';
 import { BlurView } from '@react-native-community/blur';
 import MoreScreen from '../screens/more/MoreScreen';
 import CalendarScreen from '../screens/calendar/CalendarScreen';
@@ -250,6 +251,8 @@ const DrawerNavigator = ({ route }: any) => {
 
     return (
       <>
+        {/* Carries the open sidebar's shade over the status and navigation bars */}
+        <DrawerShadeBridge widthFraction={0.74} />
         <DrawerContentScrollView
           {...props}
           contentContainerStyle={styles.drawerScroll}

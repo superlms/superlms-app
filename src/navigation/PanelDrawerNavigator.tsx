@@ -13,6 +13,7 @@ import {
 import { CommonActions } from '@react-navigation/native';
 import { theme, onThemeChange } from '../utils/theme';
 import VectorIcon from '../components/VectorIcon';
+import { DrawerShadeBridge } from './drawerShade';
 import { AppDialog, AppAlert } from '../components/AppDialog';
 import AdminTabNavigator from './AdminTabNavigator';
 import AdminAnalyticsScreen from '../screens/admin/AdminAnalyticsScreen';
@@ -179,6 +180,8 @@ const PanelDrawerNavigator = ({ route }: any) => {
 
     return (
       <>
+        {/* Carries the open sidebar's shade over the status and navigation bars */}
+        <DrawerShadeBridge widthFraction={0.7} />
         <DrawerContentScrollView
           {...props}
           contentContainerStyle={{ paddingTop: 0, paddingBottom: 0 }}

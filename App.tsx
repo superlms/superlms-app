@@ -18,6 +18,7 @@ import { ThemeProvider, theme } from './src/utils/theme';
 import { initNotifications } from './src/notifications';
 import { checkForOTAUpdate } from './src/utils/otaUpdate';
 import { AppAlertHost } from './src/components/AppDialog';
+import { SystemBarShade } from './src/navigation/drawerShade';
 
 // Routes where the biometric prompt must NOT fire — splash, onboarding and
 // every auth screen. Anything else is considered "inside the app" (dashboard
@@ -79,6 +80,9 @@ const AppInner = () => {
           </NavigationContainer>
         </AppLock>
       </SafeAreaView>
+
+      {/* Dims the status and navigation bars along with an open sidebar */}
+      <SystemBarShade />
     </View>
   );
 };
