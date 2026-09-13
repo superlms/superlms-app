@@ -37,7 +37,19 @@ const STATUS_LABEL: Record<FeeStatus, string> = {
   no_transport: '—',
 };
 
+// The fee schedule's order — the academic year, April to March.
+const MONTH_KEYS = ['apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec', 'jan', 'feb', 'mar'];
+
 const formatINR = (n: number) => `₹ ${Number(n || 0).toLocaleString('en-IN')}`;
+
+// "07:30:00" / "07:30" → "07:30 AM"; anything else is shown as it comes.
+const clock = (time?: string | null): string | null => {
+  if (!time) return null;
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(time.trim());
+  if (!m) return time;
+  const h = Number(m[1]);
+  return `${String(h % 12 || 12).padStart(2, '0')}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
+};
 
 const initialsOf = (name?: string | null) =>
   (name || '?')
@@ -48,31 +60,39 @@ const initialsOf = (name?: string | null) =>
     .join('')
     .toUpperCase();
 
-// ── Label / value row ────────────────────────────────────────────────────────
+// ── Label : value line ───────────────────────────────────────────────────────
 const InfoRow = ({
   label,
   value,
   onPress,
-  last,
 }: {
   label: string;
   value?: string | null;
   onPress?: () => void;
-  last?: boolean;
 }) => {
   if (!value) return null;
   return (
     <TouchableOpacity
-      style={[s.infoRow, !last && s.rowDivider]}
+      style={s.infoRow}
       activeOpacity={onPress ? 0.6 : 1}
       disabled={!onPress}
       onPress={onPress}
     >
       <Text style={s.infoLabel}>{label}</Text>
+      <Text style={s.infoColon}>:</Text>
       <Text style={[s.infoValue, !!onPress && s.infoValueLink]}>{value}</Text>
     </TouchableOpacity>
   );
 };
+
+// Pickup or drop — its time (a dash when not set) and, if known, the place.
+const TimeCol = ({ label, time, place }: { label: string; time: string | null; place?: string | null }) => (
+  <View style={s.timeCol}>
+    <Text style={s.timeLabel}>{label}</Text>
+    <Text style={s.timeValue}>{time || '—'}</Text>
+    {!!place && <Text style={s.timePlace} numberOfLines={2}>{place}</Text>}
+  </View>
+);
 
 // A block of rows under a plain heading, separated from the last by a line.
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -172,17 +192,29 @@ const TransportScreen = ({ navigation }: any) => {
   }
 
   const { driver, fees } = data;
-  const schedule = fees?.schedule ?? [];
   const driverPhoto = resolveFileUrl(driver?.image);
+  // Vehicle number and type on one line
+  const vehicle = [driver?.vehicle_no || data.vehicle_no, data.vehicle_type || driver?.vehicle_type]
+    .filter(Boolean)
+    .join('  ·  ');
 
-  // Only the lines that are actually filled in.
-  const routeRows = [
-    ['Vehicle No', data.vehicle_no],
-    ['Capacity', data.capacity ? `${data.capacity} seats` : null],
-    ['Pickup Point', data.pickup_location],
-    ['Pickup Time', data.pickup_time],
-    ['Drop Point', data.drop_location],
-  ].filter(([, v]) => !!v) as [string, string][];
+  // Fees only up to this month — upcoming months are left out. The year runs
+  // April to March, so January–March belong to the year after its April.
+  const now = new Date();
+  const thisMonth = (now.getMonth() + 9) % 12; // April = 0 … March = 11
+  const startYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  const schedule = (fees?.schedule ?? [])
+    .map((row, i) => {
+      const at = MONTH_KEYS.indexOf(row.key);
+      const idx = at >= 0 ? at : i;
+      return { ...row, idx, label: `${row.month} ${idx <= 8 ? startYear : startYear + 1}` };
+    })
+    .filter(row => row.idx <= thisMonth);
+  // Due for the months shown — payments cover the oldest months first.
+  const billedSoFar = schedule
+    .filter(row => row.status !== 'no_transport')
+    .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const dueSoFar = Math.max(0, billedSoFar - Number(fees?.total_paid || 0));
 
   return (
     <View style={s.root}>
@@ -193,30 +225,20 @@ const TransportScreen = ({ navigation }: any) => {
         contentContainerStyle={s.scroll}
         refreshControl={refreshControl}
       >
-        {/* The route, and what it costs */}
+        {/* A big bus, the route, and its pickup and drop times — centred */}
         <View style={s.head}>
-          <Text style={s.kicker}>ROUTE</Text>
+          <View style={s.busIcon}>
+            <VectorIcon iconSet="Ionicons" iconName="bus" size={44} color={theme.colors.primary} />
+          </View>
           <Text style={s.title}>{data.route_name}</Text>
-          <Text style={s.fee}>{formatINR(data.monthly_fee)} per month</Text>
+          <View style={s.times}>
+            <TimeCol label="Pickup" time={clock(data.pickup_time)} place={data.pickup_location} />
+            <View style={s.timesSep} />
+            <TimeCol label="Drop" time={clock(data.drop_time)} place={data.drop_location} />
+          </View>
         </View>
 
-        {routeRows.length > 0 && (
-          <>
-            <View style={s.divider} />
-            <View style={s.body}>
-              {routeRows.map(([label, value], i) => (
-                <InfoRow
-                  key={label}
-                  label={label}
-                  value={value}
-                  last={i === routeRows.length - 1}
-                />
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Who drives it */}
+        {/* Who drives it, and the vehicle */}
         {!!driver && (
           <Section title="Driver">
             <View style={s.driverRow}>
@@ -227,12 +249,7 @@ const TransportScreen = ({ navigation }: any) => {
                   <Text style={s.driverInitials}>{initialsOf(driver.name)}</Text>
                 </View>
               )}
-              <View style={s.driverInfo}>
-                <Text style={s.driverName}>{driver.name || '—'}</Text>
-                {!!driver.vehicle_type && (
-                  <Text style={s.driverSub}>{driver.vehicle_type}</Text>
-                )}
-              </View>
+              <Text style={s.driverName}>{driver.name || '—'}</Text>
             </View>
 
             <View style={s.driverRows}>
@@ -246,21 +263,20 @@ const TransportScreen = ({ navigation }: any) => {
                 value={driver.email}
                 onPress={driver.email ? () => Linking.openURL(`mailto:${driver.email}`) : undefined}
               />
-              <InfoRow label="Licence No" value={driver.license_no} last />
+              <InfoRow label="Licence No" value={driver.license_no} />
+              <InfoRow label="Vehicle" value={vehicle} />
             </View>
           </Section>
         )}
 
-        {/* What has been paid, month by month */}
+        {/* What has been paid, month by month, up to this month */}
         {!!fees && schedule.length > 0 && (
           <Section title="Transport Fees">
             <Text style={s.feeSummary}>
               Paid <Text style={s.feePaid}>{formatINR(fees.total_paid)}</Text>
               {'   ·   '}
               Due{' '}
-              <Text style={fees.total_due > 0 ? s.feeDue : s.feePaid}>
-                {formatINR(fees.total_due)}
-              </Text>
+              <Text style={dueSoFar > 0 ? s.feeDue : s.feePaid}>{formatINR(dueSoFar)}</Text>
             </Text>
 
             <View style={s.schedule}>
@@ -269,7 +285,7 @@ const TransportScreen = ({ navigation }: any) => {
                   key={row.key}
                   style={[s.feeRow, i < schedule.length - 1 && s.rowDivider]}
                 >
-                  <Text style={s.feeMonth}>{row.month}</Text>
+                  <Text style={s.feeMonth}>{row.label}</Text>
                   <Text style={s.feeAmount}>
                     {row.amount > 0 ? formatINR(row.amount) : '—'}
                   </Text>
@@ -300,25 +316,38 @@ const __mk_s = () => StyleSheet.create({
   stateScroll: { flexGrow: 1 },
 
   // Head
-  head: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 20 },
-  kicker: { fontSize: 11, fontWeight: '600', letterSpacing: 0.8, color: theme.colors.textMuted },
+  head: { alignItems: 'center', paddingHorizontal: 20, paddingTop: 28, paddingBottom: 22 },
+  busIcon: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.primaryLight,
+  },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     color: theme.colors.textPrimary,
-    lineHeight: 29,
-    marginTop: 6,
+    lineHeight: 27,
+    textAlign: 'center',
+    marginTop: 14,
   },
-  fee: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 4 },
+  times: { flexDirection: 'row', alignSelf: 'stretch', marginTop: 16 },
+  timesSep: { width: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border },
+  timeCol: { flex: 1, alignItems: 'center', paddingHorizontal: 8 },
+  timeLabel: { fontSize: 12, color: theme.colors.textMuted },
+  timeValue: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginTop: 3 },
+  timePlace: { fontSize: 12, color: theme.colors.textSecondary, textAlign: 'center', marginTop: 2 },
 
   // Full-width lines between the blocks
   divider: { height: 1, backgroundColor: theme.colors.divider },
-
-  // Label / value rows
-  body: { paddingHorizontal: 20, paddingTop: 2 },
-  infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 14 },
   rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-  infoLabel: { width: '40%', paddingRight: 12, fontSize: 14, color: theme.colors.textSecondary },
+
+  // Label : value lines
+  infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 7 },
+  infoLabel: { width: 84, fontSize: 14, color: theme.colors.textSecondary },
+  infoColon: { width: 14, fontSize: 14, color: theme.colors.textSecondary },
   infoValue: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
   infoValueLink: { color: theme.colors.primary },
 
@@ -331,10 +360,8 @@ const __mk_s = () => StyleSheet.create({
   driverAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.colors.background },
   driverAvatarFallback: { alignItems: 'center', justifyContent: 'center' },
   driverInitials: { fontSize: 15, fontWeight: '600', color: theme.colors.textSecondary },
-  driverInfo: { flex: 1 },
-  driverName: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  driverSub: { fontSize: 13, color: theme.colors.textMuted, marginTop: 2 },
-  driverRows: { marginTop: 6 },
+  driverName: { flex: 1, fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  driverRows: { marginTop: 10, paddingBottom: 8 },
 
   // Fees
   feeSummary: { fontSize: 13, color: theme.colors.textSecondary, marginBottom: 6 },

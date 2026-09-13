@@ -36,10 +36,12 @@ export interface TransportRoute {
   pickup_location: string | null;
   drop_location: string | null;
   pickup_time: string | null;
+  drop_time?: string | null;
   stops: string[];
   monthly_fee: number;
   capacity: number;
   vehicle_no: string | null;
+  vehicle_type?: string | null;
   driver: TransportDriver | null;
   fees: TransportFees;
 }
