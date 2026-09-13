@@ -4,25 +4,23 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
-import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import { Biometrics } from '../../utils/biometrics';
 import { DocHeader } from '../more/docUi';
+import { MenuRow, menuStyles } from '../more/menuUi';
 
 const NOTIFICATIONS_KEY = 'notifications_enabled';
 
 /**
- * Settings — one plain list on a white page, in the same minimal language as
- * the More hub: plain icons, inset hairline separators, and either an inline
- * Switch (toggles) or a chevron (sub-screens).
+ * Settings — a plain list like Exams and the More hub: each entry an icon, its
+ * name and a line on what it does, with a Switch (toggles) or a chevron
+ * (sub-screens) on the right.
  */
 
 const SettingsScreen = () => {
@@ -100,21 +98,26 @@ const SettingsScreen = () => {
       <DocHeader title="Settings" onBackPress={() => navigation.goBack()} />
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={s.scroll}
+        contentContainerStyle={menuStyles.list}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <SettingRow
+        <MenuRow
           icon="notifications-outline"
           title="Notifications"
+          description="Alerts for homework, exams, fees and announcements"
           trailing={
             <Switch value={notifEnabled} onValueChange={onNotifToggle} {...switchColors} />
           }
         />
 
-        <SettingRow
+        <MenuRow
           icon="finger-print-outline"
           title="Biometric Unlock"
-          sub={bioAvailable ? undefined : 'Not set up on this device'}
+          description={
+            bioAvailable
+              ? 'Open the app with your fingerprint or face'
+              : 'Not set up on this device'
+          }
           trailing={
             <Switch
               value={bioEnabled}
@@ -125,13 +128,11 @@ const SettingsScreen = () => {
           }
         />
 
-        <SettingRow
+        <MenuRow
           icon="lock-closed-outline"
           title="Change Password"
+          description="Update the password you sign in with"
           onPress={() => navigation.navigate('ChangePassword')}
-          trailing={
-            <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={16} color={theme.colors.textMuted} />
-          }
           isLast
         />
       </ScrollView>
@@ -139,60 +140,11 @@ const SettingsScreen = () => {
   );
 };
 
-const SettingRow = ({
-  icon,
-  title,
-  sub,
-  trailing,
-  onPress,
-  isLast,
-}: {
-  icon: string;
-  title: string;
-  sub?: string;
-  trailing?: React.ReactNode;
-  onPress?: () => void;
-  isLast?: boolean;
-}) => {
-  const Container: any = onPress ? TouchableOpacity : View;
-  const containerProps = onPress ? { activeOpacity: 0.6, onPress } : {};
-  return (
-    <Container {...containerProps} style={s.row}>
-      <View style={s.icon}>
-        <VectorIcon iconSet="Ionicons" iconName={icon} size={20} color={theme.colors.textSecondary} />
-      </View>
-      <View style={[s.rowMain, !isLast && s.rowBorder]}>
-        <View style={{ flex: 1 }}>
-          <Text style={s.title}>{title}</Text>
-          {!!sub && <Text style={s.sub}>{sub}</Text>}
-        </View>
-        {trailing}
-      </View>
-    </Container>
-  );
-};
-
 export default SettingsScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
-  scroll: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 32 },
-
-  row: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  icon: { width: 24, alignItems: 'center' },
-  rowMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    minHeight: 56,
-    paddingVertical: 8,
-  },
-  rowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-  title: { fontSize: 15, color: theme.colors.textPrimary },
-  sub: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let s = __mk_s();
