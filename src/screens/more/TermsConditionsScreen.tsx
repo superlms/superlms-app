@@ -11,7 +11,7 @@ import {
   DocBody,
   DocRow,
   DocNoData,
-  DocLoading,
+  DocSkeleton,
   DocError,
   docStyles,
   lastUpdated,
@@ -67,7 +67,16 @@ const TermsConditionsScreen = () => {
   const { refreshing, onRefresh } = useRefresh(fetchData);
   useFocusLoad(fetchData);
 
-  if (loading) return <DocLoading title={TITLE} />;
+  // Platform logo, name, company line and "Last updated"; then the sections.
+  if (loading) {
+    return (
+      <DocSkeleton
+        title={TITLE}
+        intro={{ logo: true, title: true, subtitle: true, meta: true }}
+        sections={3}
+      />
+    );
+  }
   if (error || !data) return <DocError title={TITLE} message={error || 'Something went wrong.'} onRetry={fetchData} />;
 
   const { metadata, platform_logo, platform_name, company_name, company_cin, last_updated } = data;

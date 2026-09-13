@@ -7,8 +7,8 @@ import { theme, onThemeChange } from '../../utils/theme';
 
 /**
  * "More" hub — the read-only info screens (About App, School Info, policies),
- * as a plain list like Exams: each entry an icon, its name and a line on what
- * it holds.
+ * as a plain list like Exams: each entry an icon, its name and a few words on
+ * what it holds (kept to one line).
  */
 
 interface MoreItem {
@@ -21,37 +21,37 @@ interface MoreItem {
 const ITEMS: MoreItem[] = [
   {
     title: 'About App',
-    description: 'What the app does and the version you are on',
+    description: 'App details and version',
     icon: 'information-circle-outline',
     route: 'AboutAppMore',
   },
   {
     title: 'School Info',
-    description: "Your school's details, contacts and address",
+    description: 'Contacts and address',
     icon: 'school-outline',
     route: 'SchoolInfoMore',
   },
   {
     title: 'Rules & Regulations',
-    description: 'The rules everyone at school follows',
+    description: 'School rules to follow',
     icon: 'shield-checkmark-outline',
     route: 'RulesRegulationsMore',
   },
   {
     title: 'Terms & Conditions',
-    description: "The terms for using the school's services",
+    description: 'Terms of our services',
     icon: 'document-text-outline',
     route: 'TermsConditionsMore',
   },
   {
     title: 'Privacy Policy',
-    description: 'How your personal data is collected and used',
+    description: 'How your data is used',
     icon: 'lock-closed-outline',
     route: 'PrivacyPolicyMore',
   },
   {
     title: 'Terms of Use',
-    description: 'What you agree to when you use this app',
+    description: 'Rules for using the app',
     icon: 'reader-outline',
     route: 'TermsOfUseMore',
   },

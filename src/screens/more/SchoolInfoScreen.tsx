@@ -12,7 +12,7 @@ import {
   DocRow,
   DocPeople,
   DocNoData,
-  DocLoading,
+  DocSkeleton,
   DocError,
   docStyles,
 } from './docUi';
@@ -68,7 +68,17 @@ const SchoolInfoScreen = () => {
   const { refreshing, onRefresh } = useRefresh(load);
   useFocusLoad(load);
 
-  if (loading) return <DocLoading title={TITLE} />;
+  // Logo and school name; a couple of sections; the management team; contacts.
+  if (loading) {
+    return (
+      <DocSkeleton
+        title={TITLE}
+        intro={{ logo: true, title: true }}
+        sections={2}
+        lists={[{ rows: 3, people: true }, { rows: 3 }]}
+      />
+    );
+  }
   if (error || !info) return <DocError title={TITLE} message={error || 'Something went wrong.'} onRetry={load} />;
 
   const sections: { title: string; content: string }[] = [

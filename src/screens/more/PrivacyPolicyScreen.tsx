@@ -9,7 +9,7 @@ import {
   DocSection,
   DocBody,
   DocNoData,
-  DocLoading,
+  DocSkeleton,
   DocError,
   docStyles,
   lastUpdated,
@@ -47,7 +47,8 @@ const PrivacyPolicyScreen = () => {
   const { refreshing, onRefresh } = useRefresh(fetchData);
   useFocusLoad(fetchData);
 
-  if (loading) return <DocLoading title={TITLE} />;
+  // "Last updated", then the policy's sections.
+  if (loading) return <DocSkeleton title={TITLE} intro={{ meta: true }} sections={3} />;
   if (error || !data) return <DocError title={TITLE} message={error || 'Something went wrong.'} onRetry={fetchData} />;
 
   const sections = data.metadata?.sections ?? [];

@@ -11,7 +11,7 @@ import {
   DocBody,
   DocRow,
   DocNoData,
-  DocLoading,
+  DocSkeleton,
   DocError,
   docStyles,
   lastUpdated,
@@ -61,7 +61,10 @@ const RulesRegulationsScreen = () => {
   const { refreshing, onRefresh } = useRefresh(fetchData);
   useFocusLoad(fetchData);
 
-  if (loading) return <DocLoading title={TITLE} />;
+  // "Last updated"; the rule sections; then the documents list.
+  if (loading) {
+    return <DocSkeleton title={TITLE} intro={{ meta: true }} sections={3} lists={[{ rows: 2 }]} />;
+  }
   if (error || !data) return <DocError title={TITLE} message={error || 'Something went wrong.'} onRetry={fetchData} />;
 
   const sections = data.sections ?? [];

@@ -104,7 +104,7 @@ const SettingsScreen = () => {
         <MenuRow
           icon="notifications-outline"
           title="Notifications"
-          description="Alerts for homework, exams, fees and announcements"
+          description="Homework, exam and fee alerts"
           trailing={
             <Switch value={notifEnabled} onValueChange={onNotifToggle} {...switchColors} />
           }
@@ -115,7 +115,7 @@ const SettingsScreen = () => {
           title="Biometric Unlock"
           description={
             bioAvailable
-              ? 'Open the app with your fingerprint or face'
+              ? 'Unlock with fingerprint or face'
               : 'Not set up on this device'
           }
           trailing={
@@ -131,7 +131,7 @@ const SettingsScreen = () => {
         <MenuRow
           icon="lock-closed-outline"
           title="Change Password"
-          description="Update the password you sign in with"
+          description="Update your sign-in password"
           onPress={() => navigation.navigate('ChangePassword')}
           isLast
         />

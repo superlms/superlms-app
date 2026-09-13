@@ -229,6 +229,103 @@ export const DocLoading = ({ title }: { title: string }) => (
   </View>
 );
 
+// ── Page skeleton: the header, then the page's own shape ─────────────────────
+// Each More screen says what its page holds — the intro (logo, title, subtitle,
+// "Last updated"), how many text sections, and any bordered lists (contact
+// rows, people, documents) — and gets boxes at the height of the text they
+// stand in for, so nothing moves when the page arrives. It shows on the first
+// load and while pulling to refresh.
+const SK_HEAD_W = [120, 96, 140, 110];
+const SK_BODY_W = ['100%', '96%', '98%', '62%'];
+const SK_ROW_W = ['64%', '52%', '70%'];
+
+export const DocSkeleton = ({
+  title,
+  intro = {},
+  sections = 3,
+  lists = [],
+}: {
+  title: string;
+  intro?: { logo?: boolean; title?: boolean; subtitle?: boolean; meta?: boolean };
+  sections?: number;
+  /** Bordered lists after the sections; `people` rows lead with a round photo. */
+  lists?: { rows: number; people?: boolean }[];
+}) => {
+  const hasIntro = intro.logo || intro.title || intro.subtitle || intro.meta;
+
+  return (
+    <View style={s.root}>
+      <DocHeader title={title} />
+      <View style={docStyles.scroll}>
+        {hasIntro && (
+          <View>
+            {intro.logo && <Skeleton width={56} height={56} radius={12} style={s.skLogo} />}
+            {intro.title && (
+              <View style={[s.skLine, s.skIntroTitle]}>
+                <Skeleton width="58%" height={18} />
+              </View>
+            )}
+            {intro.subtitle && (
+              <View style={[s.skLine, s.skIntroSub]}>
+                <Skeleton width="44%" height={11} />
+              </View>
+            )}
+            {intro.meta && (
+              <View style={[s.skLine, s.skIntroMeta]}>
+                <Skeleton width={130} height={9} />
+              </View>
+            )}
+          </View>
+        )}
+
+        {Array.from({ length: sections }, (_, i) => (
+          <View key={`section${i}`}>
+            <View style={[s.skLine, s.skSectionTitle]}>
+              <Skeleton width={SK_HEAD_W[i % SK_HEAD_W.length]} height={14} />
+            </View>
+            {SK_BODY_W.map((w, j) => (
+              <View key={j} style={[s.skLine, s.skBodyLine]}>
+                <Skeleton width={w} height={12} />
+              </View>
+            ))}
+          </View>
+        ))}
+
+        {lists.map((list, i) => (
+          <View key={`list${i}`}>
+            <View style={[s.skLine, s.skSectionTitle]}>
+              <Skeleton width={90} height={14} />
+            </View>
+            <View style={s.list}>
+              {Array.from({ length: list.rows }, (_, r) => (
+                <View key={r} style={s.row}>
+                  {list.people ? (
+                    <Skeleton width={40} height={40} radius={20} />
+                  ) : (
+                    <View style={s.rowIcon}>
+                      <Skeleton width={18} height={18} radius={4} />
+                    </View>
+                  )}
+                  <View style={[s.rowMain, r < list.rows - 1 && s.rowBorder]}>
+                    <View style={s.skRowText}>
+                      <View style={[s.skLine, s.skRowTitle]}>
+                        <Skeleton width={SK_ROW_W[r % SK_ROW_W.length]} height={12} />
+                      </View>
+                      <View style={[s.skLine, s.skRowSub]}>
+                        <Skeleton width={60} height={9} />
+                      </View>
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
 export const DocError = ({
   title,
   message,
@@ -264,6 +361,20 @@ const __mk_s = () => StyleSheet.create({
 
   loading: { padding: 20, gap: 10 },
   loadingBlock: { marginTop: 18, gap: 10 },
+
+  // Page skeleton boxes, at the heights of the real lines: intro title 22/28,
+  // subtitle 14/20, meta 12px, section heading 17px, body 15/24, list row title
+  // 15px and sub 12px.
+  skLine: { justifyContent: 'center' },
+  skLogo: { marginBottom: 14 },
+  skIntroTitle: { height: 28 },
+  skIntroSub: { height: 20, marginTop: 4 },
+  skIntroMeta: { height: 16, marginTop: 8 },
+  skSectionTitle: { height: 23, marginBottom: 8 },
+  skBodyLine: { height: 24 },
+  skRowText: { flex: 1 },
+  skRowTitle: { height: 20 },
+  skRowSub: { height: 16, marginTop: 2 },
 
   // Intro
   introLogo: { width: 56, height: 56, marginBottom: 14 },

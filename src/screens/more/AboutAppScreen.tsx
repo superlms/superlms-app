@@ -13,7 +13,7 @@ import {
   DocRow,
   DocPeople,
   DocNoData,
-  DocLoading,
+  DocSkeleton,
   DocError,
   docStyles,
 } from './docUi';
@@ -81,7 +81,17 @@ const AboutAppScreen = () => {
   const { refreshing, onRefresh } = useRefresh(fetchData);
   useFocusLoad(fetchData);
 
-  if (loading) return <DocLoading title={TITLE} />;
+  // Logo, name and tagline; a couple of sections; then the contact list.
+  if (loading) {
+    return (
+      <DocSkeleton
+        title={TITLE}
+        intro={{ logo: true, title: true, subtitle: true }}
+        sections={2}
+        lists={[{ rows: 3 }]}
+      />
+    );
+  }
   if (error || !info) return <DocError title={TITLE} message={error || 'Something went wrong.'} onRetry={fetchData} />;
 
   const content = info.content ?? [];

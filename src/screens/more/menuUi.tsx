@@ -42,7 +42,7 @@ export const MenuRow = ({
           {title}
         </Text>
         {!!description && (
-          <Text style={s.description} numberOfLines={2}>
+          <Text style={s.description} numberOfLines={1}>
             {description}
           </Text>
         )}
