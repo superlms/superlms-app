@@ -100,7 +100,7 @@ const ITEM = {
   uploadCopy: { name: 'UploadCopy', label: 'Upload Copy', icon: 'document-attach-outline' },
   contact: { name: 'ContactSchool', label: 'Contact School', icon: 'call-outline' },
   settings: { name: 'Settings', label: 'Settings', icon: 'settings-outline' },
-  more: { name: 'More', label: 'More', icon: 'ellipsis-horizontal-outline', iconSize: 23 },
+  more: { name: 'More', label: 'More', icon: 'ellipsis-horizontal-outline', iconSize: 26 },
 } satisfies Record<string, MenuItem>;
 
 const STUDENT_MENU: MenuItem[] = [
