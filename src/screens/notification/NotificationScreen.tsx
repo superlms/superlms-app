@@ -1,13 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import {
-  FlatList,
   Modal,
+  Pressable,
   ScrollView,
+  SectionList,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { usePreventRemove } from '@react-navigation/native';
+import moment from 'moment';
 import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
@@ -24,27 +27,60 @@ import { DocNoData } from '../more/docUi';
 
 const TITLE = 'Notifications';
 
-// "3 mins ago" / "2 hrs ago" / "Yesterday" from an epoch-ms timestamp.
+// A step darker than the theme's text colours, so the inbox reads crisply.
+const INK = '#0F172A';   // titles
+const BODY = '#475569';  // previews, tabs, day headings
+const QUIET = '#64748B'; // times, counts, categories
+
+// "3 mins ago" / "2 hrs ago" from an epoch-ms timestamp.
 const relativeTime = (ts: number): string => {
   const diff = Date.now() - ts;
   const min = Math.floor(diff / 60000);
   if (min < 1) return 'Just now';
   if (min < 60) return `${min} min${min > 1 ? 's' : ''} ago`;
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} hr${hr > 1 ? 's' : ''} ago`;
-  const day = Math.floor(hr / 24);
-  if (day === 1) return 'Yesterday';
-  if (day < 7) return `${day} days ago`;
-  return new Date(ts).toLocaleDateString();
+  return `${hr} hr${hr > 1 ? 's' : ''} ago`;
 };
 
-// ── One notification as a plain row, separated by a divider ──────────────────
-// The category's own icon leads the row; an unread one carries that icon and
-// its title in the accent colour, which is what a loose dot used to say. While
-// picking rows to delete, the same slot holds the tick — so nothing shifts.
-//   🎓  Exam Schedule Released                        ✕
-//       The mid-term timetable has been published.
-//       Exam · 2 hrs ago
+// Today's notifications say how long ago; older ones, the time of day — the day
+// itself is in the heading above them.
+const timeLabel = (ts: number) =>
+  moment(ts).isSame(moment(), 'day') ? relativeTime(ts) : moment(ts).format('h:mm A');
+
+const dayHeading = (ts: number) => {
+  const d = moment(ts);
+  if (d.isSame(moment(), 'day')) return 'Today';
+  if (d.isSame(moment().subtract(1, 'day'), 'day')) return 'Yesterday';
+  return d.isSame(moment(), 'year') ? d.format('ddd, D MMM') : d.format('D MMM YYYY');
+};
+
+interface DaySection {
+  title: string;
+  data: NotificationItem[];
+}
+
+// Newest first, gathered under a heading per day.
+const byDay = (items: NotificationItem[]): DaySection[] => {
+  const sections: DaySection[] = [];
+  [...items]
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .forEach(item => {
+      const title = dayHeading(item.createdAt);
+      const last = sections[sections.length - 1];
+      if (last && last.title === title) last.data.push(item);
+      else sections.push({ title, data: [item] });
+    });
+  return sections;
+};
+
+// ── One notification ─────────────────────────────────────────────────────────
+// A round icon centred on the row (tinted while unread), the title with its
+// time, a two-line preview and the kind; a round ✕ on the right, centred like
+// the chat button on Instructors. While picking rows, the circle becomes the
+// tick and the ✕ steps aside.
+//   ( 🎓 )  Exam Schedule Released           2 hrs ago    ( ✕ )
+//           The mid-term timetable has been published.
+//           Exam
 const NotificationRow = ({
   item,
   isLast,
@@ -71,40 +107,31 @@ const NotificationRow = ({
       activeOpacity={0.6}
       onPress={onPress}
       onLongPress={onLongPress}
+      delayLongPress={300}
     >
-      <View style={s.iconSlot}>
-        <VectorIcon
-          iconSet="Ionicons"
-          iconName={
-            selectionMode
-              ? selected
-                ? 'checkmark-circle'
-                : 'ellipse-outline'
-              : cfg.icon
-          }
-          size={selectionMode ? 20 : 18}
-          color={
-            selectionMode
-              ? selected
-                ? theme.colors.primary
-                : theme.colors.border
-              : unread
-              ? theme.colors.primary
-              : theme.colors.textSecondary
-          }
-        />
-      </View>
+      {selectionMode ? (
+        <View style={[s.lead, selected ? s.leadSelected : s.leadIdle]}>
+          {selected && (
+            <VectorIcon iconSet="Ionicons" iconName="checkmark" size={20} color={theme.colors.white} />
+          )}
+        </View>
+      ) : (
+        <View style={[s.lead, unread ? s.leadUnread : s.leadRead]}>
+          <VectorIcon
+            iconSet="Ionicons"
+            iconName={cfg.icon}
+            size={19}
+            color={unread ? theme.colors.primary : BODY}
+          />
+        </View>
+      )}
 
       <View style={s.body}>
-        <View style={s.line}>
+        <View style={s.titleLine}>
           <Text style={[s.title, unread && s.titleUnread]} numberOfLines={1}>
             {item.title}
           </Text>
-          {!selectionMode && (
-            <TouchableOpacity onPress={onDismiss} hitSlop={10} activeOpacity={0.6}>
-              <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={theme.colors.textMuted} />
-            </TouchableOpacity>
-          )}
+          <Text style={[s.time, unread && s.timeUnread]}>{timeLabel(item.createdAt)}</Text>
         </View>
 
         {!!item.body && (
@@ -114,9 +141,15 @@ const NotificationRow = ({
         )}
 
         <Text style={s.meta} numberOfLines={1}>
-          {item.category} · {relativeTime(item.createdAt)}
+          {item.category}
         </Text>
       </View>
+
+      {!selectionMode && (
+        <TouchableOpacity style={s.dismissBtn} onPress={onDismiss} activeOpacity={0.7} hitSlop={6}>
+          <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={QUIET} />
+        </TouchableOpacity>
+      )}
     </TouchableOpacity>
   );
 };
@@ -138,6 +171,7 @@ const NotificationScreen = ({ navigation }: any) => {
     () => (activeFilter === 'All' ? items : items.filter(i => i.category === activeFilter)),
     [items, activeFilter],
   );
+  const sections = useMemo(() => byDay(filtered), [filtered]);
 
   // Pull-to-refresh has nothing to fetch yet (local store); kept for parity and
   // so push-synced inboxes (Phase 2) can hook a real loader here.
@@ -153,8 +187,17 @@ const NotificationScreen = ({ navigation }: any) => {
 
   const clearSelection = () => setSelectedIds([]);
 
+  // While rows are picked, going back — the header arrow, Android's back
+  // button or a swipe — only lets go of the selection.
+  usePreventRemove(selectionMode, () => clearSelection());
+
   const toggleSelectAll = () =>
     setSelectedIds(allSelected ? [] : filtered.map(i => i.id));
+
+  const chooseFilter = (f: NotifCategory | 'All') => {
+    setActiveFilter(f);
+    clearSelection();
+  };
 
   const deleteSelected = () => {
     removeMany(selectedIds);
@@ -189,78 +232,91 @@ const NotificationScreen = ({ navigation }: any) => {
         }
       />
 
-      {/* What is waiting, and what can be done with the lot */}
-      <View style={s.metaBar}>
-        <Text style={s.metaBarText}>
-          {selectionMode
-            ? `${selectedIds.length} of ${filtered.length} selected`
-            : unreadCount > 0
-            ? `${unreadCount} unread`
-            : 'All caught up'}
-        </Text>
+      {/* While picking, a tap on any empty part of the screen lets go of the
+          selection; rows and links keep their own taps. */}
+      <Pressable
+        style={s.fill}
+        accessible={false}
+        disabled={!selectionMode}
+        onPress={clearSelection}
+      >
+        {/* What is waiting, and what can be done with the lot */}
+        <View style={s.metaBar}>
+          <Text style={s.metaBarText}>
+            {selectionMode
+              ? `${selectedIds.length} of ${filtered.length} selected`
+              : unreadCount > 0
+              ? `${unreadCount} unread`
+              : 'All caught up'}
+          </Text>
 
-        {selectionMode ? (
-          <TouchableOpacity onPress={toggleSelectAll} activeOpacity={0.6} hitSlop={8}>
-            <Text style={s.linkText}>{allSelected ? 'Clear all' : 'Select all'}</Text>
-          </TouchableOpacity>
-        ) : (
-          unreadCount > 0 && (
-            <TouchableOpacity onPress={markAllRead} activeOpacity={0.6} hitSlop={8}>
-              <Text style={s.linkText}>Mark all read</Text>
+          {selectionMode ? (
+            <TouchableOpacity onPress={toggleSelectAll} activeOpacity={0.6} hitSlop={8}>
+              <Text style={s.linkText}>{allSelected ? 'Clear all' : 'Select all'}</Text>
             </TouchableOpacity>
-          )
-        )}
-      </View>
-
-      {/* Category tabs, only once there is more than one kind to choose from */}
-      {categories.length > 2 && !selectionMode && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.tabs}
-        >
-          {categories.map(f => {
-            const active = activeFilter === f;
-            return (
-              <TouchableOpacity
-                key={f}
-                activeOpacity={0.6}
-                onPress={() => setActiveFilter(f)}
-                style={[s.tab, active && s.tabActive]}
-              >
-                <Text style={[s.tabText, active && s.tabTextActive]}>{f}</Text>
+          ) : (
+            unreadCount > 0 && (
+              <TouchableOpacity onPress={markAllRead} activeOpacity={0.6} hitSlop={8}>
+                <Text style={s.linkText}>Mark all read</Text>
               </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
-      <View style={s.fullDivider} />
+            )
+          )}
+        </View>
 
-      <FlatList
-        data={filtered}
-        keyExtractor={i => i.id}
-        contentContainerStyle={[s.list, filtered.length === 0 && s.listEmpty]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={
-          <DocNoData
-            icon="notifications-off-outline"
-            title="No notifications"
-            subtitle="Anything the school sends you will appear here."
-          />
-        }
-        renderItem={({ item, index }) => (
-          <NotificationRow
-            item={item}
-            isLast={index === filtered.length - 1}
-            selectionMode={selectionMode}
-            selected={selectedIds.includes(item.id)}
-            onPress={() => (selectionMode ? toggleSelect(item.id) : open(item))}
-            onLongPress={() => toggleSelect(item.id)}
-            onDismiss={() => remove(item.id)}
-          />
+        {/* Category tabs, only once there is more than one kind to choose from */}
+        {categories.length > 2 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            // A horizontal ScrollView grows to fill a column by default.
+            style={s.tabsBar}
+            contentContainerStyle={s.tabs}
+          >
+            {categories.map(f => {
+              const active = activeFilter === f;
+              return (
+                <TouchableOpacity
+                  key={f}
+                  activeOpacity={0.6}
+                  onPress={() => chooseFilter(f)}
+                  style={[s.tab, active && s.tabActive]}
+                >
+                  <Text style={[s.tabText, active && s.tabTextActive]}>{f}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         )}
-      />
+        <View style={s.fullDivider} />
+
+        <SectionList
+          sections={sections}
+          keyExtractor={i => i.id}
+          stickySectionHeadersEnabled={false}
+          contentContainerStyle={s.list}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          ListEmptyComponent={
+            <DocNoData
+              icon="notifications-off-outline"
+              title="No notifications"
+              subtitle="Anything the school sends you will appear here."
+            />
+          }
+          renderSectionHeader={({ section }) => <Text style={s.dayHead}>{section.title}</Text>}
+          renderItem={({ item, index, section }) => (
+            <NotificationRow
+              item={item}
+              isLast={index === section.data.length - 1}
+              selectionMode={selectionMode}
+              selected={selectedIds.includes(item.id)}
+              onPress={() => (selectionMode ? toggleSelect(item.id) : open(item))}
+              onLongPress={() => toggleSelect(item.id)}
+              onDismiss={() => remove(item.id)}
+            />
+          )}
+        />
+      </Pressable>
 
       {/* Delete confirmation */}
       <Modal
@@ -308,6 +364,7 @@ export default NotificationScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
+  fill: { flex: 1 },
 
   headBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
 
@@ -319,25 +376,26 @@ const __mk_s = () => StyleSheet.create({
     gap: 12,
     paddingHorizontal: 20,
     paddingTop: 14,
-    paddingBottom: 10,
+    paddingBottom: 12,
   },
-  metaBarText: { fontSize: 12, color: theme.colors.textMuted },
+  metaBarText: { fontSize: 13, color: QUIET },
   linkText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
 
   // Category tabs
-  tabs: { paddingHorizontal: 20, gap: 18 },
+  tabsBar: { flexGrow: 0 },
+  tabs: { paddingHorizontal: 20, gap: 20 },
   tab: { paddingBottom: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   tabActive: { borderBottomColor: theme.colors.primary },
-  tabText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
+  tabText: { fontSize: 14, fontWeight: '500', color: BODY },
   tabTextActive: { color: theme.colors.primary, fontWeight: '600' },
 
   fullDivider: { height: 1, backgroundColor: theme.colors.border },
 
-  // List
-  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 30 },
-  listEmpty: { flexGrow: 1 },
+  // List — grows to the full height so the empty part below it takes taps.
+  list: { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 30 },
+  dayHead: { paddingTop: 18, paddingBottom: 2, fontSize: 13, fontWeight: '600', color: BODY },
 
-  row: { flexDirection: 'row', gap: 12, paddingVertical: 13 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   // Full-bleed highlight: the row's own padding stops at the page margin.
   rowSelected: {
@@ -345,13 +403,33 @@ const __mk_s = () => StyleSheet.create({
     marginHorizontal: -20,
     paddingHorizontal: 20,
   },
-  iconSlot: { width: 22, alignItems: 'center', paddingTop: 1 },
-  body: { flex: 1, gap: 4 },
-  line: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  title: { flex: 1, fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  titleUnread: { fontWeight: '600', color: theme.colors.primary },
-  preview: { fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19 },
-  meta: { fontSize: 12, color: theme.colors.textMuted },
+
+  // Leading circle: the kind's icon, or the tick while picking
+  lead: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  leadRead: { backgroundColor: theme.colors.background },
+  leadUnread: { backgroundColor: theme.colors.primaryLight },
+  leadIdle: { borderWidth: 1.5, borderColor: theme.colors.border, backgroundColor: theme.colors.card },
+  leadSelected: { backgroundColor: theme.colors.primary },
+
+  body: { flex: 1, gap: 3 },
+  titleLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { flex: 1, fontSize: 15, fontWeight: '500', color: INK },
+  titleUnread: { fontWeight: '700' },
+  time: { fontSize: 12, color: QUIET },
+  timeUnread: { color: theme.colors.primary, fontWeight: '500' },
+  preview: { fontSize: 13, lineHeight: 19, color: BODY },
+  meta: { fontSize: 12, color: QUIET },
+
+  // Round ✕, like the chat button on Instructors
+  dismissBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   // Confirm modal
   modalOverlay: {
@@ -368,8 +446,8 @@ const __mk_s = () => StyleSheet.create({
     borderRadius: theme.radius.lg,
     padding: 24,
   },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
-  modalDesc: { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: INK },
+  modalDesc: { marginTop: 8, fontSize: 14, color: BODY, lineHeight: 20 },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
   modalBtn: {
     flex: 1,
@@ -379,7 +457,7 @@ const __mk_s = () => StyleSheet.create({
     justifyContent: 'center',
   },
   modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
-  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: INK },
   modalBtnDanger: { backgroundColor: theme.colors.danger },
   modalBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
