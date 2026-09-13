@@ -47,19 +47,24 @@ const capitalize = (v: any) => (hasVal(v) ? val(v).charAt(0).toUpperCase() + val
 // A second number only when it differs from the first.
 const unlessSame = (v: any, other: any) => (val(v) === val(other) ? null : v);
 
-// The classes the teacher is class teacher of: "10th (A), Nursery" — the
-// section without a leading "Section", or just the class when set for all of it.
-const classTeacherOf = (classes?: any[]) =>
-  [
-    ...new Set(
-      (classes ?? []).map(c => {
-        const section = hasVal(c.section_name) ? val(c.section_name).replace(/^section\s*/i, '') : '';
-        return [val(c.standard_name), section && `(${section})`].filter(x => x && x !== '—').join(' ');
-      }),
-    ),
-  ]
-    .filter(Boolean)
+// The classes the teacher is class teacher of, each with its sections in
+// brackets: "10th (Section A), Nursery (Section A, Section B)". A class set
+// without a section brings all of its sections.
+const classTeacherOf = (classes?: any[]) => {
+  const sectionsOf = new Map<string, string[]>();
+  (classes ?? []).forEach(c => {
+    if (!hasVal(c.standard_name)) return;
+    const names: string[] = hasVal(c.section_name)
+      ? [val(c.section_name)]
+      : (c.section_names ?? []).filter(hasVal).map(val);
+    const list = sectionsOf.get(val(c.standard_name)) ?? [];
+    names.forEach(n => !list.includes(n) && list.push(n));
+    sectionsOf.set(val(c.standard_name), list);
+  });
+  return [...sectionsOf]
+    .map(([cls, sections]) => (sections.length ? `${cls} (${sections.join(', ')})` : cls))
     .join(', ');
+};
 
 // Every field the school can fill, in page order: professional ID first, then
 // personal, then address, and the classes they are class teacher of last. Name

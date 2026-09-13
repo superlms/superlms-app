@@ -35,19 +35,14 @@ const val = (v: any): string => {
 
 const hasVal = (v: any) => val(v) !== '—';
 
-// "Main Gate · 07:30 AM" — whichever parts are there.
-const joined = (...parts: any[]) => parts.filter(hasVal).map(val).join(' · ');
-
 // A second number only when it differs from the first.
 const unlessSame = (v: any, other: any) => (val(v) === val(other) ? null : v);
 
-const route = (d: ProfileData) => d.transport_info?.active_transport ?? {};
-
 // Every field the school can fill, in page order: personal, family, academic,
-// address, the transport route, and the class teacher last. Name and admission
-// no. sit at the top, so they aren't repeated. A field with nothing in it is
-// left out, and appears once the school fills it in. The loading skeleton draws
-// one row per entry.
+// address, the transport route (for a student on a route), and the class
+// teacher last. Name and admission no. sit at the top, so they aren't repeated.
+// A field with nothing in it is left out, and appears once the school fills it
+// in. The loading skeleton draws one row per entry.
 const ROWS: [string, (d: ProfileData) => any][] = [
   ['Email', d => d.personal_info.email],
   ['Mobile', d => d.personal_info.mobile_number],
@@ -70,11 +65,7 @@ const ROWS: [string, (d: ProfileData) => any][] = [
   ['City', d => d.address_info.city],
   ['State', d => d.address_info.state],
   ['Pincode', d => d.address_info.pincode],
-  ['Transport Route', d => route(d).route_name],
-  ['Vehicle', d => joined(route(d).vehicle_type, route(d).vehicle_no)],
-  ['Pickup', d => joined(route(d).pickup_location, route(d).pickup_time)],
-  ['Drop', d => joined(route(d).drop_location, route(d).drop_time)],
-  ['Driver', d => joined(route(d).driver_name, route(d).driver_phone)],
+  ['Transport Route', d => d.transport_info?.active_transport?.route_name],
   ['Class Teacher', d => d.academic_info.class_teacher],
 ];
 
