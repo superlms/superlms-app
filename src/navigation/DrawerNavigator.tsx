@@ -298,6 +298,8 @@ const DrawerNavigator = ({ route }: any) => {
                       iconSet={item.iconSet || 'Ionicons'}
                       iconName={item.icon}
                       size={item.iconSize ?? 20}
+                      // A bigger glyph still takes the usual 20, so its label lines up.
+                      style={item.iconSize ? { marginHorizontal: -(item.iconSize - 20) / 2 } : undefined}
                       color={isActive ? theme.colors.primary : theme.colors.textSecondary}
                     />
                     <Text style={[styles.menuText, isActive && styles.menuTextActive]}>
