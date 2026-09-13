@@ -1,16 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Alert,
   Image,
-  Linking,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import moment from 'moment';
-import VectorIcon from '../../components/VectorIcon';
 import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
@@ -20,7 +16,7 @@ import { markAnnouncementRead } from './announcementReads';
 import apiClient from '../../api/apiClient';
 import constant from '../../utils/constant';
 import { DocHeader, DocSection, DocBody, docStyles } from '../more/docUi';
-import { INK, QUIET } from '../notification/inboxUi';
+import { AttachmentChips, INK, QUIET } from '../notification/inboxUi';
 
 const TITLE = 'View Announcement';
 
@@ -32,26 +28,6 @@ const resolveFileUrl = (url?: string): string | undefined => {
   if (/^https?:\/\//i.test(url)) return url;
   return `${FILE_ORIGIN}/${url.replace(/^\/+/, '')}`;
 };
-
-// Tappable attachment chip — file-type icon + label only; opens the file
-// straight away, no preview screen.
-const AttachmentChip = ({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: string;
-  label: string;
-  onPress: () => void;
-}) => (
-  <TouchableOpacity style={s.chip} activeOpacity={0.7} onPress={onPress}>
-    <VectorIcon iconSet="Feather" iconName={icon} size={14} color={theme.colors.primary} />
-    <Text style={s.chipText} numberOfLines={1}>
-      {label}
-    </Text>
-    <VectorIcon iconSet="Feather" iconName="external-link" size={12} color={theme.colors.textMuted} />
-  </TouchableOpacity>
-);
 
 // ── Loading ──────────────────────────────────────────────────────────────────
 // The page line for line: the date, the title, the Description heading and its
@@ -174,15 +150,6 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
     await fetchAnnouncementDetails();
   });
 
-  // Open attachments directly in the device's viewer / browser.
-  const openFile = async (url: string) => {
-    try {
-      await Linking.openURL(url);
-    } catch {
-      Alert.alert('Error', 'Unable to open this file on this device.');
-    }
-  };
-
   if (loading) {
     return (
       <View style={docStyles.root}>
@@ -223,16 +190,12 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
         {/* Description, with any attachments right under it */}
         <DocSection title="Description">
           <DocBody>{item.content || 'No description available'}</DocBody>
-          {(imageUrl || pdfUrl) && (
-            <View style={s.chips}>
-              {!!imageUrl && (
-                <AttachmentChip icon="image" label="Image" onPress={() => openFile(imageUrl)} />
-              )}
-              {!!pdfUrl && (
-                <AttachmentChip icon="file-text" label="PDF" onPress={() => openFile(pdfUrl)} />
-              )}
-            </View>
-          )}
+          <AttachmentChips
+            items={[
+              { url: imageUrl, kind: 'image' },
+              { url: pdfUrl, kind: 'pdf' },
+            ]}
+          />
         </DocSection>
 
         {/* Posted by — "Admin", with the school's name under it */}
@@ -275,22 +238,6 @@ const __mk_s = () => StyleSheet.create({
   dateText: { fontSize: 12, color: QUIET, marginBottom: 6 },
   title: { fontSize: 20, fontWeight: '700', color: INK, lineHeight: 27 },
 
-  // Attachment chips
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    maxWidth: 200,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.background,
-  },
-  chipText: { flexShrink: 1, fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
-
   // Line between the description and who posted it
   divider: { height: 1, backgroundColor: theme.colors.border },
 
@@ -304,7 +251,7 @@ const __mk_s = () => StyleSheet.create({
   creatorEmail: { fontSize: 13, color: QUIET, marginTop: 2 },
 
   // Skeleton boxes, at the heights of the real lines: date 12px, title 20/27,
-  // section heading 17px, body 15/24, name 15px, email 13px.
+  // section heading 17px, body 15/24, name 15px, school 13px.
   skLine: { justifyContent: 'center' },
   skDate: { height: 16, marginBottom: 6 },
   skTitle: { height: 27 },

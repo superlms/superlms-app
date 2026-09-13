@@ -10,7 +10,7 @@ import { DetailRow } from './calendarUi';
 import { getEventById, mapEventType } from '../../api/calendarApi';
 import type { EventDetail } from '../../api/calendarApi';
 import { DocHeader, DocSection, DocBody, docStyles } from '../more/docUi';
-import { INK, QUIET } from '../notification/inboxUi';
+import { AttachmentChips, INK, QUIET } from '../notification/inboxUi';
 import constant from '../../utils/constant';
 
 const TITLE = 'Event';
@@ -140,6 +140,7 @@ const ViewEventScreen = ({ navigation, route }: any) => {
   const location = detail?.location;
   const academic = detail?.academic_details;
   const isCancelled = detail?.is_cancelled;
+  const attachmentUrl = resolveFileUrl(detail?.attachment);
 
   const creatorAvatar = resolveFileUrl(detail?.creator_avatar);
   // Older servers send no school name; the admin account's own name is the
@@ -196,8 +197,10 @@ const ViewEventScreen = ({ navigation, route }: any) => {
           {isCancelled && <Text style={s.cancelled}>Cancelled</Text>}
         </View>
 
+        {/* Description, with the attachment right under it */}
         <DocSection title="Description">
           <DocBody>{description || 'No description available'}</DocBody>
+          <AttachmentChips items={[{ url: attachmentUrl }]} />
         </DocSection>
 
         {isCancelled && !!detail?.cancellation_reason && (

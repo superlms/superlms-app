@@ -127,6 +127,8 @@ export interface EventDetail {
   creator_avatar: string | null;
   /** The school's name; absent on servers that predate it. */
   organization_name?: string | null;
+  /** Optional image or PDF attached to the event (URL). */
+  attachment?: string | null;
   created_at: string;
   updated_at: string;
 }

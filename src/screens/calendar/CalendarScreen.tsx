@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -15,8 +15,8 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { FILTERS } from './calendarTypes';
 import type { FilterType, CalEvent } from './calendarTypes';
 import MonthYearPicker from './MonthYearPicker';
-import { MonthBar, MonthGrid, FullDivider } from './calendarUi';
-import { BODY, INK, QUIET, InboxRow } from '../notification/inboxUi';
+import { CELL, DAY, MonthBar, MonthGrid, FullDivider } from './calendarUi';
+import { BODY, INK, QUIET, InboxRow, InboxRowSkeleton } from '../notification/inboxUi';
 import { DocHeader } from '../more/docUi';
 import { getCalendarEvents, mapApiEventToCalEvent } from '../../api/calendarApi';
 
@@ -28,6 +28,74 @@ const TYPE_ICON: Record<CalEvent['type'], string> = {
   Exam: 'school',
   Event: 'calendar',
   Assignment: 'document-text',
+};
+
+// ── Loading ──────────────────────────────────────────────────────────────────
+// The month as it will be drawn — the weekday letters, a number in every day
+// that exists (the blanks before the 1st and after the last stay blank), the day
+// heading, the type tabs and a few event rows — each box at the size of what it
+// stands in for, so nothing moves when the events land.
+const TAB_W = [18, 50, 34, 38, 76]; // All, Holiday, Exam, Event, Assignment
+
+const CalendarSkeleton = ({ month }: { month: moment.Moment }) => {
+  const offset = (month.clone().startOf('month').day() + 6) % 7; // weeks start Monday
+  const days = month.daysInMonth();
+  const cells = Math.ceil((offset + days) / 7) * 7;
+
+  return (
+    <View>
+      <View style={s.grid}>
+        <View style={s.skWeekRow}>
+          {Array.from({ length: 7 }, (_, i) => (
+            <View key={i} style={s.skCell}>
+              <View style={s.skWeekLabel}>
+                <Skeleton width={9} height={9} />
+              </View>
+            </View>
+          ))}
+        </View>
+        {Array.from({ length: cells / 7 }, (_, w) => (
+          <View key={w} style={s.skWeekRow}>
+            {Array.from({ length: 7 }, (_, d) => {
+              const i = w * 7 + d;
+              const exists = i >= offset && i < offset + days;
+              return (
+                <View key={d} style={s.skCell}>
+                  <View style={s.skDayCircle}>
+                    {exists && <Skeleton width={i - offset + 1 < 10 ? 9 : 17} height={12} />}
+                  </View>
+                  <View style={s.skDot} />
+                </View>
+              );
+            })}
+          </View>
+        ))}
+      </View>
+
+      <FullDivider />
+
+      <View style={s.skDayHead}>
+        <Skeleton width={170} height={14} />
+        <Skeleton width={46} height={10} />
+      </View>
+
+      <View style={s.skTabs}>
+        {TAB_W.map((w, i) => (
+          <View key={i} style={s.skTab}>
+            <Skeleton width={w} height={11} />
+          </View>
+        ))}
+      </View>
+
+      <FullDivider />
+
+      <View style={s.list}>
+        {[0, 1, 2].map(i => (
+          <InboxRowSkeleton key={i} index={i} isLast={i === 2} metaWidth={90} />
+        ))}
+      </View>
+    </View>
+  );
 };
 
 const CalendarScreen = ({ navigation }: any) => {
@@ -42,8 +110,8 @@ const CalendarScreen = ({ navigation }: any) => {
   const [error, setError] = useState<string | null>(null);
 
   // Events are fetched a month at a time.
-  const fetchEvents = useCallback(async () => {
-    setLoading(true);
+  const fetchEvents = useCallback(async (showSkeleton = true) => {
+    if (showSkeleton) setLoading(true);
     setError(null);
 
     const startDate = currentMonth.clone().startOf('month').format('YYYY-MM-DD');
@@ -60,9 +128,25 @@ const CalendarScreen = ({ navigation }: any) => {
     }
   }, [currentMonth]);
 
-  const { refreshing, onRefresh } = useRefresh(fetchEvents);
+  // A month loads with the skeleton: on opening, and whenever the month changes
+  // (it used to keep the first month's events, so other months showed none).
+  useEffect(() => {
+    fetchEvents(true);
+  }, [fetchEvents]);
 
-  useFocusLoad(fetchEvents);
+  // Coming back to the screen refreshes quietly; the first focus is the mount,
+  // already loading above.
+  const focusedOnce = useRef(false);
+  useFocusLoad(() => {
+    if (!focusedOnce.current) {
+      focusedOnce.current = true;
+      return;
+    }
+    fetchEvents(false);
+  });
+
+  // Pulling to refresh shows the skeleton again.
+  const { refreshing, onRefresh } = useRefresh(() => fetchEvents(true));
 
   const eventsByDate = useMemo(() => {
     const grouped: Record<string, CalEvent[]> = {};
@@ -95,9 +179,13 @@ const CalendarScreen = ({ navigation }: any) => {
     setActiveFilter('All');
   };
 
-  // A month the user pages to always starts on its first day.
-  const shiftMonth = (delta: number) =>
-    setCurrentMonth(m => m.clone().add(delta, 'month'));
+  // Moving to a month selects today when it is this month, else its first day.
+  const goToMonth = (m: moment.Moment) => {
+    setCurrentMonth(m);
+    selectDate(m.isSame(moment(), 'month') ? today : m.clone().startOf('month').format('YYYY-MM-DD'));
+  };
+
+  const shiftMonth = (delta: number) => goToMonth(currentMonth.clone().add(delta, 'month'));
 
   return (
     <View style={s.root}>
@@ -111,23 +199,13 @@ const CalendarScreen = ({ navigation }: any) => {
       />
       <FullDivider />
 
-      {loading && !refreshing ? (
-        <View style={s.loading}>
-          <Skeleton width="100%" height={260} radius={12} />
-          <View style={s.loadingRows}>
-            {[0, 1, 2].map(i => (
-              <View key={i} style={s.loadingRow}>
-                <Skeleton width="55%" height={14} />
-                <Skeleton width="80%" height={12} />
-              </View>
-            ))}
-          </View>
-        </View>
+      {loading ? (
+        <CalendarSkeleton month={currentMonth} />
       ) : error ? (
         <View style={s.centeredBox}>
           <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
           <Text style={s.errorText}>{error}</Text>
-          <TouchableOpacity onPress={fetchEvents} hitSlop={10}>
+          <TouchableOpacity onPress={() => fetchEvents(true)} hitSlop={10}>
             <Text style={s.linkText}>Try again</Text>
           </TouchableOpacity>
         </View>
@@ -219,7 +297,7 @@ const CalendarScreen = ({ navigation }: any) => {
         visible={pickerVisible}
         current={currentMonth}
         onClose={() => setPickerVisible(false)}
-        onSelect={m => setCurrentMonth(m)}
+        onSelect={goToMonth}
       />
     </View>
   );
@@ -257,10 +335,23 @@ const __mk_s = () => StyleSheet.create({
   list: { paddingHorizontal: 20, paddingTop: 2 },
   noneOfType: { paddingVertical: 18, fontSize: 14, color: QUIET },
 
-  // Loading
-  loading: { paddingHorizontal: 20, paddingTop: 16 },
-  loadingRows: { marginTop: 24, gap: 18 },
-  loadingRow: { gap: 8 },
+  // Skeleton — the grid's cells (weekday label 11px + 6 padding; a day circle
+  // plus its dot) and the heading and tab lines at their real heights
+  skWeekRow: { flexDirection: 'row' },
+  skCell: { width: CELL, alignItems: 'center', paddingVertical: 3 },
+  skWeekLabel: { height: 27, justifyContent: 'center' },
+  skDayCircle: { width: DAY, height: DAY, alignItems: 'center', justifyContent: 'center' },
+  skDot: { height: 7 },
+  skDayHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 39,
+    paddingTop: 18,
+    paddingHorizontal: 20,
+  },
+  skTabs: { flexDirection: 'row', gap: 18, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 12 },
+  skTab: { height: 18, justifyContent: 'center' },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

@@ -1,12 +1,13 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
 import { Skeleton } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
 
-// The shared look of the inbox-style lists — Notifications and Announcements:
-// filter pills, day headings, and rows led by a round icon.
+// The shared look of the inbox-style lists — Notifications, Announcements and
+// calendar events: filter pills, day headings, rows led by a round icon, and
+// the attachment chips on their detail pages.
 
 // A step darker than the theme's text colours, so these lists read crisply.
 export const INK = '#0F172A';   // titles
@@ -193,12 +194,91 @@ export const InboxRow = ({
   );
 };
 
+// ── Attachments on a detail page ─────────────────────────────────────────────
+// A chip per file — its kind's icon and label — that opens the file straight
+// away in the phone's viewer or browser.
+type AttachmentKind = 'image' | 'pdf';
+
+const kindOf = (url: string): AttachmentKind => (/\.pdf(\?|#|$)/i.test(url) ? 'pdf' : 'image');
+
+export const AttachmentChip = ({ url, kind }: { url: string; kind?: AttachmentKind }) => {
+  const k = kind ?? kindOf(url);
+  const open = async () => {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Error', 'Unable to open this file on this device.');
+    }
+  };
+
+  return (
+    <TouchableOpacity style={s.chip} activeOpacity={0.7} onPress={open}>
+      <VectorIcon
+        iconSet="Feather"
+        iconName={k === 'pdf' ? 'file-text' : 'image'}
+        size={14}
+        color={theme.colors.primary}
+      />
+      <Text style={s.chipText} numberOfLines={1}>
+        {k === 'pdf' ? 'PDF' : 'Image'}
+      </Text>
+      <VectorIcon iconSet="Feather" iconName="external-link" size={12} color={theme.colors.textMuted} />
+    </TouchableOpacity>
+  );
+};
+
+/** The chips for whichever files are present; nothing at all when none are. */
+export const AttachmentChips = ({
+  items,
+}: {
+  items: { url?: string | null; kind?: AttachmentKind }[];
+}) => {
+  const present = items.filter(i => !!i.url) as { url: string; kind?: AttachmentKind }[];
+  if (present.length === 0) return null;
+  return (
+    <View style={s.chips}>
+      {present.map(i => (
+        <AttachmentChip key={i.url} url={i.url} kind={i.kind} />
+      ))}
+    </View>
+  );
+};
+
 // ── Loading ──────────────────────────────────────────────────────────────────
-// The pills, the rule, a day heading and a run of rows, each box at the height
-// of the text it stands in for, so nothing moves when the list arrives.
+// Each box at the height of the text it stands in for, so nothing moves when
+// the list arrives.
 const TITLE_W = ['62%', '48%', '70%', '55%', '66%', '44%'];
 const BODY_W = ['88%', '76%', '92%', '70%', '84%', '80%'];
 
+/** One row's skeleton: the round icon, the title, the description, the last line. */
+export const InboxRowSkeleton = ({
+  index,
+  isLast,
+  metaWidth = 96,
+}: {
+  index: number;
+  isLast: boolean;
+  metaWidth?: number;
+}) => (
+  <View style={[s.row, !isLast && s.rowDivider]}>
+    <View style={s.leadSlot}>
+      <Skeleton width={36} height={36} radius={18} />
+    </View>
+    <View style={s.body}>
+      <View style={s.skTitle}>
+        <Skeleton width={TITLE_W[index % TITLE_W.length]} height={13} />
+      </View>
+      <View style={s.skPreview}>
+        <Skeleton width={BODY_W[index % BODY_W.length]} height={11} />
+      </View>
+      <View style={s.skMeta}>
+        <Skeleton width={metaWidth} height={9} />
+      </View>
+    </View>
+  </View>
+);
+
+/** The pills, the rule, a day heading and a run of rows. */
 export const InboxSkeleton = ({
   pillWidths,
   trailing,
@@ -229,22 +309,7 @@ export const InboxSkeleton = ({
         <Skeleton width={64} height={11} />
       </View>
       {Array.from({ length: rows }, (_, i) => (
-        <View key={i} style={[s.row, i < rows - 1 && s.rowDivider]}>
-          <View style={s.leadSlot}>
-            <Skeleton width={36} height={36} radius={18} />
-          </View>
-          <View style={s.body}>
-            <View style={s.skTitle}>
-              <Skeleton width={TITLE_W[i % TITLE_W.length]} height={13} />
-            </View>
-            <View style={s.skPreview}>
-              <Skeleton width={BODY_W[i % BODY_W.length]} height={11} />
-            </View>
-            <View style={s.skMeta}>
-              <Skeleton width={metaWidth} height={9} />
-            </View>
-          </View>
-        </View>
+        <InboxRowSkeleton key={i} index={i} isLast={i === rows - 1} metaWidth={metaWidth} />
       ))}
     </View>
   </View>
@@ -321,6 +386,22 @@ const __mk_s = () => StyleSheet.create({
   metaLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 },
   meta: { flexShrink: 1, fontSize: 11, color: QUIET },
   timeOn: { color: theme.colors.primary, fontWeight: '500' },
+
+  // Attachment chips
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: 200,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+  },
+  chipText: { flexShrink: 1, fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
 
   // Skeleton boxes, at the heights of the real lines
   skList: { paddingHorizontal: 20 },
