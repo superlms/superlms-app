@@ -17,7 +17,8 @@ import PhotoCropper, { type CropRect } from '../../components/PhotoCropper';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getTeacherProfile, updateTeacherPhoto, type PickedPhoto } from '../../api/teacherApi';
 import { apiErr } from '../../utils/filePickers';
-import { DocHeader, DocLoading, DocError } from '../more/docUi';
+import { DocHeader, DocError } from '../more/docUi';
+import ProfileSkeleton from './ProfileSkeleton';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface TeacherProfile {
@@ -42,6 +43,23 @@ const hasVal = (v: any) => val(v) !== '—';
 
 // Gender is stored lower-case ("male").
 const capitalize = (v: any) => (hasVal(v) ? val(v).charAt(0).toUpperCase() + val(v).slice(1) : v);
+
+// The detail list, in page order: professional ID first, then personal, then
+// address. Name and email sit at the top, so they aren't repeated. The loading
+// skeleton draws one row per entry.
+const ROWS: [string, (d: TeacherProfile) => any][] = [
+  ['Employee ID', d => d.professional_info.employee_id],
+  ['Mobile', d => d.personal_info.mobile_number],
+  ['Emergency Contact', d => d.personal_info.emergency_contact],
+  ['DOB', d => d.personal_info.dob],
+  ['Gender', d => capitalize(d.personal_info.gender)],
+  ['Date of Joining', d => d.professional_info.date_of_joining],
+  ['Qualification', d => d.professional_info.qualification],
+  ['Address', d => d.address_info.address],
+  ['City', d => d.address_info.city],
+  ['State', d => d.address_info.state],
+  ['Pincode', d => d.address_info.pincode],
+];
 
 // ─── Info Row: label, then value from the middle ──────────────────────────────
 const InfoRow = ({
@@ -117,29 +135,17 @@ const TeacherProfileScreen = () => {
     }
   };
 
-  if (loading) return <DocLoading title="Profile" />;
+  if (loading) return <ProfileSkeleton labels={ROWS.map(([label]) => label)} subWidth="55%" />;
   if (error || !profile) {
     return <DocError title="Profile" message={error || 'Something went wrong.'} onRetry={fetchProfile} />;
   }
 
-  const { personal_info: p, professional_info: pr, address_info: a } = profile;
+  const { personal_info: p } = profile;
 
-  // One plain list: professional ID first, then personal, then address details.
-  // Name and email sit at the top, so they aren't repeated; empty fields are
-  // left out.
-  const rows = ([
-    ['Employee ID', pr.employee_id],
-    ['Mobile', p.mobile_number],
-    ['Emergency Contact', p.emergency_contact],
-    ['DOB', p.dob],
-    ['Gender', capitalize(p.gender)],
-    ['Date of Joining', pr.date_of_joining],
-    ['Qualification', pr.qualification],
-    ['Address', a.address],
-    ['City', a.city],
-    ['State', a.state],
-    ['Pincode', a.pincode],
-  ] as [string, any][]).filter(([, v]) => hasVal(v));
+  // One plain list (see ROWS); empty fields are left out.
+  const rows = ROWS
+    .map(([label, get]) => [label, get(profile)] as [string, any])
+    .filter(([, v]) => hasVal(v));
 
   return (
     <View style={s.root}>

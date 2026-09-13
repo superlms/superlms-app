@@ -10,7 +10,8 @@ import { theme, onThemeChange } from '../../utils/theme';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getStudentProfile } from '../../api/studentApi';
-import { DocHeader, DocLoading, DocError } from '../more/docUi';
+import { DocHeader, DocError } from '../more/docUi';
+import ProfileSkeleton from './ProfileSkeleton';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ProfileData {
@@ -33,6 +34,30 @@ const val = (v: any): string => {
 };
 
 const hasVal = (v: any) => val(v) !== '—';
+
+// The detail list, in page order: personal, then academic, then address. Name
+// and admission no. sit at the top, so they aren't repeated. The loading
+// skeleton draws one row per entry.
+const ROWS: [string, (d: ProfileData) => any][] = [
+  ['Email', d => d.personal_info.email],
+  ['Mobile', d => d.personal_info.mobile_number],
+  ['DOB', d => d.personal_info.dob],
+  ['Gender', d => d.personal_info.gender],
+  ['Religion', d => d.personal_info.religion],
+  ['Aadhar No', d => d.personal_info.aadhar_no],
+  ['Father Name', d => d.family_info.father_name],
+  ['Mother Name', d => d.family_info.mother_name],
+  ['Class', d => d.academic_info.standard_name],
+  ['Section', d => d.academic_info.section_name],
+  ['Roll No', d => d.academic_info.roll_no],
+  ['Date of Admission', d => d.academic_info.date_of_admission],
+  ['Board', d => d.academic_info.board],
+  ['Local Address', d => d.address_info.local_address],
+  ['Permanent Address', d => d.address_info.permanent_address],
+  ['City', d => d.address_info.city],
+  ['State', d => d.address_info.state],
+  ['Pincode', d => d.address_info.pincode],
+];
 
 // ─── Info Row: label, then value from the middle ──────────────────────────────
 const InfoRow = ({
@@ -70,36 +95,17 @@ const StudentProfileScreen = () => {
 
   useFocusLoad(fetchProfile);
 
-  if (loading) return <DocLoading title="Profile" />;
+  if (loading) return <ProfileSkeleton labels={ROWS.map(([label]) => label)} subWidth="42%" />;
   if (error || !profile) {
     return <DocError title="Profile" message={error || 'Something went wrong.'} onRetry={fetchProfile} />;
   }
 
-  const { personal_info: p, family_info: f, address_info: a, academic_info: ac } = profile;
+  const { personal_info: p, academic_info: ac } = profile;
 
-  // One plain list: personal, then academic, then address details. Name and
-  // admission no. sit at the top, so they aren't repeated; empty fields are
-  // left out.
-  const rows = ([
-    ['Email', p.email],
-    ['Mobile', p.mobile_number],
-    ['DOB', p.dob],
-    ['Gender', p.gender],
-    ['Religion', p.religion],
-    ['Aadhar No', p.aadhar_no],
-    ['Father Name', f.father_name],
-    ['Mother Name', f.mother_name],
-    ['Class', ac.standard_name],
-    ['Section', ac.section_name],
-    ['Roll No', ac.roll_no],
-    ['Date of Admission', ac.date_of_admission],
-    ['Board', ac.board],
-    ['Local Address', a.local_address],
-    ['Permanent Address', a.permanent_address],
-    ['City', a.city],
-    ['State', a.state],
-    ['Pincode', a.pincode],
-  ] as [string, any][]).filter(([, v]) => hasVal(v));
+  // One plain list (see ROWS); empty fields are left out.
+  const rows = ROWS
+    .map(([label, get]) => [label, get(profile)] as [string, any])
+    .filter(([, v]) => hasVal(v));
 
   return (
     <View style={s.root}>
