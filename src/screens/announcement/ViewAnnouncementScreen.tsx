@@ -123,7 +123,10 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
   // Fetch the full announcement by id; whatever was passed in is kept for any
   // field the server leaves out.
   const fetchAnnouncementDetails = async () => {
-    if (!id) return;
+    if (!id) {
+      setLoading(false);
+      return;
+    }
 
     try {
       const response = await apiClient.get(`/announcement/${id}`);
@@ -163,7 +166,11 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const { refreshing, onRefresh } = useRefresh(fetchAnnouncementDetails);
+  // Pulling to refresh shows the skeleton again while the page reloads.
+  const { refreshing, onRefresh } = useRefresh(async () => {
+    setLoading(true);
+    await fetchAnnouncementDetails();
+  });
 
   // Open attachments directly in the device's viewer / browser.
   const openFile = async (url: string) => {

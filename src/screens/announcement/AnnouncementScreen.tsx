@@ -51,10 +51,10 @@ const AnnouncementScreen = ({ navigation }: any) => {
   const reads = useAnnouncementReads();
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
-  // The skeleton shows only until the first load; pulling to refresh or coming
-  // back from an announcement updates the list in place.
-  const fetchAnnouncements = useCallback(async () => {
-    if (!loadedOnce.current) setLoading(true);
+  // The skeleton shows on the first load, on a pull to refresh and on "Try
+  // again"; coming back from an announcement updates the list in place.
+  const fetchAnnouncements = useCallback(async (showSkeleton = !loadedOnce.current) => {
+    if (showSkeleton) setLoading(true);
     setError(null);
 
     try {
@@ -74,9 +74,9 @@ const AnnouncementScreen = ({ navigation }: any) => {
     }
   }, []);
 
-  const { refreshing, onRefresh } = useRefresh(fetchAnnouncements);
+  const { refreshing, onRefresh } = useRefresh(() => fetchAnnouncements(true));
 
-  useFocusLoad(fetchAnnouncements);
+  useFocusLoad(() => fetchAnnouncements());
 
   // ── Role, then date window ──────────────────────────────────────────────────
   const allowedTags = ROLE_TAGS[role.toLowerCase()] ?? ROLE_TAGS.student;
@@ -102,7 +102,7 @@ const AnnouncementScreen = ({ navigation }: any) => {
         <View style={s.centeredBox}>
           <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
           <Text style={s.errorText}>{error}</Text>
-          <TouchableOpacity onPress={fetchAnnouncements} hitSlop={10}>
+          <TouchableOpacity onPress={() => fetchAnnouncements(true)} hitSlop={10}>
             <Text style={ui.linkText}>Try again</Text>
           </TouchableOpacity>
         </View>
