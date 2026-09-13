@@ -33,6 +33,7 @@ const destinationFor = (role: UserRole) => {
 const LoginScreen = () => {
   const navigation = useNavigation<any>();
   const scrollRef = useRef<ScrollView>(null);
+  const passwordRef = useRef<TextInput>(null);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -76,6 +77,8 @@ const LoginScreen = () => {
       150,
     );
   };
+
+  const canSubmit = !loading && !!identifier.trim() && !!password.trim();
 
   const handleLogin = async () => {
     if (!identifier.trim()) {
@@ -131,7 +134,7 @@ const LoginScreen = () => {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+    <KeyboardAvoidingView style={styles.flex} behavior="padding">
       <View style={styles.safeArea}>
         <StatusBar
           barStyle="dark-content"
@@ -144,106 +147,103 @@ const LoginScreen = () => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.iconBadge}>
-            <Image source={require('../../assets/logo.png')} style={styles.logo} />
-          </View>
+          <Image source={require('../../assets/logo.png')} style={styles.logo} />
 
-          <Text style={styles.title}>Welcome to SuperLMS</Text>
+          <Text style={styles.title}>Welcome back</Text>
           <Text
             style={styles.subtitle}
             onLayout={e => {
               subtitleYRef.current = e.nativeEvent.layout.y;
             }}
           >
-            Students use their admission number, staff use email.
+            Students sign in with their admission number, staff with their email.
           </Text>
 
-          <View style={styles.formCard}>
-            {/* Identifier */}
-            <Text style={styles.label}>Email or Admission Number</Text>
+          {/* Identifier */}
+          <Text style={styles.label}>Email or Admission Number</Text>
+          <TextInput
+            placeholder="you@school.com or 2026DMO650015"
+            placeholderTextColor={theme.colors.textMuted}
+            style={[styles.input, (identifierFocused || !!identifier) && styles.inputActive]}
+            value={identifier}
+            onChangeText={t => {
+              setIdentifier(t);
+              setError('');
+            }}
+            onFocus={() => {
+              setIdentifierFocused(true);
+              scrollFormIntoView();
+            }}
+            onBlur={() => setIdentifierFocused(false)}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="next"
+            blurOnSubmit={false}
+            onSubmitEditing={() => passwordRef.current?.focus()}
+          />
+
+          {/* Password */}
+          <Text style={styles.label}>Password</Text>
+          <View style={[styles.input, styles.passWrap, (passwordFocused || !!password) && styles.inputActive]}>
             <TextInput
-              placeholder="you@school.com  or  2026DMO650015"
+              ref={passwordRef}
+              placeholder="Enter your password"
               placeholderTextColor={theme.colors.textMuted}
-              style={[
-                styles.input,
-                (identifierFocused || !!identifier) && styles.inputActive,
-              ]}
-              value={identifier}
+              style={styles.passInput}
+              secureTextEntry={!showPass}
+              value={password}
               onChangeText={t => {
-                setIdentifier(t);
+                setPassword(t);
                 setError('');
               }}
               onFocus={() => {
-                setIdentifierFocused(true);
+                setPasswordFocused(true);
                 scrollFormIntoView();
               }}
-              onBlur={() => setIdentifierFocused(false)}
+              onBlur={() => setPasswordFocused(false)}
               autoCapitalize="none"
               autoCorrect={false}
+              returnKeyType="go"
+              onSubmitEditing={() => {
+                if (canSubmit) handleLogin();
+              }}
             />
-
-            {/* Password */}
-            <Text style={styles.label}>Password</Text>
-            <View
-              style={[
-                styles.passWrap,
-                (passwordFocused || !!password) && styles.inputActive,
-              ]}
+            <TouchableOpacity
+              onPress={() => setShowPass(v => !v)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <TextInput
-                placeholder="Enter password"
-                placeholderTextColor={theme.colors.textMuted}
-                style={styles.passInput}
-                secureTextEntry={!showPass}
-                value={password}
-                onChangeText={t => {
-                  setPassword(t);
-                  setError('');
-                }}
-                onFocus={() => {
-                  setPasswordFocused(true);
-                  scrollFormIntoView();
-                }}
-                onBlur={() => setPasswordFocused(false)}
+              <VectorIcon
+                iconSet="Ionicons"
+                iconName={showPass ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={theme.colors.textMuted}
               />
-              <TouchableOpacity
-                onPress={() => setShowPass(v => !v)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <VectorIcon
-                  iconSet="Ionicons"
-                  iconName={showPass ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color={theme.colors.textMuted}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              onPress={() => navigation.navigate('ForgotPassword')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.forgot}>Forgot Password?</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.button,
-                (loading || !identifier.trim() || !password.trim()) &&
-                  styles.buttonDisabled,
-              ]}
-              activeOpacity={0.9}
-              onPress={handleLogin}
-              disabled={loading || !identifier.trim() || !password.trim()}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.buttonText}>Continue</Text>
-              )}
             </TouchableOpacity>
           </View>
-          <View style={{ height: 100 }} />
+
+          <TouchableOpacity
+            style={styles.forgotWrap}
+            onPress={() => navigation.navigate('ForgotPassword')}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.forgot}>Forgot password?</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, !canSubmit && styles.buttonDisabled]}
+            activeOpacity={0.85}
+            onPress={handleLogin}
+            disabled={!canSubmit}
+          >
+            {loading ? (
+              <ActivityIndicator color={theme.colors.white} size="small" />
+            ) : (
+              <Text style={styles.buttonText}>Continue</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.keyboardSpace} />
         </ScrollView>
 
         {/* Error popup pinned to the bottom of the screen */}
@@ -281,78 +281,74 @@ const LoginScreen = () => {
 export default LoginScreen;
 
 const __mk_styles = () => StyleSheet.create({
+  flex: { flex: 1 },
   safeArea: { flex: 1, backgroundColor: theme.colors.card },
   container: {
     flexGrow: 1,
-    paddingHorizontal: theme.spacing.lg,
-    paddingVertical: theme.spacing.xl,
+    paddingHorizontal: 24,
+    paddingTop: 72,
   },
-  iconBadge: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginTop: theme.spacing.xl,
-    marginBottom: theme.spacing.md,
-  },
-  logo: { width: 110, height: 110, resizeMode: 'contain' },
+
+  // Logo, title, subtitle — left-aligned, nothing behind them
+  logo: { width: 56, height: 56, resizeMode: 'contain' },
   title: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '700',
     color: theme.colors.textPrimary,
-    textAlign: 'center',
+    marginTop: 28,
   },
   subtitle: {
-    fontSize: 15,
-    textAlign: 'center',
+    fontSize: 14,
+    lineHeight: 20,
     color: theme.colors.textSecondary,
-    marginTop: theme.spacing.xs,
-    paddingHorizontal: 20,
-    marginBottom: theme.spacing.lg,
+    marginTop: 6,
+    marginBottom: 32,
   },
-  formCard: {
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.lg,
-  },
+
+  // Fields
   label: {
-    color: theme.colors.textPrimary,
     fontSize: 13,
-    fontWeight: '600',
-    marginBottom: theme.spacing.xs,
+    fontWeight: '500',
+    color: theme.colors.textSecondary,
+    marginBottom: 8,
   },
   input: {
-    backgroundColor: theme.colors.surface,
+    height: 52,
+    paddingHorizontal: 14,
+    paddingVertical: 0,
+    marginBottom: 18,
+    borderRadius: theme.radius.sm,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    borderRadius: theme.radius.sm,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.md,
+    backgroundColor: theme.colors.card,
+    fontSize: 15,
     color: theme.colors.textPrimary,
   },
-  inputActive: {
-    borderColor: '#5B7FFF',
-  },
-  passWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.sm,
-    paddingHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-  },
+  inputActive: { borderColor: theme.colors.primary },
+  passWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   passInput: {
     flex: 1,
-    paddingVertical: theme.spacing.md,
+    height: '100%',
+    paddingVertical: 0,
+    fontSize: 15,
     color: theme.colors.textPrimary,
   },
-  forgot: {
-    color: theme.colors.primary,
-    textAlign: 'right',
-    marginBottom: theme.spacing.lg,
-    fontWeight: '500',
+  forgotWrap: { alignSelf: 'flex-end', marginTop: -6, marginBottom: 28 },
+  forgot: { fontSize: 13, fontWeight: '500', color: theme.colors.primary },
+
+  // Continue
+  button: {
+    height: 52,
+    borderRadius: theme.radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.primary,
   },
+  buttonDisabled: { opacity: 0.4 },
+  buttonText: { color: theme.colors.white, fontWeight: '600', fontSize: 16 },
+
+  keyboardSpace: { height: 100 },
+
   errorToast: {
     position: 'absolute',
     left: theme.spacing.lg,
@@ -377,16 +373,7 @@ const __mk_styles = () => StyleSheet.create({
     color: theme.colors.white,
     fontWeight: '500',
   },
-  button: {
-    backgroundColor: theme.colors.primary,
-    paddingVertical: 12,
-    borderRadius: 99,
-    alignItems: 'center',
-  },
-  buttonDisabled: { backgroundColor: '#B0B0B0' },
-  buttonText: { color: theme.colors.white, fontWeight: '600', fontSize: 16 },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let styles = __mk_styles();
