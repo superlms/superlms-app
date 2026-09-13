@@ -136,9 +136,18 @@ export const DoneTick = ({ done, onPress }: { done: boolean; onPress?: () => voi
 //      Mathematics · Ms. Patel · 09:30 AM
 //      Solve problems 1–10 from chapter 3 …
 //      Open attachment
+//
+// The teacher's list puts the attachment first and the period above the title:
+//      View image
+//      09:00 AM – 09:45 AM · Mathematics · 10th (A)
+//      Chapter 3 Exercise
+//      Solve problems 1–10 from chapter 3 …
 export const HomeworkRow = ({
   hw,
   meta,
+  period,
+  heading,
+  attachmentFirst,
   leading,
   trailing,
   done,
@@ -146,7 +155,12 @@ export const HomeworkRow = ({
   onPreviewImage,
 }: {
   hw: HomeworkItem;
-  meta: string;
+  meta?: string;
+  // The line above the title: the period's time, then e.g. "Mathematics · 10th (A)".
+  period?: string | null;
+  heading?: string;
+  // The attachment above everything else, not under the task.
+  attachmentFirst?: boolean;
   leading?: React.ReactNode;
   trailing?: React.ReactNode;
   done?: boolean;
@@ -158,6 +172,23 @@ export const HomeworkRow = ({
   const desc = hw.description?.trim();
   const isImage = hw.file_type === 'image';
 
+  const attachment = !!hw.file_url && (
+    <TouchableOpacity
+      style={[s.attach, attachmentFirst && s.attachFirst]}
+      hitSlop={6}
+      activeOpacity={0.6}
+      onPress={() => (isImage ? onPreviewImage(hw.file_url!) : openFile(hw.file_url))}
+    >
+      <VectorIcon
+        iconSet="Ionicons"
+        iconName={isImage ? 'image-outline' : 'document-attach-outline'}
+        size={15}
+        color={theme.colors.primary}
+      />
+      <Text style={s.attachText}>{isImage ? 'View image' : 'Open attachment'}</Text>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={[s.row, !isLast && s.rowDivider]}>
       {leading}
@@ -168,6 +199,14 @@ export const HomeworkRow = ({
         disabled={!desc}
         onPress={() => setExpanded(e => !e)}
       >
+        {attachmentFirst && attachment}
+        {(!!period || !!heading) && (
+          <Text style={s.heading}>
+            {!!period && <Text style={s.period}>{period}</Text>}
+            {!!period && !!heading && ' · '}
+            {heading}
+          </Text>
+        )}
         <Text style={[s.title, done && s.titleDone]}>{quietCaps(hw.title)}</Text>
         {!!meta && (
           <Text style={s.meta} numberOfLines={1}>
@@ -179,22 +218,7 @@ export const HomeworkRow = ({
             {desc}
           </Text>
         )}
-        {!!hw.file_url && (
-          <TouchableOpacity
-            style={s.attach}
-            hitSlop={6}
-            activeOpacity={0.6}
-            onPress={() => (isImage ? onPreviewImage(hw.file_url!) : openFile(hw.file_url))}
-          >
-            <VectorIcon
-              iconSet="Ionicons"
-              iconName={isImage ? 'image-outline' : 'document-attach-outline'}
-              size={15}
-              color={theme.colors.primary}
-            />
-            <Text style={s.attachText}>{isImage ? 'View image' : 'Open attachment'}</Text>
-          </TouchableOpacity>
-        )}
+        {!attachmentFirst && attachment}
       </TouchableOpacity>
 
       {trailing}
@@ -272,7 +296,10 @@ const __mk_s = () => StyleSheet.create({
   desc: { fontSize: 13, lineHeight: 19, color: theme.colors.textSecondary, marginTop: 3 },
   descDone: { color: theme.colors.textMuted },
   attach: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 7, alignSelf: 'flex-start' },
+  attachFirst: { marginTop: 0, marginBottom: 5 },
   attachText: { fontSize: 13, fontWeight: '500', color: theme.colors.primary },
+  heading: { fontSize: 12, lineHeight: 17, color: theme.colors.textMuted, marginBottom: 1 },
+  period: { fontWeight: '600', color: theme.colors.primary },
 
   // Loading
   skLine: { marginTop: 6 },

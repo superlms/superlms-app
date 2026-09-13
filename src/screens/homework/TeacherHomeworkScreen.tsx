@@ -14,6 +14,7 @@ import {
   type HomeworkItem,
 } from '../../api/homeworkApi';
 import { getTeacherClassesSubjects } from '../../api/marksApi';
+import { fmtTime } from '../../api/timetableApi';
 import {
   DateStrip,
   DayHead,
@@ -83,14 +84,17 @@ const TeacherHomeworkScreen = ({ navigation }: any) => {
   );
   const dayItems = items.filter(h => h.assigned_date === selected);
 
-  const metaFor = (hw: HomeworkItem) =>
-    [
-      quietCaps(hw.subject?.name),
-      [hw.standard, hw.section].filter(Boolean).join(' '),
-      hw.assigned_time,
-    ]
+  // "09:00 AM – 09:45 AM": the class's period in the teacher's timetable.
+  const periodFor = (hw: HomeworkItem) =>
+    hw.period_start ? [fmtTime(hw.period_start), fmtTime(hw.period_end)].filter(Boolean).join(' – ') : null;
+
+  // "Mathematics · 10th (A)" — the section as its last letter.
+  const headingFor = (hw: HomeworkItem) => {
+    const letter = hw.section?.trim().slice(-1).toUpperCase();
+    return [quietCaps(hw.subject?.name), [hw.standard, letter && `(${letter})`].filter(Boolean).join(' ')]
       .filter(Boolean)
       .join(' · ');
+  };
 
   const canAdd = !noSubjects && !error;
 
@@ -147,7 +151,9 @@ const TeacherHomeworkScreen = ({ navigation }: any) => {
                   <HomeworkRow
                     key={hw.id}
                     hw={hw}
-                    meta={metaFor(hw)}
+                    period={periodFor(hw)}
+                    heading={headingFor(hw)}
+                    attachmentFirst
                     isLast={i === dayItems.length - 1}
                     onPreviewImage={setPreview}
                     trailing={

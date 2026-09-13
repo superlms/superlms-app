@@ -18,6 +18,9 @@ export interface HomeworkItem {
   days_ago: string | null;
   file_url: string | null;
   file_type: 'pdf' | 'image' | 'doc' | null;
+  // Teacher list only: the class's period in the teacher's timetable ("09:00").
+  period_start?: string | null;
+  period_end?: string | null;
 }
 
 export interface TeacherHomeworkResponse {
