@@ -10,28 +10,28 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import {
   AttendanceStatus,
   STATUS_CODE,
   STATUS_CONFIG,
-  STATUS_ORDER,
   formatLong,
   getRecentMarkableDates,
 } from './markAttendanceData';
 import {
   attendanceErrorMessage,
   getStudentsForAttendance,
+  markHoliday,
   submitAttendance,
   type AttendanceClass,
   type AttendanceStudent,
 } from '../../api/attendanceApi';
 import { theme, onThemeChange } from '../../utils/theme';
 import constant from '../../utils/constant';
+import VectorIcon from '../../components/VectorIcon';
 import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { ConfirmDialog, SuccessDialog } from '../../components/ConfirmDialog';
-import { useRefresh } from '../../hooks/useRefresh';
+import { useFocusLoad, useRefresh } from '../../hooks/useRefresh';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { ErrorBox } from '../homework/homeworkUi';
 
@@ -43,8 +43,14 @@ interface MarkStudent {
   status: AttendanceStatus;
 }
 
-// Teachers may only mark the last 3 working days — Sundays (auto-holidays) are skipped.
-const RECENT_DATES = getRecentMarkableDates(3);
+// Teachers may mark the last 7 working days — Sundays (auto-holidays) are
+// skipped. Kept in sync with MARKABLE_DAYS in the API's AttendanceController.
+const MARKABLE_DAYS = 7;
+
+const STATUS_ORDER: AttendanceStatus[] = ['present', 'absent', 'holiday'];
+// "Mark all" sets the list only; a holiday for everyone is its own button,
+// saved straight away.
+const MARK_ALL: AttendanceStatus[] = ['present', 'absent'];
 
 // Resolve a (possibly relative) photo path into a full URL.
 const FILE_ORIGIN = constant.API_BASE_URL.replace(/\/api\/v\d+\/?$/, '');
@@ -147,10 +153,9 @@ const ListSkeleton = () => (
 );
 
 const MarkAttendanceScreen = () => {
-  const navigation = useNavigation<any>();
-  const [selectedDate, setSelectedDate] = useState<string>(
-    RECENT_DATES[RECENT_DATES.length - 1].iso,
-  );
+  const [dates, setDates] = useState(() => getRecentMarkableDates(MARKABLE_DAYS));
+  const [selectedDate, setSelectedDate] = useState<string>(() => dates[dates.length - 1].iso);
+  const stripRef = useRef<ScrollView>(null);
 
   const [classes, setClasses] = useState<AttendanceClass[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
@@ -159,12 +164,12 @@ const MarkAttendanceScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [markingHoliday, setMarkingHoliday] = useState(false);
 
   // Dialogs
   const [holidayConfirm, setHolidayConfirm] = useState(false);
   const [submitConfirm, setSubmitConfirm] = useState(false);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [success, setSuccess] = useState<{ title: string; message: string } | null>(null);
 
   const counts = countByStatus(students);
 
@@ -182,6 +187,9 @@ const MarkAttendanceScreen = () => {
       ),
     [selectedClass],
   );
+  const savedAsHoliday =
+    !!selectedClass?.students.length &&
+    selectedClass.students.every(st => st.attendance?.status === 'holiday');
 
   // ── Load the teacher's classes + students for the chosen date ──
   const loadClasses = useCallback(async (date: string, quiet = false) => {
@@ -209,15 +217,28 @@ const MarkAttendanceScreen = () => {
     loadClasses(selectedDate);
   }, [selectedDate, loadClasses]);
 
+  // Coming back to the screen shows what is saved now, so a day marked earlier
+  // opens ready to update. The first focus is the mount, already loading above.
+  const focusedOnce = useRef(false);
+  useFocusLoad(() => {
+    if (!focusedOnce.current) {
+      focusedOnce.current = true;
+      return;
+    }
+    const next = getRecentMarkableDates(MARKABLE_DAYS);
+    setDates(next);
+    if (!next.some(d => d.iso === selectedDate)) {
+      setSelectedDate(next[next.length - 1].iso); // the effect above reloads
+      return;
+    }
+    loadClasses(selectedDate, true);
+  });
+
   // The chosen class's students, freshly copied to mark whenever the class or
   // the day's data changes.
   useEffect(() => {
     setStudents((selectedClass?.students ?? []).map(toMarkStudent));
   }, [selectedClass]);
-
-  useEffect(() => () => {
-    if (leaveTimer.current) clearTimeout(leaveTimer.current);
-  }, []);
 
   const { refreshing, onRefresh } = useRefresh(() => loadClasses(selectedDate, true));
 
@@ -228,15 +249,7 @@ const MarkAttendanceScreen = () => {
   const markAll = (status: AttendanceStatus) =>
     setStudents(prev => prev.map(st => ({ ...st, status })));
 
-  // Dismiss the success popup and return to the dashboard.
-  const goToDashboard = () => {
-    if (leaveTimer.current) clearTimeout(leaveTimer.current);
-    leaveTimer.current = null;
-    setSuccessMsg(null);
-    loadClasses(selectedDate, true);
-    navigation.navigate('MainTabs');
-  };
-
+  // After saving, stay here: the reload shows what was saved, ready to update.
   const doSubmit = async () => {
     setSubmitConfirm(false);
     if (!students.length) return;
@@ -248,15 +261,39 @@ const MarkAttendanceScreen = () => {
         remarks: null,
       }));
       await submitAttendance(selectedDate, attendances);
-      setSuccessMsg(
-        `${classLabel} · ${formatLong(selectedDate)}\nPresent ${counts.present} · Absent ${counts.absent} · Holiday ${counts.holiday}`,
-      );
-      // Briefly show the success popup, then head back to the dashboard.
-      leaveTimer.current = setTimeout(goToDashboard, 1500);
+      setSuccess({
+        title: alreadyMarked ? 'Attendance Updated' : 'Attendance Submitted',
+        message: `${classLabel} · ${formatLong(selectedDate)}\nPresent ${counts.present} · Absent ${counts.absent} · Holiday ${counts.holiday}`,
+      });
+      loadClasses(selectedDate, true);
     } catch (e: any) {
       Alert.alert('Submit failed', attendanceErrorMessage(e));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const doMarkHoliday = async () => {
+    if (!selectedClass) return;
+    setMarkingHoliday(true);
+    try {
+      const res = await markHoliday(
+        selectedDate,
+        selectedClass.class_info.standard_id,
+        selectedClass.class_info.section_id,
+      );
+      setHolidayConfirm(false);
+      const n = res?.marked_students ?? students.length;
+      setSuccess({
+        title: 'Marked as Holiday',
+        message: `${classLabel} · ${formatLong(selectedDate)}\n${n} ${n === 1 ? 'student' : 'students'} set to Holiday`,
+      });
+      loadClasses(selectedDate, true);
+    } catch (e: any) {
+      setHolidayConfirm(false);
+      Alert.alert('Could not mark holiday', attendanceErrorMessage(e));
+    } finally {
+      setMarkingHoliday(false);
     }
   };
 
@@ -303,7 +340,7 @@ const MarkAttendanceScreen = () => {
         <Text style={s.className}>{classLabel}</Text>
         <Text style={s.classMeta}>
           {formatLong(selectedDate)} · {students.length} {students.length === 1 ? 'student' : 'students'}
-          {alreadyMarked ? ' · already marked' : ''}
+          {savedAsHoliday ? ' · marked as holiday' : alreadyMarked ? ' · already marked' : ''}
         </Text>
 
         <View style={s.counts}>
@@ -320,13 +357,8 @@ const MarkAttendanceScreen = () => {
         {students.length > 0 && (
           <View style={s.markAll}>
             <Text style={s.markAllLabel}>Mark all</Text>
-            {STATUS_ORDER.map(st => (
-              <TouchableOpacity
-                key={st}
-                hitSlop={8}
-                activeOpacity={0.6}
-                onPress={() => (st === 'holiday' ? setHolidayConfirm(true) : markAll(st))}
-              >
+            {MARK_ALL.map(st => (
+              <TouchableOpacity key={st} hitSlop={8} activeOpacity={0.6} onPress={() => markAll(st)}>
                 <Text style={s.markAllLink}>{STATUS_CONFIG[st].full}</Text>
               </TouchableOpacity>
             ))}
@@ -374,16 +406,25 @@ const MarkAttendanceScreen = () => {
     );
   };
 
-  const canSubmit = !loading && !error && !!selectedClass && students.length > 0;
+  const canAct = !loading && !error && !!selectedClass && students.length > 0;
+  const busy = submitting || markingHoliday;
 
   return (
     <View style={s.root}>
       <DocHeader title="Mark Attendance" />
 
-      {/* The markable days: chosen one filled, today outlined */}
+      {/* The markable days, oldest to today: chosen one filled, today outlined.
+          The strip opens scrolled to its end, where today is. */}
       <View style={s.top}>
-        <View style={s.days}>
-          {RECENT_DATES.map(d => {
+        <ScrollView
+          ref={stripRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={s.stripBar}
+          contentContainerStyle={s.strip}
+          onContentSizeChange={() => stripRef.current?.scrollToEnd({ animated: false })}
+        >
+          {dates.map(d => {
             const active = d.iso === selectedDate;
             const today = !active && d.isToday;
             return (
@@ -402,24 +443,42 @@ const MarkAttendanceScreen = () => {
               </TouchableOpacity>
             );
           })}
-        </View>
-        <Text style={s.note}>You can mark the last 3 working days. Sundays are holidays.</Text>
+        </ScrollView>
+        <Text style={s.note}>
+          You can mark and update the last {MARKABLE_DAYS} working days. Sundays are holidays.
+        </Text>
       </View>
 
       <View style={s.fill}>{renderBody()}</View>
 
-      {canSubmit && (
+      {canAct && (
         <View style={s.bar}>
           <TouchableOpacity
-            style={[s.submitBtn, submitting && s.submitBtnBusy]}
+            style={[s.holidayBtn, busy && s.btnBusy]}
+            activeOpacity={0.7}
+            disabled={busy}
+            onPress={() => setHolidayConfirm(true)}
+          >
+            <VectorIcon
+              iconSet="Ionicons"
+              iconName="sunny-outline"
+              size={16}
+              color={STATUS_CONFIG.holiday.color}
+            />
+            <Text style={s.holidayText} numberOfLines={1}>
+              Mark as holiday
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.submitBtn, busy && s.btnBusy]}
             activeOpacity={0.85}
-            disabled={submitting}
+            disabled={busy}
             onPress={() => setSubmitConfirm(true)}
           >
             {submitting ? (
               <ActivityIndicator size="small" color={theme.colors.white} />
             ) : (
-              <Text style={s.submitText}>
+              <Text style={s.submitText} numberOfLines={1}>
                 {alreadyMarked ? 'Update attendance' : 'Submit attendance'}
               </Text>
             )}
@@ -427,20 +486,18 @@ const MarkAttendanceScreen = () => {
         </View>
       )}
 
-      {/* Mark-all-holiday confirmation */}
+      {/* Whole class holiday — saved straight away */}
       <ConfirmDialog
         visible={holidayConfirm}
-        title="Mark all as Holiday?"
-        message={`Every student in ${classLabel || 'this class'} will be set to Holiday for ${formatLong(selectedDate)}.`}
+        title="Mark as Holiday?"
+        message={`Every student in ${classLabel || 'this class'} will be marked Holiday for ${formatLong(selectedDate)}. You can still change it afterwards.`}
         confirmText="Mark Holiday"
         confirmColor={STATUS_CONFIG.holiday.color}
         iconName="sunny-outline"
         iconColor={STATUS_CONFIG.holiday.color}
         iconBg={STATUS_CONFIG.holiday.bg}
-        onConfirm={() => {
-          markAll('holiday');
-          setHolidayConfirm(false);
-        }}
+        loading={markingHoliday}
+        onConfirm={doMarkHoliday}
         onCancel={() => setHolidayConfirm(false)}
       />
 
@@ -457,13 +514,13 @@ const MarkAttendanceScreen = () => {
         onCancel={() => setSubmitConfirm(false)}
       />
 
-      {/* Success popup */}
+      {/* Saved */}
       <SuccessDialog
-        visible={!!successMsg}
-        title={alreadyMarked ? 'Attendance Updated' : 'Attendance Submitted'}
-        message={successMsg ?? ''}
+        visible={!!success}
+        title={success?.title ?? ''}
+        message={success?.message ?? ''}
         buttonText="Done"
-        onClose={goToDashboard}
+        onClose={() => setSuccess(null)}
       />
     </View>
   );
@@ -477,16 +534,9 @@ const __mk_s = () => StyleSheet.create({
   fillGrow: { flexGrow: 1 },
 
   // Days
-  top: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  days: { flexDirection: 'row', gap: 8 },
+  top: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  stripBar: { flexGrow: 0 },
+  strip: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, gap: 8 },
   day: {
     width: 48,
     alignItems: 'center',
@@ -502,7 +552,7 @@ const __mk_s = () => StyleSheet.create({
   dayDate: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginTop: 2 },
   dayTextActive: { color: theme.colors.white },
   dayTextToday: { color: theme.colors.primary },
-  note: { flex: 1, fontSize: 12, lineHeight: 17, color: theme.colors.textMuted },
+  note: { paddingHorizontal: 20, paddingBottom: 12, fontSize: 12, lineHeight: 17, color: theme.colors.textMuted },
 
   list: { paddingHorizontal: 20, paddingBottom: 24 },
 
@@ -559,23 +609,40 @@ const __mk_s = () => StyleSheet.create({
 
   empty: { textAlign: 'center', fontSize: 14, color: theme.colors.textMuted, paddingVertical: 30 },
 
-  // Submit
+  // Bottom bar: holiday for everyone, and submit
   bar: {
+    flexDirection: 'row',
+    gap: 10,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: theme.colors.border,
     backgroundColor: theme.colors.card,
   },
-  submitBtn: {
+  holidayBtn: {
+    flex: 1,
     height: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  holidayText: { fontSize: 14, fontWeight: '600', color: STATUS_CONFIG.holiday.color },
+  submitBtn: {
+    flex: 1.3,
+    height: 48,
+    paddingHorizontal: 8,
     borderRadius: theme.radius.md,
     backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  submitBtnBusy: { opacity: 0.7 },
-  submitText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
+  btnBusy: { opacity: 0.7 },
+  submitText: { fontSize: 14, fontWeight: '600', color: theme.colors.white },
 
   // Loading
   skHead: { gap: 8, paddingTop: 16, paddingBottom: 12 },
