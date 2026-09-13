@@ -523,9 +523,8 @@ const __mk_docStyles = () => StyleSheet.create({
 
   // A page that opens on a centred head (School Info): the logo, the name, short
   // lines under it, then a full-width rule.
-  // The lines under the name keep only a little side padding, so they run
-  // nearly the full width; the name keeps the page's usual 20.
-  hero: { alignItems: 'center', paddingTop: 28, paddingBottom: 24, paddingHorizontal: 8 },
+  // 25 on each side, so the address and contact lines sit clear of the edges.
+  hero: { alignItems: 'center', paddingTop: 28, paddingBottom: 24, paddingHorizontal: 25 },
   heroLogo: { width: 96, height: 96 },
   heroName: {
     fontSize: 20,
@@ -533,7 +532,6 @@ const __mk_docStyles = () => StyleSheet.create({
     color: theme.colors.textPrimary,
     textAlign: 'center',
     marginTop: 14,
-    paddingHorizontal: 12,
   },
   heroLine: { fontSize: 13, lineHeight: 19, color: theme.colors.textMuted, textAlign: 'center', marginTop: 6 },
   heroLink: { color: theme.colors.primary, fontWeight: '500' },
