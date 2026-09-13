@@ -44,6 +44,13 @@ export interface PaymentRow {
   payment_date: string | null;
   class?: string;
   remark?: string | null;
+  // Transport payments also carry these, for the detailed list and its receipt.
+  serial?: number;
+  date?: string | null;
+  day?: string | null;
+  submitted_by?: string;
+  type?: string;
+  mode?: string;
 }
 
 export interface AcademicFeeItem {

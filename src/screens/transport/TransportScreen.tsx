@@ -1,9 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   Linking,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,17 +10,14 @@ import {
 } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
-import { AppAlert } from '../../components/AppDialog';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import constant from '../../utils/constant';
-import { downloadPdf } from '../../api/pdfDownload';
 import { DocHeader, DocLoading, DocNoData } from '../more/docUi';
+import { TransportPayments } from '../fees/TransportPayments';
 import {
   getMyTransport,
-  transportReceiptUrl,
   type FeeStatus,
-  type TransportPayment,
   type TransportRoute,
 } from '../../api/transportApi';
 
@@ -100,14 +95,6 @@ const TimeCol = ({ label, time, place }: { label: string; time: string | null; p
   </View>
 );
 
-// One detail of a payment — a small label over its value, half the width.
-const PayField = ({ label, value }: { label: string; value?: string | null }) => (
-  <View style={s.payField}>
-    <Text style={s.payFieldLabel}>{label}</Text>
-    <Text style={s.payFieldValue}>{value || '—'}</Text>
-  </View>
-);
-
 // A block of rows under a plain heading, separated from the last by a line.
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <>
@@ -126,8 +113,6 @@ const TransportScreen = ({ navigation }: any) => {
   const [notUsing, setNotUsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<TransportRoute | null>(null);
-  // The payment whose receipt is downloading — its button shows a spinner.
-  const [downloading, setDownloading] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -233,22 +218,6 @@ const TransportScreen = ({ navigation }: any) => {
   const dueSoFar = Math.max(0, billedSoFar - Number(fees?.total_paid || 0));
   const payments = fees?.payments ?? [];
 
-  // Saves the receipt PDF to the phone's Downloads (the share sheet on iOS).
-  const downloadReceipt = async (p: TransportPayment) => {
-    if (downloading) return;
-    setDownloading(p.id);
-    const fileName = `Transport-Receipt-${p.receipt_number.replace(/[\\/:*?"<>|\s]+/g, '-')}.pdf`;
-    try {
-      await downloadPdf(transportReceiptUrl(p.id), fileName);
-      if (Platform.OS === 'android') AppAlert.alert('Downloaded', `${fileName} is saved in Downloads.`);
-    } catch (e: any) {
-      console.log('[transportReceipt] ❌', e?.message);
-      AppAlert.alert('Could not download', 'Please check your connection and try again.');
-    } finally {
-      setDownloading(null);
-    }
-  };
-
   return (
     <View style={s.root}>
       <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
@@ -338,40 +307,9 @@ const TransportScreen = ({ navigation }: any) => {
         )}
 
         {/* Every payment made, each with its receipt to download */}
-        {payments.length > 0 && (
+        {!!fees && (
           <Section title="Payments">
-            {payments.map((p, i) => (
-              <View key={p.id} style={[s.payment, i < payments.length - 1 && s.rowDivider]}>
-                <View style={s.paymentHead}>
-                  <View style={s.serial}>
-                    <Text style={s.serialText}>{p.serial}</Text>
-                  </View>
-                  <Text style={s.paymentAmount}>{formatINR(p.amount)}</Text>
-                  <TouchableOpacity
-                    style={s.receiptBtn}
-                    onPress={() => downloadReceipt(p)}
-                    disabled={downloading !== null}
-                    activeOpacity={0.7}
-                  >
-                    {downloading === p.id ? (
-                      <ActivityIndicator size="small" color={theme.colors.primary} />
-                    ) : (
-                      <VectorIcon iconSet="Ionicons" iconName="download-outline" size={16} color={theme.colors.primary} />
-                    )}
-                    <Text style={s.receiptBtnText}>Receipt</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={s.payGrid}>
-                  <PayField label="Date" value={p.date} />
-                  <PayField label="Day" value={p.day} />
-                  <PayField label="Submitted By" value={p.submitted_by} />
-                  <PayField label="Type" value={p.type} />
-                  <PayField label="Mode" value={p.mode} />
-                  <PayField label="Receipt No" value={p.receipt_number} />
-                </View>
-              </View>
-            ))}
+            <TransportPayments payments={payments} />
           </Section>
         )}
       </ScrollView>
@@ -445,40 +383,6 @@ const __mk_s = () => StyleSheet.create({
   feeStatus: { width: 72, textAlign: 'right', fontSize: 13, color: theme.colors.textMuted },
   feeStatusDue: { color: theme.colors.danger, fontWeight: '500' },
   feeStatusPartial: { color: theme.colors.textPrimary, fontWeight: '500' },
-
-  // Payments
-  payment: { paddingVertical: 14 },
-  paymentHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  serial: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.background,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.border,
-  },
-  serialText: { fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary },
-  paymentAmount: { flex: 1, fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary },
-  receiptBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    minWidth: 96,
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.primaryLight,
-    backgroundColor: theme.colors.primaryLight,
-  },
-  receiptBtnText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
-  payGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 10, paddingLeft: 34, rowGap: 10 },
-  payField: { width: '50%', paddingRight: 8 },
-  payFieldLabel: { fontSize: 11, color: theme.colors.textMuted },
-  payFieldValue: { fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary, marginTop: 2 },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

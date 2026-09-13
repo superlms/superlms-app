@@ -14,6 +14,7 @@ import {
   getFeeDashboard,
   getFeePenalties,
 } from '../../api/feeApi';
+import type { TransportPayment } from '../../api/transportApi';
 import {
   AmountRows,
   FeeHead,
@@ -26,6 +27,7 @@ import {
   ReceiptRow,
   inr,
 } from './feesUi';
+import { TransportPayments } from './TransportPayments';
 
 const TITLE = 'Fees';
 
@@ -166,6 +168,18 @@ const Academic = ({ a, onPay }: { a: AcademicFees; onPay: (i?: Installment) => v
 const Transport = ({ tr, onPay }: { tr: TransportFees; onPay: () => void }) => {
   const t = tr.totals;
   const pct = t.annual_fee > 0 ? Math.round((t.paid / t.annual_fee) * 100) : 100;
+  // The payments arrive newest first; the serial counts from the first one.
+  const payments: TransportPayment[] = tr.paid.map((p, i) => ({
+    id: p.id,
+    serial: p.serial ?? tr.paid.length - i,
+    amount: p.amount,
+    date: p.date ?? p.payment_date,
+    day: p.day ?? null,
+    submitted_by: p.submitted_by ?? '—',
+    type: p.type ?? '—',
+    mode: p.mode ?? p.payment_mode,
+    receipt_number: p.receipt_number,
+  }));
 
   return (
     <>
@@ -192,11 +206,7 @@ const Transport = ({ tr, onPay }: { tr: TransportFees; onPay: () => void }) => {
       </DashSection>
 
       <DashSection title="Payments">
-        {tr.paid.length === 0 ? (
-          <Note>No transport payments yet.</Note>
-        ) : (
-          tr.paid.map((p, i) => <ReceiptRow key={p.id} p={p} isLast={i === tr.paid.length - 1} />)
-        )}
+        <TransportPayments payments={payments} />
       </DashSection>
     </>
   );
