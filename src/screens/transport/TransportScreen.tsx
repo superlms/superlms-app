@@ -19,6 +19,7 @@ import {
   CardDetailRow,
   CardDetails,
   CardDetailsSkeleton,
+  CardDivider,
   CardFooter,
   CardFooterSkeleton,
   CardHead,
@@ -74,19 +75,19 @@ const initialsOf = (name?: string | null) =>
     .join('')
     .toUpperCase();
 
-// Pickup or drop — its time (a dash when not set) and, if known, the place.
-const TimeCol = ({ label, time, place }: { label: string; time: string | null; place?: string | null }) => (
-  <View style={s.timeCol}>
-    <Text style={s.timeLabel}>{label}</Text>
-    <Text style={s.timeValue}>{time || '—'}</Text>
-    {!!place && <Text style={s.timePlace} numberOfLines={2}>{place}</Text>}
-  </View>
-);
-
-// A card (or cards) under a plain heading, separated from the last by a line.
-const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+// A card (or cards) under a plain heading, separated from the block before by
+// a line — the first one sits straight under the header.
+const Section = ({
+  title,
+  first,
+  children,
+}: {
+  title: string;
+  first?: boolean;
+  children: React.ReactNode;
+}) => (
   <>
-    <View style={s.divider} />
+    {!first && <View style={s.divider} />}
     <View style={s.section}>
       <Text style={s.sectionTitle}>{title}</Text>
       {children}
@@ -96,14 +97,14 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 
 // ── Loading ──────────────────────────────────────────────────────────────────
 // What the page held when it last loaded — the skeleton draws the same cards
-// (the driver's details and call button, the months so far, the payments), so
-// nothing jumps when the page arrives. Before anything has loaded it assumes a
-// driver with four details and a phone, the fees up to this month and one
-// payment.
+// (the route's lines and the driver under them, the months so far, the
+// payments), so nothing jumps when the page arrives. Before anything has
+// loaded it assumes no pickup or drop points, a driver with four details and a
+// phone, the fees up to this month and one payment.
 type PageShape = {
+  points: number;
   driverLines: number | null;
   driverPhone: boolean;
-  places: boolean;
   fees: boolean;
   feeRows: number;
   payments: number;
@@ -117,9 +118,9 @@ const shapeOf = (d: TransportRoute): PageShape => {
   const driver = d.driver;
   const vehicle = driver?.vehicle_no || d.vehicle_no || d.vehicle_type || driver?.vehicle_type;
   return {
+    points: [d.pickup_location, d.drop_location].filter(Boolean).length,
     driverLines: driver ? [driver.phone, driver.email, driver.license_no, vehicle].filter(Boolean).length : null,
     driverPhone: !!driver?.phone,
-    places: !!(d.pickup_location || d.drop_location),
     fees: !!d.fees,
     feeRows: d.fees ? Math.min(monthsSoFar(), d.fees.schedule?.length ?? 0) : 0,
     payments: d.fees?.payments?.length ?? 0,
@@ -130,48 +131,36 @@ const shapeOf = (d: TransportRoute): PageShape => {
 const DRIVER_WIDTHS = [96, 150, 104, 124];
 const DRIVER_LABELS = [44, 40, 76, 52];
 
-const TimeColSkeleton = ({ place }: { place: boolean }) => (
-  <View style={s.timeCol}>
-    <Skeleton width={42} height={11} style={s.skLine} />
-    <Skeleton width={80} height={16} style={s.skTime} />
-    {place && <Skeleton width={92} height={11} style={s.skTime} />}
-  </View>
-);
-
 const TransportSkeleton = ({ onBack }: { onBack: () => void }) => {
   const shape = lastShape ?? {
+    points: 0,
     driverLines: 4,
     driverPhone: true,
-    places: false,
     fees: true,
     feeRows: monthsSoFar(),
     payments: 1,
   };
   const rows = shape.feeRows;
 
+  // The route's lines: monthly fee, pickup and drop times, the points that are
+  // set, then paid and remaining.
+  const routeWidths = [62, 70, 70, ...Array(shape.points).fill(120), ...(shape.fees ? [62, 62] : [])];
+  const routeLabels = [84, 78, 68, ...Array(shape.points).fill(80), ...(shape.fees ? [60, 98] : [])];
+
   return (
     <View style={s.root}>
       <DocHeader title={TITLE} onBackPress={onBack} />
       <ScrollView scrollEnabled={false} contentContainerStyle={s.scroll}>
-        {/* Bus, route, pickup and drop */}
-        <View style={s.head}>
-          <Skeleton width={88} height={88} radius={44} />
-          <Skeleton width="42%" height={22} style={s.skTitle} />
-          <View style={s.times}>
-            <TimeColSkeleton place={shape.places} />
-            <View style={s.timesSep} />
-            <TimeColSkeleton place={shape.places} />
-          </View>
-        </View>
-
-        {/* Driver */}
-        {shape.driverLines !== null && (
-          <>
-            <View style={s.divider} />
-            <View style={s.section}>
-              <Skeleton width={46} height={12} style={s.skSectionTitle} />
-              <TransportCard>
-                <CardHeadSkeleton titleWidth="46%" subWidth={40} />
+        {/* Route, then the driver in the same card */}
+        <View style={s.section}>
+          <Skeleton width={44} height={12} style={s.skSectionTitle} />
+          <TransportCard>
+            <CardHeadSkeleton lead={false} titleWidth="40%" subWidth={null} />
+            <CardDetailsSkeleton widths={routeWidths} labels={routeLabels} />
+            {shape.driverLines !== null && (
+              <>
+                <CardDivider />
+                <CardHeadSkeleton titleWidth="36%" subWidth={40} />
                 {shape.driverLines > 0 && (
                   <CardDetailsSkeleton
                     widths={DRIVER_WIDTHS.slice(0, shape.driverLines)}
@@ -179,10 +168,10 @@ const TransportSkeleton = ({ onBack }: { onBack: () => void }) => {
                   />
                 )}
                 {shape.driverPhone && <CardFooterSkeleton width={96} />}
-              </TransportCard>
-            </View>
-          </>
-        )}
+              </>
+            )}
+          </TransportCard>
+        </View>
 
         {/* Transport Fees, up to this month */}
         {rows > 0 && (
@@ -334,6 +323,7 @@ const TransportScreen = ({ navigation }: any) => {
     .reduce((sum, row) => sum + Number(row.amount || 0), 0);
   const dueSoFar = Math.max(0, billedSoFar - Number(fees?.total_paid || 0));
   const payments = fees?.payments ?? [];
+  const monthlyFee = fees?.monthly_fee || data.monthly_fee;
 
   const callDriver = driver?.phone ? () => Linking.openURL(`tel:${driver.phone}`) : undefined;
   const mailDriver = driver?.email ? () => Linking.openURL(`mailto:${driver.email}`) : undefined;
@@ -347,49 +337,63 @@ const TransportScreen = ({ navigation }: any) => {
         contentContainerStyle={s.scroll}
         refreshControl={refreshControl}
       >
-        {/* A big bus, the route, and its pickup and drop times — centred */}
-        <View style={s.head}>
-          <View style={s.busIcon}>
-            <VectorIcon iconSet="Ionicons" iconName="bus" size={44} color={theme.colors.primary} />
-          </View>
-          <Text style={s.title}>{data.route_name}</Text>
-          <View style={s.times}>
-            <TimeCol label="Pickup" time={clock(data.pickup_time)} place={data.pickup_location} />
-            <View style={s.timesSep} />
-            <TimeCol label="Drop" time={clock(data.drop_time)} place={data.drop_location} />
-          </View>
-        </View>
-
-        {/* Who drives it, and the vehicle — a card like a payment's, with a
-            call button across its foot */}
-        {!!driver && (
-          <Section title="Driver">
-            <TransportCard>
-              <CardHead
-                lead={
-                  driverPhoto ? (
-                    <Image source={{ uri: driverPhoto }} style={s.driverAvatar} />
-                  ) : (
-                    <View style={[s.driverAvatar, s.driverAvatarFallback]}>
-                      <Text style={s.driverInitials}>{initialsOf(driver.name)}</Text>
-                    </View>
-                  )
-                }
-                title={driver.name || '—'}
-                sub="Driver"
-              />
-              {!!(driver.phone || driver.email || driver.license_no || vehicle) && (
-                <CardDetails>
-                  {!!driver.phone && <CardDetailRow label="Phone" value={driver.phone} onPress={callDriver} />}
-                  {!!driver.email && <CardDetailRow label="Email" value={driver.email} onPress={mailDriver} />}
-                  {!!driver.license_no && <CardDetailRow label="Licence No." value={driver.license_no} />}
-                  {!!vehicle && <CardDetailRow label="Vehicle" value={vehicle} />}
-                </CardDetails>
+        {/* The route — its name, monthly fee, pickup and drop, what is paid and
+            what remains — then, in the same card, who drives it, with a call
+            button across the foot */}
+        <Section title="Route" first>
+          <TransportCard>
+            <CardHead title={data.route_name} />
+            <CardDetails>
+              <CardDetailRow label="Monthly Fee" value={monthlyFee ? formatINR(monthlyFee) : null} />
+              <CardDetailRow label="Pickup Time" value={clock(data.pickup_time)} />
+              <CardDetailRow label="Drop Time" value={clock(data.drop_time)} />
+              {!!data.pickup_location && <CardDetailRow label="Pickup Point" value={data.pickup_location} />}
+              {!!data.drop_location && <CardDetailRow label="Drop Point" value={data.drop_location} />}
+              {!!fees && (
+                <>
+                  <CardDetailRow
+                    label="Fee Paid"
+                    value={formatINR(fees.total_paid)}
+                    tone={fees.total_paid > 0 ? 'paid' : undefined}
+                  />
+                  <CardDetailRow
+                    label="Fee Remaining"
+                    value={formatINR(dueSoFar)}
+                    tone={dueSoFar > 0 ? 'due' : 'paid'}
+                  />
+                </>
               )}
-              {!!callDriver && <CardFooter icon="call-outline" label="Call Driver" onPress={callDriver} />}
-            </TransportCard>
-          </Section>
-        )}
+            </CardDetails>
+
+            {!!driver && (
+              <>
+                <CardDivider />
+                <CardHead
+                  lead={
+                    driverPhoto ? (
+                      <Image source={{ uri: driverPhoto }} style={s.driverAvatar} />
+                    ) : (
+                      <View style={[s.driverAvatar, s.driverAvatarFallback]}>
+                        <Text style={s.driverInitials}>{initialsOf(driver.name)}</Text>
+                      </View>
+                    )
+                  }
+                  title={driver.name || '—'}
+                  sub="Driver"
+                />
+                {!!(driver.phone || driver.email || driver.license_no || vehicle) && (
+                  <CardDetails>
+                    {!!driver.phone && <CardDetailRow label="Phone" value={driver.phone} onPress={callDriver} />}
+                    {!!driver.email && <CardDetailRow label="Email" value={driver.email} onPress={mailDriver} />}
+                    {!!driver.license_no && <CardDetailRow label="Licence No." value={driver.license_no} />}
+                    {!!vehicle && <CardDetailRow label="Vehicle" value={vehicle} />}
+                  </CardDetails>
+                )}
+                {!!callDriver && <CardFooter icon="call-outline" label="Call Driver" onPress={callDriver} />}
+              </>
+            )}
+          </TransportCard>
+        </Section>
 
         {/* What has been paid, and each month up to this one — a card like a
             payment's */}
@@ -449,31 +453,6 @@ const __mk_s = () => StyleSheet.create({
   scroll: { paddingBottom: 40 },
   stateScroll: { flexGrow: 1 },
 
-  // Head
-  head: { alignItems: 'center', paddingHorizontal: 20, paddingTop: 28, paddingBottom: 22 },
-  busIcon: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.colors.primaryLight,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: theme.colors.textPrimary,
-    lineHeight: 27,
-    textAlign: 'center',
-    marginTop: 14,
-  },
-  times: { flexDirection: 'row', alignSelf: 'stretch', marginTop: 16 },
-  timesSep: { width: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border },
-  timeCol: { flex: 1, alignItems: 'center', paddingHorizontal: 8 },
-  timeLabel: { fontSize: 12, color: theme.colors.textMuted },
-  timeValue: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginTop: 3 },
-  timePlace: { fontSize: 12, color: theme.colors.textSecondary, textAlign: 'center', marginTop: 2 },
-
   // Full-width lines between the blocks
   divider: { height: 1, backgroundColor: theme.colors.divider },
 
@@ -493,9 +472,6 @@ const __mk_s = () => StyleSheet.create({
   feeStatusPartial: { color: theme.colors.textPrimary },
 
   // Skeleton — boxes the height of the text they stand in for
-  skLine: { marginVertical: 2.5 },
-  skTitle: { marginTop: 17, marginBottom: 2 },
-  skTime: { marginTop: 5 },
   skSectionTitle: { marginTop: 2, marginBottom: 13 },
   skEmpty: { marginVertical: 14 },
 

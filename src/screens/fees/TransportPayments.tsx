@@ -49,7 +49,7 @@ export const CardHead = ({
   sub,
   chip,
 }: {
-  lead: React.ReactNode;
+  lead?: React.ReactNode;
   title: string;
   sub?: string | null;
   chip?: { label: string; tone: 'paid' | 'due' } | null;
@@ -78,24 +78,38 @@ export const CardDetails = ({ children }: { children: React.ReactNode }) => (
   <View style={s.details}>{children}</View>
 );
 
+/** A hairline across the card, between two of its blocks. */
+export const CardDivider = () => <View style={s.cardDivider} />;
+
 /**
  * A detail: the label on the left, its value on the right — in the accent
- * colour when it can be tapped — and anything `aside` in a column after it.
+ * colour when it can be tapped, green or red for money paid or still owed —
+ * and anything `aside` in a column after it.
  */
 export const CardDetailRow = ({
   label,
   value,
   onPress,
+  tone,
   aside,
 }: {
   label: string;
   value?: string | null;
   onPress?: () => void;
+  tone?: 'paid' | 'due';
   aside?: React.ReactNode;
 }) => (
   <TouchableOpacity style={s.detailRow} activeOpacity={onPress ? 0.6 : 1} disabled={!onPress} onPress={onPress}>
     <Text style={s.detailLabel}>{label}</Text>
-    <Text style={[s.detailValue, !!onPress && s.detailLink]} numberOfLines={1}>
+    <Text
+      style={[
+        s.detailValue,
+        !!onPress && s.detailLink,
+        tone === 'paid' && s.detailPaid,
+        tone === 'due' && s.detailDue,
+      ]}
+      numberOfLines={1}
+    >
       {value || '—'}
     </Text>
     {aside !== undefined && <View style={s.aside}>{aside}</View>}
@@ -130,19 +144,25 @@ export const CardFooter = ({
 
 // ── The card in boxes, for the loading skeleton ──────────────────────────────
 export const CardHeadSkeleton = ({
+  lead = true,
   titleWidth = '42%',
   subWidth = '58%',
   chipWidth,
 }: {
+  /** The round lead; false for a head without one. */
+  lead?: boolean;
   titleWidth?: number | string;
-  subWidth?: number | string;
+  /** The small line's width; null for a head without one. */
+  subWidth?: number | string | null;
   chipWidth?: number;
 }) => (
   <View style={s.top}>
-    <Skeleton width={40} height={40} radius={20} />
+    {lead && <Skeleton width={40} height={40} radius={20} />}
     <View style={s.topBody}>
-      <Skeleton width={titleWidth} height={18} />
-      <Skeleton width={subWidth} height={12} style={s.skSub} />
+      <View style={s.skTitle}>
+        <Skeleton width={titleWidth} height={18} />
+      </View>
+      {subWidth !== null && <Skeleton width={subWidth} height={12} style={s.skSub} />}
     </View>
     {!!chipWidth && <Skeleton width={chipWidth} height={22} radius={11} />}
   </View>
@@ -308,7 +328,10 @@ const __mk_s = () => StyleSheet.create({
     color: theme.colors.textPrimary,
   },
   detailLink: { color: theme.colors.primary },
+  detailPaid: { color: PAID_INK },
+  detailDue: { color: theme.colors.danger },
   aside: { width: 64, alignItems: 'flex-end', marginLeft: 12 },
+  cardDivider: { marginHorizontal: 14, height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border },
 
   // The action, across the foot of the card
   footer: {
@@ -324,7 +347,8 @@ const __mk_s = () => StyleSheet.create({
   footerText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
 
   // Skeleton — boxes the height of the text they stand in for
-  skSub: { marginTop: 5 },
+  skTitle: { height: 24, justifyContent: 'center' },
+  skSub: { marginTop: 3 },
   skLine: { marginVertical: 2.5 },
   skValue: { flex: 1, alignItems: 'flex-end', marginLeft: 16 },
 });
