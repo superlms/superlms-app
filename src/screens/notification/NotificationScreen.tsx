@@ -27,6 +27,13 @@ import { DocNoData } from '../more/docUi';
 
 const TITLE = 'Notifications';
 
+type ReadFilter = 'all' | 'unread' | 'read';
+const READ_FILTERS: { key: ReadFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'unread', label: 'Unread' },
+  { key: 'read', label: 'Read' },
+];
+
 // A step darker than the theme's text colours, so the inbox reads crisply.
 const INK = '#0F172A';   // titles
 const BODY = '#475569';  // previews, tabs, day headings
@@ -134,7 +141,7 @@ const NotificationRow = ({
         </Text>
 
         {!!item.body && (
-          <Text style={s.preview} numberOfLines={2}>
+          <Text style={s.preview} numberOfLines={1}>
             {item.body}
           </Text>
         )}
@@ -151,6 +158,7 @@ const NotificationRow = ({
 const NotificationScreen = ({ navigation }: any) => {
   const { items, unreadCount, markRead, markAllRead, removeMany } = useNotifications();
   const [activeFilter, setActiveFilter] = useState<NotifCategory | 'All'>('All');
+  const [readFilter, setReadFilter] = useState<ReadFilter>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -161,9 +169,21 @@ const NotificationScreen = ({ navigation }: any) => {
     return ['All', ...Array.from(set)] as (NotifCategory | 'All')[];
   }, [items]);
 
-  const filtered = useMemo(
+  const inCategory = useMemo(
     () => (activeFilter === 'All' ? items : items.filter(i => i.category === activeFilter)),
     [items, activeFilter],
+  );
+  // Totals for the All / Unread / Read selector, within the chosen tab.
+  const readCounts = useMemo(() => {
+    const unread = inCategory.filter(i => !i.read).length;
+    return { all: inCategory.length, unread, read: inCategory.length - unread };
+  }, [inCategory]);
+  const filtered = useMemo(
+    () =>
+      readFilter === 'all'
+        ? inCategory
+        : inCategory.filter(i => (readFilter === 'unread' ? !i.read : i.read)),
+    [inCategory, readFilter],
   );
   const sections = useMemo(() => byDay(filtered), [filtered]);
 
@@ -190,6 +210,11 @@ const NotificationScreen = ({ navigation }: any) => {
 
   const chooseFilter = (f: NotifCategory | 'All') => {
     setActiveFilter(f);
+    clearSelection();
+  };
+
+  const chooseReadFilter = (f: ReadFilter) => {
+    setReadFilter(f);
     clearSelection();
   };
 
@@ -236,24 +261,44 @@ const NotificationScreen = ({ navigation }: any) => {
       >
         {/* What is waiting, and what can be done with the lot */}
         <View style={s.metaBar}>
-          <Text style={s.metaBarText}>
-            {selectionMode
-              ? `${selectedIds.length} of ${filtered.length} selected`
-              : unreadCount > 0
-              ? `${unreadCount} unread`
-              : 'All caught up'}
-          </Text>
+          {selectionMode ? (
+            <Text style={s.metaBarText}>
+              {selectedIds.length} of {filtered.length} selected
+            </Text>
+          ) : (
+            // All / Unread / Read, each with its total
+            <View style={s.readFilters}>
+              {READ_FILTERS.map(f => {
+                const active = readFilter === f.key;
+                return (
+                  <TouchableOpacity
+                    key={f.key}
+                    activeOpacity={0.7}
+                    onPress={() => chooseReadFilter(f.key)}
+                    style={[s.readPill, active && s.readPillActive]}
+                  >
+                    <Text style={[s.readPillText, active && s.readPillTextActive]}>
+                      {f.label}{' '}
+                      <Text style={[s.readPillCount, active && s.readPillTextActive]}>
+                        {readCounts[f.key]}
+                      </Text>
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
 
           {selectionMode ? (
             <TouchableOpacity onPress={toggleSelectAll} activeOpacity={0.6} hitSlop={8}>
               <Text style={s.linkText}>{allSelected ? 'Clear all' : 'Select all'}</Text>
             </TouchableOpacity>
+          ) : unreadCount > 0 ? (
+            <TouchableOpacity onPress={markAllRead} activeOpacity={0.6} hitSlop={8}>
+              <Text style={s.linkText}>Mark all read</Text>
+            </TouchableOpacity>
           ) : (
-            unreadCount > 0 && (
-              <TouchableOpacity onPress={markAllRead} activeOpacity={0.6} hitSlop={8}>
-                <Text style={s.linkText}>Mark all read</Text>
-              </TouchableOpacity>
-            )
+            <Text style={s.metaBarText}>All caught up</Text>
           )}
         </View>
 
@@ -291,11 +336,25 @@ const NotificationScreen = ({ navigation }: any) => {
           showsVerticalScrollIndicator={false}
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
-            <DocNoData
-              icon="notifications-off-outline"
-              title="No notifications"
-              subtitle="Anything the school sends you will appear here."
-            />
+            readFilter === 'unread' && readCounts.all > 0 ? (
+              <DocNoData
+                icon="checkmark-done-outline"
+                title="All caught up"
+                subtitle="You have read every notification here."
+              />
+            ) : readFilter === 'read' && readCounts.all > 0 ? (
+              <DocNoData
+                icon="mail-unread-outline"
+                title="Nothing read yet"
+                subtitle="Notifications you open will appear here."
+              />
+            ) : (
+              <DocNoData
+                icon="notifications-off-outline"
+                title="No notifications"
+                subtitle="Anything the school sends you will appear here."
+              />
+            )
           }
           renderSectionHeader={({ section }) => <Text style={s.dayHead}>{section.title}</Text>}
           renderItem={({ item, index, section }) => (
@@ -373,6 +432,20 @@ const __mk_s = () => StyleSheet.create({
   },
   metaBarText: { fontSize: 13, color: QUIET },
   linkText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
+
+  // Read selector: All / Unread / Read, each with its total
+  readFilters: { flexDirection: 'row', gap: 6 },
+  readPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  readPillActive: { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primaryLight },
+  readPillText: { fontSize: 12, fontWeight: '500', color: BODY },
+  readPillCount: { fontWeight: '700', color: INK },
+  readPillTextActive: { color: theme.colors.primary },
 
   // Category tabs
   tabsBar: { flexGrow: 0 },
