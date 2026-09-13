@@ -7,7 +7,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
 } from 'react-native';
 import {
   createDrawerNavigator,
@@ -17,7 +16,6 @@ import { CommonActions } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   activateAccount,
-  getActiveAccount,
   getActiveAccountId,
   removeAccount,
 } from '../utils/accountStore';
@@ -89,7 +87,7 @@ const ITEM = {
   subjects: { name: 'Subjects', label: 'Subjects', icon: 'albums-outline' },
   syllabus: { name: 'Syllabus', label: 'Syllabus', icon: 'document-text-outline' },
   content: { name: 'Content', label: 'Content', icon: 'folder-outline' },
-  quiz: { name: 'Quiz', label: 'Quiz', icon: 'help-circle-outline' },
+  quiz: { name: 'Quiz', label: 'Assignments', icon: 'help-circle-outline' },
   books: { name: 'Book', label: 'Books', icon: 'book-outline' },
   instructor: { name: 'Instructor', label: 'Instructors', icon: 'person-outline' },
   idCard: { name: 'IDCard', label: 'ID Card', icon: 'id-card-outline' },
@@ -191,15 +189,6 @@ const DrawerNavigator = ({ route }: any) => {
         useNativeDriver: true,
       }).start(() => setLogoutVisible(false));
     };
-    const [org, setOrg] = useState<{ name?: string; logo?: string | null } | null>(null);
-    const [logoBroken, setLogoBroken] = useState(false);
-
-    useEffect(() => {
-      getActiveAccount()
-        .then(a => setOrg(a?.organization ?? null))
-        .catch(() => setOrg(null));
-    }, []);
-
     const doLogout = async () => {
       setLogoutVisible(false);
       const parentNav = navigation.getParent?.();
@@ -264,26 +253,8 @@ const DrawerNavigator = ({ route }: any) => {
         <DrawerContentScrollView
           {...props}
           contentContainerStyle={styles.drawerScroll}
+          showsVerticalScrollIndicator={false}
         >
-          {/* The school */}
-          <View style={styles.header}>
-            {org?.logo && !logoBroken ? (
-              <Image
-                source={{ uri: org.logo }}
-                style={styles.logoImage}
-                onError={() => setLogoBroken(true)}
-              />
-            ) : (
-              <View style={styles.schoolRow}>
-                <VectorIcon iconSet="Ionicons" iconName="school-outline" size={22} color={theme.colors.textSecondary} />
-                <Text style={styles.schoolName} numberOfLines={2}>
-                  {org?.name || 'School'}
-                </Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.headerDivider} />
-
           <View style={styles.menu}>
             {menuItems.map((item, i) => {
               const isActive = activeRoute === item.name;
@@ -313,6 +284,8 @@ const DrawerNavigator = ({ route }: any) => {
             })}
           </View>
 
+          {/* The same inset line as between the items, so More is a row like the rest */}
+          <View style={styles.itemDivider} />
           <View style={styles.logoutContainer}>
             <TouchableOpacity
               style={styles.menuItem}
@@ -483,7 +456,7 @@ const DrawerNavigator = ({ route }: any) => {
       <Drawer.Screen
         name="Quiz"
         component={role === 'teacher' ? TeacherQuizScreen : StudentQuizScreen}
-        initialParams={{ title: 'Quiz' }}
+        initialParams={{ title: 'Assignments' }}
       />
       <Drawer.Screen
         name="Book"
@@ -537,24 +510,6 @@ export default DrawerNavigator;
 const __mk_styles = () => StyleSheet.create({
   drawerScroll: { paddingTop: 0, paddingBottom: 16 },
 
-  // The school
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 14,
-  },
-  logoImage: {
-    width: 170,
-    height: 64,
-    resizeMode: 'contain',
-  },
-  schoolRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 },
-  schoolName: { flex: 1, fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary },
-  headerDivider: {
-    height: 1,
-    backgroundColor: theme.colors.border,
-  },
-
   // Menu
   menu: { paddingTop: 8 },
   menuItem: {
@@ -577,9 +532,6 @@ const __mk_styles = () => StyleSheet.create({
 
   // Log out
   logoutContainer: {
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    marginTop: 12,
     paddingTop: 8,
   },
   logoutText: { fontSize: 15, fontWeight: '500', color: theme.colors.danger },

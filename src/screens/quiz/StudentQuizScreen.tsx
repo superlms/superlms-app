@@ -155,7 +155,7 @@ const StudentQuizScreen = ({ navigation }: any) => {
 
   return (
     <View style={s.root}>
-      <Header title="Quiz" onBackPress={() => navigation.goBack()} />
+      <Header title="Assignments" onBackPress={() => navigation.goBack()} />
 
       {loading ? (
         <View style={s.stateBox}>
