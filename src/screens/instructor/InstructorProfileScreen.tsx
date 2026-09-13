@@ -32,8 +32,8 @@ const initials = (name?: string | null) =>
     .join('')
     .toUpperCase();
 
-// Label in the left half, value from the middle of the screen to its right
-// edge; tappable (brand colour) when it has an action such as calling or
+// Label in the left half, value from the middle of the screen to 20 short of
+// its right edge; tappable (brand colour) when it has an action such as calling or
 // emailing. Every row, the last too, has its line under it.
 const InfoRow = ({
   label,
@@ -171,8 +171,8 @@ const InstructorProfileScreen = ({ navigation, route }: any) => {
         <View style={s.body}>
           {/* Contact & details */}
           {details.length > 0 ? (
-            // Runs to the right edge of the screen — no right padding — and its
-            // last line divides the details from Subjects.
+            // The lines run to the right edge of the screen (the values keep
+            // the left's padding) and the last divides the details from Subjects.
             <View style={s.details}>
               {details.map(d => (
                 <InfoRow
@@ -243,7 +243,9 @@ const __mk_s = () => StyleSheet.create({
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 14 },
   infoRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
   infoLabel: { paddingRight: 12, fontSize: 14, color: theme.colors.textSecondary },
-  infoValue: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
+  // The same gap on the right as the page has on the left, so a long email or
+  // address stops short of the edge while the row's line still runs to it
+  infoValue: { flex: 1, paddingRight: BODY_PAD, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
   infoValueLink: { color: theme.colors.primary },
 
   // Subjects / classes
