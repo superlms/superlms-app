@@ -191,6 +191,8 @@ const ViewAnnouncementScreen = ({ navigation, route }: any) => {
         <DocSection title="Description">
           <DocBody>{item.content || 'No description available'}</DocBody>
           <AttachmentChips
+            // A tap saves the file to Downloads, named after the announcement
+            downloadAs={item.title}
             items={[
               { url: imageUrl, kind: 'image' },
               { url: pdfUrl, kind: 'pdf' },

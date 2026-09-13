@@ -1,10 +1,11 @@
 import React from 'react';
-import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
 import { Skeleton } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
 import { AppAlert } from '../../components/AppDialog';
+import { useDocumentDownload } from '../more/docUi';
 
 // The shared look of the inbox-style lists — Notifications, Announcements and
 // calendar events: filter pills, day headings, rows led by a round icon, and
@@ -197,12 +198,25 @@ export const InboxRow = ({
 
 // ── Attachments on a detail page ─────────────────────────────────────────────
 // A chip per file — its kind's icon and label — that opens the file straight
-// away in the phone's viewer or browser.
+// away in the phone's viewer or browser, or, where the page asks for it, saves
+// it to the phone's Downloads instead.
 type AttachmentKind = 'image' | 'pdf';
 
 const kindOf = (url: string): AttachmentKind => (/\.pdf(\?|#|$)/i.test(url) ? 'pdf' : 'image');
 
-export const AttachmentChip = ({ url, kind }: { url: string; kind?: AttachmentKind }) => {
+export const AttachmentChip = ({
+  url,
+  kind,
+  onDownload,
+  busy,
+}: {
+  url: string;
+  kind?: AttachmentKind;
+  // Given, a tap saves the file instead of opening it.
+  onDownload?: () => void;
+  // A download of this file is running.
+  busy?: boolean;
+}) => {
   const k = kind ?? kindOf(url);
   const open = async () => {
     try {
@@ -213,7 +227,7 @@ export const AttachmentChip = ({ url, kind }: { url: string; kind?: AttachmentKi
   };
 
   return (
-    <TouchableOpacity style={s.chip} activeOpacity={0.7} onPress={open}>
+    <TouchableOpacity style={s.chip} activeOpacity={0.7} disabled={busy} onPress={onDownload ?? open}>
       <VectorIcon
         iconSet="Feather"
         iconName={k === 'pdf' ? 'file-text' : 'image'}
@@ -223,24 +237,53 @@ export const AttachmentChip = ({ url, kind }: { url: string; kind?: AttachmentKi
       <Text style={s.chipText} numberOfLines={1}>
         {k === 'pdf' ? 'PDF' : 'Image'}
       </Text>
-      <VectorIcon iconSet="Feather" iconName="external-link" size={12} color={theme.colors.textMuted} />
+      {busy ? (
+        <ActivityIndicator size="small" color={theme.colors.textMuted} style={s.chipSpinner} />
+      ) : (
+        <VectorIcon
+          iconSet="Feather"
+          iconName={onDownload ? 'download' : 'external-link'}
+          size={12}
+          color={theme.colors.textMuted}
+        />
+      )}
     </TouchableOpacity>
   );
 };
 
-/** The chips for whichever files are present; nothing at all when none are. */
+/**
+ * The chips for whichever files are present; nothing at all when none are.
+ * With `downloadAs` — the name to save under, e.g. the announcement's title —
+ * a tap downloads the file instead of opening it.
+ */
 export const AttachmentChips = ({
   items,
+  downloadAs,
 }: {
   items: { url?: string | null; kind?: AttachmentKind }[];
+  downloadAs?: string;
 }) => {
+  const { downloading, download } = useDocumentDownload();
   const present = items.filter(i => !!i.url) as { url: string; kind?: AttachmentKind }[];
   if (present.length === 0) return null;
   return (
     <View style={s.chips}>
-      {present.map(i => (
-        <AttachmentChip key={i.url} url={i.url} kind={i.kind} />
-      ))}
+      {present.map(i => {
+        const k = i.kind ?? kindOf(i.url);
+        return (
+          <AttachmentChip
+            key={i.url}
+            url={i.url}
+            kind={k}
+            busy={downloading === i.url}
+            onDownload={
+              downloadAs !== undefined
+                ? () => download(i.url, downloadAs || (k === 'pdf' ? 'PDF' : 'Image'), i.url, k === 'pdf' ? 'pdf' : 'jpg')
+                : undefined
+            }
+          />
+        );
+      })}
     </View>
   );
 };
@@ -403,6 +446,8 @@ const __mk_s = () => StyleSheet.create({
     backgroundColor: theme.colors.background,
   },
   chipText: { flexShrink: 1, fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
+  // Scaled to the 12px icon it stands in for, so the chip keeps its size.
+  chipSpinner: { width: 12, height: 12, transform: [{ scale: 0.6 }] },
 
   // Skeleton boxes, at the heights of the real lines
   skList: { paddingHorizontal: 20 },
