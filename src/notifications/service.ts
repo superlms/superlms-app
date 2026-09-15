@@ -46,6 +46,10 @@ export function openNotificationTarget(id?: string, shown?: Record<string, any>)
 }
 
 export const CHANNEL_ID = 'superlms-default';
+// The status-bar icon: the Super LMS mark in white (res/drawable-*/ic_notification.png),
+// tinted the app's indigo where the phone colours it.
+export const NOTIFICATION_ICON = 'ic_notification';
+export const NOTIFICATION_COLOR = '#4F46E5';
 export const SOUND_ANDROID = 'notification_tone';       // res/raw/notification_tone.wav
 export const SOUND_IOS = 'notification_tone.wav';        // bundled file
 
@@ -103,7 +107,8 @@ export async function displaySystemNotification(item: NotificationItem): Promise
       data: { id: item.id, ...(item.data ?? {}) },
       android: {
         channelId: CHANNEL_ID,
-        smallIcon: 'ic_launcher', // TODO: swap for a dedicated monochrome status icon
+        smallIcon: NOTIFICATION_ICON,
+        color: NOTIFICATION_COLOR,
         sound: SOUND_ANDROID,
         importance: AndroidImportance.HIGH,
         pressAction: { id: 'default' },

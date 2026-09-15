@@ -12,7 +12,15 @@
 import { Platform } from 'react-native';
 import notifee, { AndroidGroupAlertBehavior, AndroidImportance, AndroidStyle } from '@notifee/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CHANNEL_ID, SOUND_ANDROID, SOUND_IOS, ensureChannel, notificationsEnabled } from './service';
+import {
+  CHANNEL_ID,
+  NOTIFICATION_COLOR,
+  NOTIFICATION_ICON,
+  SOUND_ANDROID,
+  SOUND_IOS,
+  ensureChannel,
+  notificationsEnabled,
+} from './service';
 
 const STORE_KEY = 'chat_notifications';
 const GROUP_ID = 'superlms-chats';
@@ -75,7 +83,8 @@ export async function showChatMessage(input: {
       data: { screen: 'UserChats', params: JSON.stringify(input.params), chatFrom: key },
       android: {
         channelId: CHANNEL_ID,
-        smallIcon: 'ic_launcher',
+        smallIcon: NOTIFICATION_ICON,
+        color: NOTIFICATION_COLOR,
         sound: SOUND_ANDROID,
         importance: AndroidImportance.HIGH,
         pressAction: { id: 'default' },
@@ -141,7 +150,8 @@ async function showSummary(threads: Threads): Promise<void> {
     },
     android: {
       channelId: CHANNEL_ID,
-      smallIcon: 'ic_launcher',
+      smallIcon: NOTIFICATION_ICON,
+      color: NOTIFICATION_COLOR,
       groupId: GROUP_ID,
       groupSummary: true,
       groupAlertBehavior: AndroidGroupAlertBehavior.CHILDREN,
