@@ -28,6 +28,21 @@ interface HeaderProps {
   height?: number;
 }
 
+/** A round icon button as the header draws it — for a rightSlot holding several. */
+export const HeaderIconButton = ({
+  icon,
+  onPress,
+  size = 20,
+}: {
+  icon: string;
+  onPress: () => void;
+  size?: number;
+}) => (
+  <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={styles.backButton}>
+    <VectorIcon iconSet="Ionicons" iconName={icon} size={size} color={theme.colors.primary} />
+  </TouchableOpacity>
+);
+
 const Header = ({
   title,
   onBackPress,
@@ -88,18 +103,7 @@ const Header = ({
               <Text style={styles.rightPillText}>{rightText}</Text>
             </View>
           ) : rightIcon && onRightPress ? (
-            <TouchableOpacity
-              onPress={onRightPress}
-              activeOpacity={0.7}
-              style={styles.backButton}
-            >
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName={rightIcon}
-                size={20}
-                color={theme.colors.primary}
-              />
-            </TouchableOpacity>
+            <HeaderIconButton icon={rightIcon} onPress={onRightPress} />
           ) : null}
         </View>
       </View>

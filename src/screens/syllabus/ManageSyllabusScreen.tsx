@@ -319,29 +319,32 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
             {chapter.topics.length === 0 && <Text style={s.noTopics}>No topics yet.</Text>}
 
             {chapter.topics.map((topic, i) => (
-              <TopicLine
-                key={topic.id}
-                label={`${number}.${i + 1}`}
-                name={topic.name}
-                right={
-                  <View style={s.topicActions}>
-                    <TouchableOpacity
-                      hitSlop={8}
-                      activeOpacity={0.6}
-                      onPress={() => setTopicModal({ mode: 'edit', chapter, topic })}
-                    >
-                      <VectorIcon iconSet="Ionicons" iconName="create-outline" size={17} color={theme.colors.textMuted} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      hitSlop={8}
-                      activeOpacity={0.6}
-                      onPress={() => confirmDeleteTopic(chapter, topic)}
-                    >
-                      <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={17} color={theme.colors.textMuted} />
-                    </TouchableOpacity>
-                  </View>
-                }
-              />
+              <React.Fragment key={topic.id}>
+                {/* A line between one topic and the next */}
+                {i > 0 && <View style={s.topicDivider} />}
+                <TopicLine
+                  label={`${number}.${i + 1}`}
+                  name={topic.name}
+                  right={
+                    <View style={s.topicActions}>
+                      <TouchableOpacity
+                        hitSlop={8}
+                        activeOpacity={0.6}
+                        onPress={() => setTopicModal({ mode: 'edit', chapter, topic })}
+                      >
+                        <VectorIcon iconSet="Ionicons" iconName="create-outline" size={17} color={theme.colors.textMuted} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        hitSlop={8}
+                        activeOpacity={0.6}
+                        onPress={() => confirmDeleteTopic(chapter, topic)}
+                      >
+                        <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={17} color={theme.colors.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+                  }
+                />
+              </React.Fragment>
             ))}
 
             <View style={s.chapterActions}>
@@ -415,6 +418,7 @@ const __mk_s = () => StyleSheet.create({
   // Inside an open chapter
   noTopics: { fontSize: 13, color: theme.colors.textMuted, paddingVertical: 6 },
   topicActions: { flexDirection: 'row', alignItems: 'center', gap: 18 },
+  topicDivider: { height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border },
   chapterActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 22, paddingTop: 10 },
   actionPrimary: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
   action: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },

@@ -44,17 +44,21 @@ export const DocHeader = ({
   onBackPress,
   rightIcon,
   onRightPress,
+  rightSlot,
 }: {
   title: string;
   onBackPress?: () => void;
   rightIcon?: string;
   onRightPress?: () => void;
+  /** Several right-side buttons, in place of rightIcon. */
+  rightSlot?: React.ReactNode;
 }) => (
   <Header
     title={title}
     onBackPress={onBackPress}
     rightIcon={rightIcon}
     onRightPress={onRightPress}
+    rightSlot={rightSlot}
     divider
     height={50}
   />

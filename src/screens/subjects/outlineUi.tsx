@@ -288,6 +288,8 @@ export const OutlineScreen = ({
   headerTitle,
   rightIcon,
   onRightPress,
+  rightSlot,
+  renderExtra,
   fetchChapters,
   ...page
 }: Omit<ChapterOutlineProps, 'outline' | 'refreshing' | 'onRefresh'> & {
@@ -295,6 +297,10 @@ export const OutlineScreen = ({
   headerTitle: string;
   rightIcon?: string;
   onRightPress?: () => void;
+  /** Several header buttons, in place of rightIcon. */
+  rightSlot?: React.ReactNode;
+  /** Drawn after the page with its chapters to hand — e.g. a sheet that adds to them. */
+  renderExtra?: (outline: ChaptersState) => React.ReactNode;
   fetchChapters: () => Promise<SyllabusChapter[]>;
 }) => {
   const outline = useChapters(fetchChapters);
@@ -309,8 +315,10 @@ export const OutlineScreen = ({
         onBackPress={() => navigation.goBack()}
         rightIcon={rightIcon}
         onRightPress={onRightPress}
+        rightSlot={rightSlot}
       />
       <ChapterOutline outline={outline} refreshing={refreshing} onRefresh={onRefresh} {...page} />
+      {renderExtra?.(outline)}
     </View>
   );
 };
