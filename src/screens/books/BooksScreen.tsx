@@ -48,8 +48,9 @@ const BooksScreen = ({ navigation, route }: any) => {
     );
   }, [books]);
 
-  // Tabs only once there is more than one subject to choose from.
-  const showTabs = subjects.length > 1;
+  // A teacher's books can be filtered by subject once there is more than one; a
+  // student's show as one list, as a teacher's do without tabs.
+  const showTabs = role === 'teacher' && subjects.length > 1;
 
   // A refresh can take away the subject being looked at; fall back to All.
   const current =
