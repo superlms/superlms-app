@@ -22,13 +22,27 @@ import { navigateToScreen } from '../navigation/navigationRef';
  * we get the real `screen`/`params` objects regardless of OS serialisation).
  * Safe to call from a cold start — navigation is queued until the app is ready.
  */
-export function openNotificationTarget(id?: string): void {
+export function openNotificationTarget(id?: string, shown?: Record<string, any>): void {
   if (!id) return;
   const item = notificationStore.getById(id);
   const data = item?.data as
     | { screen?: string; params?: Record<string, any> }
     | undefined;
-  if (data?.screen) navigateToScreen(data.screen, data.params);
+  if (data?.screen) {
+    navigateToScreen(data.screen, data.params);
+    return;
+  }
+
+  // Not in the inbox — a chat notification carries its own target.
+  if (typeof shown?.screen === 'string') {
+    let params: Record<string, any> | undefined;
+    try {
+      params = typeof shown.params === 'string' ? JSON.parse(shown.params) : shown.params;
+    } catch {
+      params = undefined;
+    }
+    navigateToScreen(shown.screen, params);
+  }
 }
 
 export const CHANNEL_ID = 'superlms-default';
@@ -131,7 +145,7 @@ export async function initNotifications(): Promise<void> {
     if (!id) return;
     if (type === EventType.PRESS) {
       notificationStore.markRead(id);
-      openNotificationTarget(id);
+      openNotificationTarget(id, detail.notification?.data);
     }
   });
 
@@ -140,7 +154,7 @@ export async function initNotifications(): Promise<void> {
   const initialId = initial?.notification?.id;
   if (initialId) {
     notificationStore.markRead(initialId);
-    openNotificationTarget(initialId);
+    openNotificationTarget(initialId, initial?.notification?.data);
   }
 
   // Push (FCM): bind foreground/refresh listeners, and if the user is already

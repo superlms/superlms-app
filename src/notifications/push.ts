@@ -17,6 +17,8 @@ import messaging, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { notify } from './index';
 import { emitChatPush, isChatOpenWith } from '../screens/chats/chatEvents';
+import { markChatDelivered } from '../api/chatApi';
+import { showChatMessage } from './chatNotifications';
 import { NotifData, NotificationType } from './catalog';
 import {
   registerDeviceToken,
@@ -43,14 +45,24 @@ export async function handleRemoteMessage(
     }
   }
 
-  // A chat message: an open chat screen fetches it at once, and the
-  // conversation already on screen takes it without a banner.
+  // A chat message: this phone has it (the sender's second tick), an open chat
+  // screen fetches it at once, and it joins its conversation's own notification
+  // — none for the conversation already on screen, and never the inbox.
   if (type === 'chat_message') {
+    markChatDelivered().catch(() => {});
     const from = Number(parsedParams?.contact?.user_id);
     if (from) {
       emitChatPush(from);
-      if (isChatOpenWith(from)) return;
+      if (!isChatOpenWith(from)) {
+        await showChatMessage({
+          fromUserId: from,
+          name: title ?? parsedParams?.contact?.name ?? 'New message',
+          text: body ?? '',
+          params: parsedParams ?? {},
+        });
+      }
     }
+    return;
   }
 
   const data: NotifData = { ...rest };

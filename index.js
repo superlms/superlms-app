@@ -30,7 +30,7 @@ notifee.onBackgroundEvent(async ({ type, detail }) => {
     await notificationStore.markRead(id);
     // Deep-link to the screen the notification points at. If the app was killed,
     // the navigator isn't ready yet — navigateToScreen queues until onReady.
-    openNotificationTarget(id);
+    openNotificationTarget(id, detail.notification?.data);
   }
 });
 

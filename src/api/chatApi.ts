@@ -50,6 +50,10 @@ export interface ChatMessage {
   mine: boolean;
   created_at: string;
   status: 'sent' | 'delivered' | 'read';
+  // Pinned in the conversation, for both people.
+  pinned?: boolean;
+  // A copy forwarded from another message.
+  forwarded?: boolean;
   attachment: ChatAttachment | null;
 }
 
@@ -61,6 +65,8 @@ export interface ChatThread {
   has_more: boolean;
   // Every message of mine up to these ids has reached the other person / been read.
   receipts?: { delivered_up_to: number; read_up_to: number };
+  // Every pinned message, the latest pin first.
+  pinned?: ChatMessage[];
 }
 
 /** Everyone this user can chat with, the latest conversation first. */
@@ -104,6 +110,22 @@ export const sendChatMessage = async (
 /** Delete messages for yourself; the other person keeps theirs. */
 export const deleteChatMessages = async (ids: number[]): Promise<void> => {
   await apiClient.post('/chat/messages/delete', { ids });
+};
+
+/** Pin messages for both people — or unpin them, when every one is pinned already. */
+export const pinChatMessages = async (ids: number[]): Promise<{ pinned: boolean; ids: number[] }> => {
+  const { data } = await apiClient.post('/chat/messages/pin', { ids });
+  return unwrap(data);
+};
+
+/** Send copies of messages, files included, to other people. */
+export const forwardChatMessages = async (ids: number[], userIds: number[]): Promise<void> => {
+  await apiClient.post('/chat/messages/forward', { ids, user_ids: userIds });
+};
+
+/** This phone has what was sent to its user — the senders see two ticks. */
+export const markChatDelivered = async (): Promise<void> => {
+  await apiClient.post('/chat/delivered');
 };
 
 /** Delete whole chats for yourself; they come back when a new message arrives. */

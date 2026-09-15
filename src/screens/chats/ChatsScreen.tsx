@@ -14,6 +14,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  ToastAndroid,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -35,17 +36,31 @@ import {
   chatErrorMessage,
   deleteChatMessages,
   getChatThread,
+  pinChatMessages,
   sendChatMessage,
 } from '../../api/chatApi';
+import { clearChatNotifications } from '../../notifications/chatNotifications';
 import { DayLabel, chatColors as CH, dayLabelFor } from './chatUi';
 import { onChatPush, setOpenChat } from './chatEvents';
 import { bubbleTime, fileSize, SAMPLE_MESSAGES } from './chatFormat';
+
+// The clipboard is a native module; it is required lazily so a build without it
+// still runs, and Copy then says to update the app.
+let Clipboard: any = null;
+try {
+  Clipboard = require('@react-native-clipboard/clipboard').default;
+} catch {
+  Clipboard = null;
+}
 
 type DrawerRole = 'student' | 'teacher';
 
 // While a conversation is open it checks for new messages this often; a push
 // brings one in straight away.
 const POLL_MS = 3000;
+
+// Read ticks, as the message's other person has seen it.
+const READ_GREEN = '#16A34A';
 
 // A message on screen: one the school has, or one of mine still on its way.
 interface LocalMessage extends ChatMessage {
@@ -87,6 +102,15 @@ const withReceipts = (list: LocalMessage[], receipts?: ChatThread['receipts']): 
 
 const sameList = (a: LocalMessage[], b: LocalMessage[]) => a.length === b.length && a.every((m, i) => m === b[i]);
 
+const samePins = (a: ChatMessage[], b: ChatMessage[]) =>
+  a.length === b.length && a.every((m, i) => m.id === b[i].id);
+
+// What a message says in one line: its words, or what it carries.
+const previewOf = (m: ChatMessage) => m.body || (m.attachment?.type === 'image' ? 'Photo' : 'File');
+
+const toast = (message: string) =>
+  Platform.OS === 'android' ? ToastAndroid.show(message, ToastAndroid.SHORT) : AppAlert.alert(message);
+
 const initials = (name?: string) =>
   (name ?? 'S')
     .split(' ')
@@ -95,8 +119,8 @@ const initials = (name?: string) =>
     .join('')
     .toUpperCase();
 
-// A clock while mine is on its way, a warning if it did not go; then one tick
-// when sent, two once it has landed, in the accent colour once read.
+// A clock while mine is on its way, a warning if it did not go; then one grey
+// tick when sent, two once it has reached them, and two green once read.
 const Ticks = ({ msg }: { msg: LocalMessage }) =>
   msg.failed ? (
     <VectorIcon iconSet="Ionicons" iconName="alert-circle" size={13} color={theme.colors.danger} />
@@ -106,18 +130,19 @@ const Ticks = ({ msg }: { msg: LocalMessage }) =>
     <VectorIcon
       iconSet="Ionicons"
       iconName={msg.status === 'sent' ? 'checkmark' : 'checkmark-done'}
-      size={13}
-      color={msg.status === 'read' ? CH.accent : CH.muted}
+      size={14}
+      color={msg.status === 'read' ? READ_GREEN : CH.muted}
     />
   );
 
 // ── One message ──────────────────────────────────────────────────────────────
 // Mine sit on a soft indigo wash, theirs on white behind a hairline. A photo
 // shows in the bubble and a document as its name and size; either opens in the
-// phone's viewer. Only the last bubble of a run carries the time. As a
-// skeleton, each bubble is a grey block its own size.
+// phone's viewer. A forwarded copy says so on top, a pinned one carries a pin
+// by its time. As a skeleton, each bubble is a grey block its own size.
 const Bubble = ({
   msg,
+  pinned,
   skeleton,
   selected,
   selectionMode,
@@ -126,6 +151,7 @@ const Bubble = ({
   onRetry,
 }: {
   msg: Row;
+  pinned: boolean;
   skeleton?: boolean;
   selected: boolean;
   selectionMode: boolean;
@@ -173,13 +199,25 @@ const Bubble = ({
             skeleton && s.unseen,
           ]}
         >
+          {msg.forwarded && (
+            <View style={s.forwarded}>
+              <VectorIcon iconSet="Ionicons" iconName="arrow-redo" size={11} color={CH.muted} />
+              <Text style={s.forwardedText}>Forwarded</Text>
+            </View>
+          )}
           {file?.type === 'image' && (
-            <TouchableOpacity activeOpacity={0.85} onPress={tapFile} disabled={skeleton}>
+            <TouchableOpacity activeOpacity={0.85} onPress={tapFile} onLongPress={onLongPress} disabled={skeleton}>
               {file.url && !skeleton ? <Image source={{ uri: file.url }} style={s.photo} /> : <View style={s.photo} />}
             </TouchableOpacity>
           )}
           {file?.type === 'file' && (
-            <TouchableOpacity style={s.file} activeOpacity={0.7} onPress={tapFile} disabled={skeleton}>
+            <TouchableOpacity
+              style={s.file}
+              activeOpacity={0.7}
+              onPress={tapFile}
+              onLongPress={onLongPress}
+              disabled={skeleton}
+            >
               <VectorIcon iconSet="Ionicons" iconName="document-text-outline" size={22} color={CH.accent} />
               <View style={s.fileText}>
                 <Text style={s.fileName} numberOfLines={1}>
@@ -190,8 +228,9 @@ const Bubble = ({
             </TouchableOpacity>
           )}
           {!!msg.body && <Text style={[s.bubbleText, !!file && s.bubbleTextAfter]}>{msg.body}</Text>}
-          {msg.lastOfGroup && (
+          {(msg.lastOfGroup || pinned) && (
             <View style={s.meta}>
+              {pinned && <VectorIcon iconSet="Ionicons" iconName="pin" size={10} color={CH.muted} />}
               <Text style={s.metaTime}>{bubbleTime(msg.created_at)}</Text>
               {isMe && <Ticks msg={msg} />}
             </View>
@@ -204,6 +243,13 @@ const Bubble = ({
     </>
   );
 };
+
+// A header button in selection mode.
+const HeadBtn = ({ icon, color, onPress }: { icon: string; color?: string; onPress: () => void }) => (
+  <TouchableOpacity style={s.headBtn} activeOpacity={0.6} hitSlop={8} onPress={onPress}>
+    <VectorIcon iconSet="Ionicons" iconName={icon} size={20} color={color ?? CH.ink} />
+  </TouchableOpacity>
+);
 
 const ChatsScreen = ({ navigation, route }: any) => {
   // Who this conversation is with — from the chats, an instructor or a push.
@@ -225,6 +271,9 @@ const ChatsScreen = ({ navigation, route }: any) => {
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [last, rememberLast] = useLastLoaded<ChatMessage[]>(userId ? `chat:${userId}` : null);
+  // Pinned messages, the latest pin first, and which one the pin bar shows.
+  const [pins, setPins] = useState<ChatMessage[]>([]);
+  const [pinIndex, setPinIndex] = useState(0);
 
   const [input, setInput] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -239,6 +288,12 @@ const ChatsScreen = ({ navigation, route }: any) => {
   // Android draws behind the keyboard, so the composer is lifted by hand.
   const liftStyle = useKeyboardLiftStyle();
 
+  const takePins = useCallback((thread: ChatThread) => {
+    if (!thread.pinned) return;
+    const next = thread.pinned;
+    setPins(prev => (samePins(prev, next) ? prev : next));
+  }, []);
+
   const loadLatest = useCallback(
     async (showSkeleton = false) => {
       if (!userId) return;
@@ -247,6 +302,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
         const thread = await getChatThread(userId);
         atBottom.current = true;
         setMessages(prev => withReceipts(merge(prev.filter(m => !isSent(m)), thread.messages), thread.receipts));
+        takePins(thread);
         setHasMore(thread.has_more);
         setError(null);
         setLoaded(true);
@@ -258,10 +314,10 @@ const ChatsScreen = ({ navigation, route }: any) => {
         setLoading(false);
       }
     },
-    [userId],
+    [userId, takePins],
   );
 
-  // New messages since the newest on screen, and how far mine have got.
+  // New messages since the newest on screen, how far mine have got, and the pins.
   const checkNew = useCallback(async () => {
     if (!userId || !loadedRef.current || checking.current || AppState.currentState !== 'active') return;
     checking.current = true;
@@ -272,23 +328,26 @@ const ChatsScreen = ({ navigation, route }: any) => {
         const next = withReceipts(merge(prev, thread.messages), thread.receipts);
         return sameList(prev, next) ? prev : next;
       });
+      takePins(thread);
     } catch {
       // The next check tries again.
     } finally {
       checking.current = false;
     }
-  }, [userId]);
+  }, [userId, takePins]);
 
   useEffect(() => {
     loadLatest();
   }, [loadLatest]);
 
-  // While the conversation is on screen: check for new messages, fetch at once
-  // on a push from this person, and keep their pushes from raising a banner.
+  // While the conversation is on screen: its notification is cleared, new
+  // messages are checked for, a push from this person is fetched at once, and
+  // their pushes raise no notification.
   useFocusEffect(
     useCallback(() => {
       if (!userId) return;
       setOpenChat(userId);
+      clearChatNotifications(userId);
       const timer = setInterval(checkNew, POLL_MS);
       const off = onChatPush(from => {
         if (from === userId) checkNew();
@@ -394,14 +453,62 @@ const ChatsScreen = ({ navigation, route }: any) => {
       { text: 'Cancel', style: 'cancel' },
     ]);
 
+  // ── Selected messages: pin, copy, forward, delete ─────────────────────────
   const toggleSelect = (id: number) =>
     setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+
+  const pinnedIds = useMemo(() => new Set(pins.map(m => m.id)), [pins]);
+  const selectedMessages = messages.filter(m => selectedIds.includes(m.id));
+  const allPinned = selectedMessages.length > 0 && selectedMessages.every(m => pinnedIds.has(m.id));
+  const canCopy = selectedMessages.some(m => !!m.body);
+
+  const pinSelected = async () => {
+    const ids = selectedIds;
+    const chosen = selectedMessages;
+    setSelectedIds([]);
+    try {
+      const res = await pinChatMessages(ids);
+      setPins(prev =>
+        res.pinned
+          ? [...chosen.filter(m => !prev.some(p => p.id === m.id)), ...prev]
+          : prev.filter(m => !ids.includes(m.id)),
+      );
+      setPinIndex(0);
+      const what = ids.length > 1 ? 'Messages' : 'Message';
+      toast(res.pinned ? `${what} pinned` : `${what} unpinned`);
+    } catch (e: any) {
+      AppAlert.alert('Could not pin', chatErrorMessage(e));
+    }
+  };
+
+  const copySelected = () => {
+    const text = selectedMessages
+      .map(m => m.body)
+      .filter(Boolean)
+      .join('\n');
+    const count = selectedMessages.length;
+    setSelectedIds([]);
+    if (!text) return;
+    try {
+      Clipboard.setString(text);
+      toast(count > 1 ? 'Messages copied' : 'Message copied');
+    } catch {
+      AppAlert.alert('Update the app', 'Copying messages needs the latest version of the app.');
+    }
+  };
+
+  const forwardSelected = () => {
+    const ids = selectedIds.filter(id => id > 0);
+    setSelectedIds([]);
+    if (ids.length) navigation.navigate('ForwardChat', { ids, userRole });
+  };
 
   const deleteSelected = async () => {
     const ids = selectedIds;
     setConfirmDelete(false);
     setSelectedIds([]);
     setMessages(prev => prev.filter(m => !ids.includes(m.id)));
+    setPins(prev => prev.filter(m => !ids.includes(m.id)));
     try {
       await deleteChatMessages(ids);
     } catch (e: any) {
@@ -443,6 +550,19 @@ const ChatsScreen = ({ navigation, route }: any) => {
     [source],
   );
 
+  // The pin bar shows one pinned message; a tap takes the list to it and the
+  // bar on to the next pin.
+  const pin = pins.length ? pins[pinIndex % pins.length] : null;
+  const showPin = () => {
+    if (!pin) return;
+    const index = rows.findIndex(r => r.id === pin.id);
+    if (index >= 0) {
+      atBottom.current = false;
+      listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.3 });
+    }
+    setPinIndex(i => i + 1);
+  };
+
   if (!contact) {
     return (
       <View style={s.root}>
@@ -471,7 +591,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
     <Animated.View style={[s.root, liftStyle]}>
       <StatusBar barStyle="dark-content" backgroundColor={theme.colors.statusBar} />
 
-      {/* ── Who you are talking to ── */}
+      {/* ── Who you are talking to — or, while picking, what to do with the picked ── */}
       <View style={s.topBar}>
         <TouchableOpacity
           style={s.backBtn}
@@ -488,15 +608,13 @@ const ChatsScreen = ({ navigation, route }: any) => {
 
         {selectionMode ? (
           <>
-            <Text style={s.topName}>{selectedIds.length} selected</Text>
-            <TouchableOpacity
-              style={s.headBtn}
-              activeOpacity={0.6}
-              hitSlop={8}
-              onPress={() => setConfirmDelete(true)}
-            >
-              <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={19} color={theme.colors.danger} />
-            </TouchableOpacity>
+            <Text style={s.topName}>{selectedIds.length}</Text>
+            <View style={s.headActions}>
+              <HeadBtn icon={allPinned ? 'pin' : 'pin-outline'} onPress={pinSelected} />
+              {canCopy && <HeadBtn icon="copy-outline" onPress={copySelected} />}
+              <HeadBtn icon="arrow-redo-outline" onPress={forwardSelected} />
+              <HeadBtn icon="trash-outline" color={theme.colors.danger} onPress={() => setConfirmDelete(true)} />
+            </View>
           </>
         ) : (
           <>
@@ -518,6 +636,21 @@ const ChatsScreen = ({ navigation, route }: any) => {
           </>
         )}
       </View>
+
+      {/* ── The pinned message ── */}
+      {!loading && !!pin && (
+        <TouchableOpacity style={s.pinBar} activeOpacity={0.7} onPress={showPin}>
+          <VectorIcon iconSet="Ionicons" iconName="pin" size={15} color={CH.accent} />
+          <View style={s.pinText}>
+            <Text style={s.pinLabel}>
+              {pins.length > 1 ? `Pinned message ${(pinIndex % pins.length) + 1} of ${pins.length}` : 'Pinned message'}
+            </Text>
+            <Text style={s.pinBody} numberOfLines={1}>
+              {previewOf(pin)}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* ── Messages ── */}
       {error && !loaded && !loading ? (
@@ -545,6 +678,9 @@ const ChatsScreen = ({ navigation, route }: any) => {
           onContentSizeChange={() => {
             if (atBottom.current) listRef.current?.scrollToEnd({ animated: false });
           }}
+          onScrollToIndexFailed={info =>
+            listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true })
+          }
           // The skeleton stands in for the spinner.
           refreshControl={<AppRefreshControl refreshing={false} onRefresh={() => loadLatest(true)} />}
           ListHeaderComponent={
@@ -569,6 +705,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
           renderItem={({ item }) => (
             <Bubble
               msg={item}
+              pinned={pinnedIds.has(item.id)}
               skeleton={loading}
               selected={selectedIds.includes(item.id)}
               selectionMode={selectionMode}
@@ -676,15 +813,31 @@ const __mk_s = () => StyleSheet.create({
     borderWidth: 1,
     borderColor: CH.surfaceLine,
   },
-  headBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  headBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  headActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   topAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: CH.page },
   topAvatarFallback: { alignItems: 'center', justifyContent: 'center' },
   topAvatarInitials: { fontSize: 13, fontWeight: '600', color: CH.sub },
   // The name and the line under it sit together, centred on the photo.
   topInfo: { flex: 1, justifyContent: 'center' },
   topInfoName: { fontSize: 15, lineHeight: 19, fontWeight: '600', color: CH.ink },
-  topName: { flex: 1, fontSize: 15, fontWeight: '600', color: CH.ink },
+  topName: { flex: 1, fontSize: 16, fontWeight: '600', color: CH.ink },
   topSubtitle: { fontSize: 12, lineHeight: 15, color: CH.muted },
+
+  // Pin bar
+  pinBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 8,
+    backgroundColor: CH.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: CH.surfaceLine,
+  },
+  pinText: { flex: 1 },
+  pinLabel: { fontSize: 11.5, fontWeight: '600', color: CH.accent },
+  pinBody: { fontSize: 13, color: CH.sub, marginTop: 1 },
 
   // Messages
   msgList: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 14 },
@@ -715,6 +868,8 @@ const __mk_s = () => StyleSheet.create({
   bubbleTailOther: { borderBottomLeftRadius: 5 },
   bubbleText: { fontSize: 14.5, lineHeight: 21, color: CH.ink },
   bubbleTextAfter: { marginTop: 8 },
+  forwarded: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 },
+  forwardedText: { fontSize: 11.5, fontStyle: 'italic', color: CH.muted },
   meta: {
     flexDirection: 'row',
     alignItems: 'center',
