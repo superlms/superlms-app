@@ -43,6 +43,10 @@ const bandFor = (pct: number): string => {
 // Below three quarters is the point at which a month is worth looking at.
 const LOW = 75;
 
+// A month's bar runs across part of its row, and its name and percentage sit
+// over the bar, so the percentage ends where the bar does.
+const BAR_SPAN = '70%' as const;
+
 const Bar = ({ pct, low }: { pct: number; low: boolean }) => (
   <View style={s.barBg}>
     <View
@@ -328,15 +332,14 @@ const __mk_s = () => StyleSheet.create({
   monthRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
   monthDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   monthBody: { flex: 1, gap: 7 },
-  monthLine: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  monthLine: { width: BAR_SPAN, flexDirection: 'row', alignItems: 'center', gap: 10 },
   monthLabel: { flex: 1, fontSize: 14, color: theme.colors.textPrimary },
   monthPct: { fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary },
   monthPctLow: { color: theme.colors.danger },
   monthMeta: { fontSize: 12, color: theme.colors.textMuted },
 
-  // The bar runs across part of the row, not all of it.
   barBg: {
-    width: '70%',
+    width: BAR_SPAN,
     height: 4,
     borderRadius: 2,
     backgroundColor: theme.colors.border,
