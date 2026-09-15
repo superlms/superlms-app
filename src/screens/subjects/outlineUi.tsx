@@ -28,7 +28,7 @@ export const comboClass = (c: TeacherCombo) =>
 // "Mathematics · 10th A"
 export const comboLabel = (c: TeacherCombo) => {
   const cls = comboClass(c);
-  return cls ? `${quietCaps(c.subjectName)} · ${cls}` : quietCaps(c.subjectName);
+  return cls ? `${c.subjectName} · ${cls}` : c.subjectName;
 };
 
 export const comboChapters = (c: TeacherCombo) =>
@@ -149,7 +149,7 @@ const OutlineSkeleton = ({ rows }: { rows: number }) => {
   return (
     <View style={s.fill}>
       <View style={s.head}>
-        <Skeleton width={52} height={52} radius={10} />
+        <Skeleton width={39} height={39} radius={8} />
         <View style={[s.headText, s.skHeadText]}>
           <Skeleton width="55%" height={22} />
           <Skeleton width="40%" height={13} />
@@ -248,9 +248,10 @@ export const ChapterOutline = ({
     >
       {/* The subject, and how much of it there is */}
       <View style={s.head}>
-        <SubjectIcon image={image} size={52} />
+        <SubjectIcon image={image} size={39} />
         <View style={s.headText}>
-          <Text style={s.title}>{quietCaps(title)}</Text>
+          {/* The subject's name as the school typed it in the admin panel */}
+          <Text style={s.title}>{title}</Text>
           <Text style={s.size}>{size}</Text>
         </View>
       </View>

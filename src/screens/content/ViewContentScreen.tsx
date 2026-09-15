@@ -25,7 +25,7 @@ const TITLE = 'Topic';
 const ViewContentScreen = ({ navigation, route }: any) => {
   const topic: SyllabusTopic | undefined = route.params?.topic;
   const chapterName = quietCaps(route.params?.chapterName);
-  const subjectName = quietCaps(route.params?.subjectName);
+  const subjectName: string = route.params?.subjectName ?? '';
   const topicName = quietCaps(topic?.name ?? route.params?.topicName);
 
   const content = topic?.content?.trim() ?? '';

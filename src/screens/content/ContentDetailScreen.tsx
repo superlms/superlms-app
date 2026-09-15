@@ -2,7 +2,6 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
-import { quietCaps } from '../../utils/quietCaps';
 import {
   getChapters,
   type SyllabusChapter,
@@ -47,7 +46,7 @@ const ContentDetailScreen = ({ navigation, route }: any) => {
             }
           : {
               title: 'No content yet',
-              subtitle: `Study material for ${quietCaps(subjectName)} will appear here once your teacher adds it.`,
+              subtitle: `Study material for ${subjectName} will appear here once your teacher adds it.`,
             }
       }
       renderTopics={(chapter, number) =>

@@ -1,5 +1,4 @@
 import React from 'react';
-import { quietCaps } from '../../utils/quietCaps';
 import { getChapters, type TeacherCombo } from '../../api/contentApi';
 import { OutlineScreen, comboChapters, comboClass } from './outlineUi';
 
@@ -25,7 +24,7 @@ const SubjectDetailsScreen = ({ navigation, route }: any) => {
           ? { title: 'No chapters yet', subtitle: 'Add chapters and topics from Syllabus.' }
           : {
               title: 'No chapters yet',
-              subtitle: `Chapters for ${quietCaps(subjectName)} will appear here once your teacher adds them.`,
+              subtitle: `Chapters for ${subjectName} will appear here once your teacher adds them.`,
             }
       }
     />

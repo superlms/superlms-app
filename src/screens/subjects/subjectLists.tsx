@@ -11,7 +11,6 @@ import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
-import { quietCaps } from '../../utils/quietCaps';
 import { DocHeader, DocNoData } from '../more/docUi';
 import {
   getStudentSubjects,
@@ -216,7 +215,8 @@ export const StudentSubjectList = ({
   const items: Item[] = subjects.map(sub => ({
     key: String(sub.id),
     image: sub.image,
-    title: quietCaps(sub.name),
+    // The name as the school typed it in the admin panel.
+    title: sub.name,
     meta: metaFor(sub),
     onPress: () => onOpen(sub),
   }));
@@ -272,7 +272,7 @@ export const TeacherSubjectList = ({
   const items: Item[] = combos.map(c => ({
     key: c.key,
     image: c.subjectImage,
-    title: quietCaps(c.subjectName),
+    title: c.subjectName,
     meta: comboClass(c) || null,
     onPress: () => onOpen(c),
   }));

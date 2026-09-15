@@ -34,7 +34,7 @@ const TITLE = 'Topic Content';
 const EditTopicContentScreen = ({ navigation, route }: any) => {
   const topic: SyllabusTopic = route.params?.topic;
   const chapterName = quietCaps(route.params?.chapterName);
-  const subjectName = quietCaps(route.params?.subjectName);
+  const subjectName: string = route.params?.subjectName ?? '';
 
   const [content, setContent] = useState(topic?.content ?? '');
   const [link, setLink] = useState(topic?.link ?? '');
