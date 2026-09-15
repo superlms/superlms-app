@@ -35,6 +35,8 @@ export interface ChatContact extends ChatPerson {
   conversation_id: number | null;
   last_message: ChatPreview | null;
   unread: number;
+  // You have blocked them.
+  blocked?: boolean;
 }
 
 export interface ChatAttachment {
@@ -67,6 +69,10 @@ export interface ChatThread {
   receipts?: { delivered_up_to: number; read_up_to: number };
   // Every pinned message, the latest pin first.
   pinned?: ChatMessage[];
+  // You have blocked them.
+  blocked?: boolean;
+  // False when either of you has blocked the other.
+  can_message?: boolean;
 }
 
 /** Everyone this user can chat with, the latest conversation first. */
@@ -126,6 +132,15 @@ export const forwardChatMessages = async (ids: number[], userIds: number[]): Pro
 /** This phone has what was sent to its user — the senders see two ticks. */
 export const markChatDelivered = async (): Promise<void> => {
   await apiClient.post('/chat/delivered');
+};
+
+/** Block people: they can't message you — so none of their notifications — nor you them, until you unblock. */
+export const blockChatUsers = async (userIds: number[]): Promise<void> => {
+  await apiClient.post('/chat/block', { user_ids: userIds });
+};
+
+export const unblockChatUsers = async (userIds: number[]): Promise<void> => {
+  await apiClient.post('/chat/unblock', { user_ids: userIds });
 };
 
 /** Delete whole chats for yourself; they come back when a new message arrives. */

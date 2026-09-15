@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   AppState,
+  BackHandler,
   FlatList,
   Image,
   Keyboard,
@@ -38,6 +39,7 @@ import {
   getChatThread,
   pinChatMessages,
   sendChatMessage,
+  unblockChatUsers,
 } from '../../api/chatApi';
 import { clearChatNotifications } from '../../notifications/chatNotifications';
 import { DayLabel, chatColors as CH, dayLabelFor } from './chatUi';
@@ -179,64 +181,63 @@ const Bubble = ({
           <DayLabel label={msg.day} />
         ))}
 
+      {/* The message's row runs the full width, so a picked message is highlighted
+          right across the conversation, as on WhatsApp. */}
       <TouchableOpacity
-        style={[
-          s.bubbleWrap,
-          isMe ? s.bubbleWrapMe : s.bubbleWrapOther,
-          msg.firstOfGroup && s.bubbleWrapFirst,
-          selected && s.bubbleWrapSelected,
-        ]}
+        style={[s.row, msg.firstOfGroup && s.rowFirst, selected && s.rowSelected]}
         onLongPress={onLongPress}
         onPress={selectionMode ? onPress : msg.failed ? onRetry : undefined}
         activeOpacity={selectionMode || msg.failed ? 0.7 : 1}
         disabled={skeleton}
       >
-        <View
-          style={[
-            s.bubble,
-            isMe ? s.bubbleMe : s.bubbleOther,
-            msg.lastOfGroup && (isMe ? s.bubbleTailMe : s.bubbleTailOther),
-            skeleton && s.unseen,
-          ]}
-        >
-          {msg.forwarded && (
-            <View style={s.forwarded}>
-              <VectorIcon iconSet="Ionicons" iconName="arrow-redo" size={11} color={CH.muted} />
-              <Text style={s.forwardedText}>Forwarded</Text>
-            </View>
-          )}
-          {file?.type === 'image' && (
-            <TouchableOpacity activeOpacity={0.85} onPress={tapFile} onLongPress={onLongPress} disabled={skeleton}>
-              {file.url && !skeleton ? <Image source={{ uri: file.url }} style={s.photo} /> : <View style={s.photo} />}
-            </TouchableOpacity>
-          )}
-          {file?.type === 'file' && (
-            <TouchableOpacity
-              style={s.file}
-              activeOpacity={0.7}
-              onPress={tapFile}
-              onLongPress={onLongPress}
-              disabled={skeleton}
-            >
-              <VectorIcon iconSet="Ionicons" iconName="document-text-outline" size={22} color={CH.accent} />
-              <View style={s.fileText}>
-                <Text style={s.fileName} numberOfLines={1}>
-                  {file.name || 'File'}
-                </Text>
-                {!!file.size && <Text style={s.fileSize}>{fileSize(file.size)}</Text>}
+        <View style={[s.bubbleWrap, isMe ? s.bubbleWrapMe : s.bubbleWrapOther]}>
+          <View
+            style={[
+              s.bubble,
+              isMe ? s.bubbleMe : s.bubbleOther,
+              msg.lastOfGroup && (isMe ? s.bubbleTailMe : s.bubbleTailOther),
+              skeleton && s.unseen,
+            ]}
+          >
+            {msg.forwarded && (
+              <View style={s.forwarded}>
+                <VectorIcon iconSet="Ionicons" iconName="arrow-redo" size={11} color={CH.muted} />
+                <Text style={s.forwardedText}>Forwarded</Text>
               </View>
-            </TouchableOpacity>
-          )}
-          {!!msg.body && <Text style={[s.bubbleText, !!file && s.bubbleTextAfter]}>{msg.body}</Text>}
-          {(msg.lastOfGroup || pinned) && (
-            <View style={s.meta}>
-              {pinned && <VectorIcon iconSet="Ionicons" iconName="pin" size={10} color={CH.muted} />}
-              <Text style={s.metaTime}>{bubbleTime(msg.created_at)}</Text>
-              {isMe && <Ticks msg={msg} />}
-            </View>
-          )}
+            )}
+            {file?.type === 'image' && (
+              <TouchableOpacity activeOpacity={0.85} onPress={tapFile} onLongPress={onLongPress} disabled={skeleton}>
+                {file.url && !skeleton ? <Image source={{ uri: file.url }} style={s.photo} /> : <View style={s.photo} />}
+              </TouchableOpacity>
+            )}
+            {file?.type === 'file' && (
+              <TouchableOpacity
+                style={s.file}
+                activeOpacity={0.7}
+                onPress={tapFile}
+                onLongPress={onLongPress}
+                disabled={skeleton}
+              >
+                <VectorIcon iconSet="Ionicons" iconName="document-text-outline" size={22} color={CH.accent} />
+                <View style={s.fileText}>
+                  <Text style={s.fileName} numberOfLines={1}>
+                    {file.name || 'File'}
+                  </Text>
+                  {!!file.size && <Text style={s.fileSize}>{fileSize(file.size)}</Text>}
+                </View>
+              </TouchableOpacity>
+            )}
+            {!!msg.body && <Text style={[s.bubbleText, !!file && s.bubbleTextAfter]}>{msg.body}</Text>}
+            {(msg.lastOfGroup || pinned) && (
+              <View style={s.meta}>
+                {pinned && <VectorIcon iconSet="AntDesign" iconName="pushpin" size={10} color={CH.muted} />}
+                <Text style={s.metaTime}>{bubbleTime(msg.created_at)}</Text>
+                {isMe && <Ticks msg={msg} />}
+              </View>
+            )}
+          </View>
+          {skeleton && <Skeleton radius={16} style={s.fillBox} />}
         </View>
-        {skeleton && <Skeleton radius={16} style={s.fillBox} />}
       </TouchableOpacity>
 
       {msg.failed && <Text style={s.failedText}>Not sent · Tap to try again</Text>}
@@ -245,9 +246,19 @@ const Bubble = ({
 };
 
 // A header button in selection mode.
-const HeadBtn = ({ icon, color, onPress }: { icon: string; color?: string; onPress: () => void }) => (
+const HeadBtn = ({
+  icon,
+  iconSet = 'Ionicons',
+  color,
+  onPress,
+}: {
+  icon: string;
+  iconSet?: string;
+  color?: string;
+  onPress: () => void;
+}) => (
   <TouchableOpacity style={s.headBtn} activeOpacity={0.6} hitSlop={8} onPress={onPress}>
-    <VectorIcon iconSet="Ionicons" iconName={icon} size={20} color={color ?? CH.ink} />
+    <VectorIcon iconSet={iconSet} iconName={icon} size={20} color={color ?? CH.ink} />
   </TouchableOpacity>
 );
 
@@ -274,6 +285,9 @@ const ChatsScreen = ({ navigation, route }: any) => {
   // Pinned messages, the latest pin first, and which one the pin bar shows.
   const [pins, setPins] = useState<ChatMessage[]>([]);
   const [pinIndex, setPinIndex] = useState(0);
+  // Blocked either way round: no composer, only a line saying why.
+  const [blocked, setBlocked] = useState(false);
+  const [canMessage, setCanMessage] = useState(true);
 
   const [input, setInput] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -288,7 +302,10 @@ const ChatsScreen = ({ navigation, route }: any) => {
   // Android draws behind the keyboard, so the composer is lifted by hand.
   const liftStyle = useKeyboardLiftStyle();
 
+  // What every fetch also says: whether messages can be sent at all, and the pins.
   const takePins = useCallback((thread: ChatThread) => {
+    if (typeof thread.blocked === 'boolean') setBlocked(thread.blocked);
+    if (typeof thread.can_message === 'boolean') setCanMessage(thread.can_message);
     if (!thread.pinned) return;
     const next = thread.pinned;
     setPins(prev => (samePins(prev, next) ? prev : next));
@@ -358,6 +375,18 @@ const ChatsScreen = ({ navigation, route }: any) => {
         off();
       };
     }, [userId, checkNew]),
+  );
+
+  // The phone's back button first lets go of the picked messages.
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (selectedIds.length === 0) return false;
+        setSelectedIds([]);
+        return true;
+      });
+      return () => sub.remove();
+    }, [selectedIds.length]),
   );
 
   // Kept for the conversation's next first load: the latest messages, no file links.
@@ -517,6 +546,19 @@ const ChatsScreen = ({ navigation, route }: any) => {
     }
   };
 
+  const unblock = async () => {
+    if (!userId) return;
+    setBlocked(false);
+    try {
+      await unblockChatUsers([userId]);
+      toast(`${contact?.name ?? 'Chat'} unblocked`);
+    } catch (e: any) {
+      setBlocked(true);
+      AppAlert.alert('Could not unblock', chatErrorMessage(e));
+    }
+    loadLatest();
+  };
+
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
     atBottom.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - 80;
@@ -610,7 +652,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
           <>
             <Text style={s.topName}>{selectedIds.length}</Text>
             <View style={s.headActions}>
-              <HeadBtn icon={allPinned ? 'pin' : 'pin-outline'} onPress={pinSelected} />
+              <HeadBtn iconSet="AntDesign" icon={allPinned ? 'pushpin' : 'pushpino'} onPress={pinSelected} />
               {canCopy && <HeadBtn icon="copy-outline" onPress={copySelected} />}
               <HeadBtn icon="arrow-redo-outline" onPress={forwardSelected} />
               <HeadBtn icon="trash-outline" color={theme.colors.danger} onPress={() => setConfirmDelete(true)} />
@@ -640,7 +682,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
       {/* ── The pinned message ── */}
       {!loading && !!pin && (
         <TouchableOpacity style={s.pinBar} activeOpacity={0.7} onPress={showPin}>
-          <VectorIcon iconSet="Ionicons" iconName="pin" size={15} color={CH.accent} />
+          <VectorIcon iconSet="AntDesign" iconName="pushpin" size={15} color={CH.accent} />
           <View style={s.pinText}>
             <Text style={s.pinLabel}>
               {pins.length > 1 ? `Pinned message ${(pinIndex % pins.length) + 1} of ${pins.length}` : 'Pinned message'}
@@ -717,7 +759,19 @@ const ChatsScreen = ({ navigation, route }: any) => {
         />
       )}
 
-      {/* ── Write ── */}
+      {/* ── Write — or, blocked either way round, why not ── */}
+      {loaded && !canMessage ? (
+        <View style={s.blockedBar}>
+          <Text style={s.blockedText}>
+            {blocked ? `You blocked ${contact.name}.` : `You can't message ${contact.name}.`}
+          </Text>
+          {blocked && (
+            <TouchableOpacity onPress={unblock} hitSlop={10} activeOpacity={0.7}>
+              <Text style={s.linkText}>Unblock</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : (
       <View style={s.inputBar}>
         <View style={s.inputPill}>
           <TextInput
@@ -748,6 +802,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
           />
         </TouchableOpacity>
       </View>
+      )}
 
       {/* Delete confirmation */}
       <Modal
@@ -849,11 +904,13 @@ const __mk_s = () => StyleSheet.create({
   dayWrap: { alignSelf: 'center' },
   dayText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.8, marginTop: 6, marginBottom: 14 },
 
-  bubbleWrap: { maxWidth: '82%', marginTop: 2 },
-  bubbleWrapFirst: { marginTop: 10 },
+  // A message's full-width row: the gap above it, and the highlight while picked.
+  row: { marginHorizontal: -16, paddingHorizontal: 16, paddingTop: 2 },
+  rowFirst: { paddingTop: 10 },
+  rowSelected: { backgroundColor: 'rgba(79, 70, 229, 0.14)' },
+  bubbleWrap: { maxWidth: '82%' },
   bubbleWrapMe: { alignSelf: 'flex-end' },
   bubbleWrapOther: { alignSelf: 'flex-start' },
-  bubbleWrapSelected: { opacity: 0.5 },
   bubble: {
     paddingHorizontal: 13,
     paddingTop: 9,
@@ -935,6 +992,18 @@ const __mk_s = () => StyleSheet.create({
     borderColor: CH.surfaceLine,
   },
   sendBtnActive: { backgroundColor: CH.accent, borderColor: CH.accent },
+
+  // In place of the composer when either of the two has blocked the other
+  blockedBar: {
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: CH.surfaceLine,
+    backgroundColor: CH.surface,
+  },
+  blockedText: { fontSize: 13.5, color: CH.sub, textAlign: 'center' },
 
   // Confirm modal
   modalOverlay: {

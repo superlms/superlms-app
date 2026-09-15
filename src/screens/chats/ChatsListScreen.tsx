@@ -1,13 +1,16 @@
 import React, { useCallback, useRef, useState } from 'react';
 import {
+  BackHandler,
   FlatList,
   Image,
   Modal,
+  Platform,
   StyleProp,
   StyleSheet,
   Text,
   TextInput,
   TextStyle,
+  ToastAndroid,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -23,10 +26,13 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { DocNoData } from '../more/docUi';
 import {
   type ChatContact,
+  blockChatUsers,
   chatErrorMessage,
   deleteChatConversations,
   getChatContacts,
+  unblockChatUsers,
 } from '../../api/chatApi';
+import { clearChatNotifications } from '../../notifications/chatNotifications';
 import { onChatPush } from './chatEvents';
 import { listTimeLabel, previewLine, SAMPLE_CONTACTS } from './chatFormat';
 
@@ -35,6 +41,9 @@ type DrawerRole = 'student' | 'teacher';
 // While the list is on screen it checks for new messages this often; a push
 // brings one in straight away.
 const POLL_MS = 15000;
+
+const toast = (message: string) =>
+  Platform.OS === 'android' ? ToastAndroid.show(message, ToastAndroid.SHORT) : AppAlert.alert(message);
 
 const initials = (name: string) =>
   name
@@ -117,7 +126,7 @@ const ChatRow = ({
             </Words>
           </View>
           {!!item.last_message && (
-            <Words skeleton={skeleton} style={[s.time, unread && s.timeUnread]}>
+            <Words skeleton={skeleton} style={[s.time, unread && !item.blocked && s.timeUnread]}>
               {listTimeLabel(item.last_message.created_at)}
             </Words>
           )}
@@ -125,11 +134,20 @@ const ChatRow = ({
 
         <View style={s.rowLine}>
           <View style={s.fill}>
-            <Words skeleton={skeleton} style={[s.last, unread && s.lastUnread, !item.last_message && s.lastNone]}>
-              {previewLine(item)}
+            {/* A blocked person's row says so in place of their messages */}
+            <Words
+              skeleton={skeleton}
+              style={[
+                s.last,
+                unread && !item.blocked && s.lastUnread,
+                !item.last_message && s.lastNone,
+                item.blocked && s.lastBlocked,
+              ]}
+            >
+              {item.blocked ? 'Blocked' : previewLine(item)}
             </Words>
           </View>
-          {unread &&
+          {unread && !item.blocked &&
             (skeleton ? (
               <Skeleton width={18} height={18} radius={9} />
             ) : (
@@ -160,6 +178,7 @@ const ChatsListScreen = ({ navigation, route }: any) => {
   const [searchText, setSearchText] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmBlock, setConfirmBlock] = useState(false);
 
   const load = useCallback(
     async (showSkeleton = false) => {
@@ -196,7 +215,58 @@ const ChatsListScreen = ({ navigation, route }: any) => {
     }, [load]),
   );
 
+  // The phone's back button first lets go of the picked chats, then closes the
+  // search — and only then leaves Chats.
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (selectedIds.length > 0) {
+          setSelectedIds([]);
+          return true;
+        }
+        if (searchOpen) {
+          setSearchOpen(false);
+          setSearchText('');
+          return true;
+        }
+        return false;
+      });
+      return () => sub.remove();
+    }, [selectedIds.length, searchOpen]),
+  );
+
   const selectionMode = selectedIds.length > 0;
+  const selectedContacts = contacts.filter(c => selectedIds.includes(c.user_id));
+  // With every picked chat blocked already, the button unblocks instead.
+  const allBlocked = selectedContacts.length > 0 && selectedContacts.every(c => c.blocked);
+
+  const unblockSelected = async () => {
+    const ids = selectedIds;
+    setSelectedIds([]);
+    setContacts(prev => prev.map(c => (ids.includes(c.user_id) ? { ...c, blocked: false } : c)));
+    try {
+      await unblockChatUsers(ids);
+      toast(ids.length > 1 ? 'Unblocked' : `${selectedContacts[0]?.name ?? 'Chat'} unblocked`);
+    } catch (e: any) {
+      AppAlert.alert('Could not unblock', chatErrorMessage(e));
+    }
+    load();
+  };
+
+  const blockSelected = async () => {
+    const ids = selectedIds;
+    setConfirmBlock(false);
+    setSelectedIds([]);
+    setContacts(prev => prev.map(c => (ids.includes(c.user_id) ? { ...c, blocked: true } : c)));
+    ids.forEach(id => clearChatNotifications(id));
+    try {
+      await blockChatUsers(ids);
+      toast(ids.length > 1 ? 'Blocked' : `${selectedContacts[0]?.name ?? 'Chat'} blocked`);
+    } catch (e: any) {
+      AppAlert.alert('Could not block', chatErrorMessage(e));
+    }
+    load();
+  };
 
   // Only people there has been a conversation with — + starts a new one. While
   // it loads, the list is drawn as a skeleton from the chats it shows.
@@ -238,6 +308,22 @@ const ChatsListScreen = ({ navigation, route }: any) => {
         onBackPress={() => (selectionMode ? setSelectedIds([]) : navigation.goBack())}
         rightSlot={
           <View style={s.headActions}>
+            {/* Block the picked chats — or unblock them, when every one is blocked */}
+            {selectionMode && (
+              <TouchableOpacity
+                style={s.headBtn}
+                activeOpacity={0.6}
+                hitSlop={8}
+                onPress={() => (allBlocked ? unblockSelected() : setConfirmBlock(true))}
+              >
+                <VectorIcon
+                  iconSet="Ionicons"
+                  iconName={allBlocked ? 'lock-open-outline' : 'ban-outline'}
+                  size={20}
+                  color={theme.colors.textPrimary}
+                />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={s.headBtn}
               activeOpacity={0.6}
@@ -351,6 +437,42 @@ const ChatsListScreen = ({ navigation, route }: any) => {
         />
       )}
 
+      {/* Block confirmation */}
+      <Modal
+        transparent
+        visible={confirmBlock}
+        animationType="fade"
+        onRequestClose={() => setConfirmBlock(false)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>
+              Block {selectedIds.length === 1 ? selectedContacts[0]?.name ?? 'this chat' : `${selectedIds.length} chats`}?
+            </Text>
+            <Text style={s.modalDesc}>
+              They won't be able to message you, and you won't get notifications from them. You can unblock
+              them at any time.
+            </Text>
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                style={[s.modalBtn, s.modalBtnGhost]}
+                activeOpacity={0.7}
+                onPress={() => setConfirmBlock(false)}
+              >
+                <Text style={s.modalBtnGhostText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalBtn, s.modalBtnDanger]}
+                activeOpacity={0.85}
+                onPress={blockSelected}
+              >
+                <Text style={s.modalBtnDangerText}>Block</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Delete confirmation */}
       <Modal
         transparent
@@ -457,6 +579,7 @@ const __mk_s = () => StyleSheet.create({
   last: { fontSize: 13, color: theme.colors.textSecondary },
   lastUnread: { color: theme.colors.textPrimary, fontWeight: '500' },
   lastNone: { color: theme.colors.textMuted },
+  lastBlocked: { color: theme.colors.danger, fontStyle: 'italic' },
   unread: {
     minWidth: 18,
     height: 18,
