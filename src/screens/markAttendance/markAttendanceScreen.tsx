@@ -165,6 +165,8 @@ const MarkAttendanceScreen = ({ navigation, route }: any) => {
   const [selectedDate, setSelectedDate] = useState<string>(today);
   const [dateSheet, setDateSheet] = useState(false);
   const sunday = isSundayIso(selectedDate);
+  // Bumped each time the screen is opened afresh, so its list starts at the top.
+  const [visit, setVisit] = useState(0);
 
   const [classes, setClasses] = useState<AttendanceClass[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
@@ -233,17 +235,37 @@ const MarkAttendanceScreen = ({ navigation, route }: any) => {
     loadClasses(selectedDate, true);
   }, [submitted, selectedDate, loadClasses]);
 
-  // Coming back to a saved review shows what is saved now. Part-way through
-  // marking (back from the review without submitting), the marks are kept.
-  // The first focus is the mount, already loading above.
+  // Opened again from the bottom tabs or the drawer: start over on today, as a
+  // fresh screen — not the day, class or unsaved marks left behind.
+  const startFresh = () => {
+    const now = toIso(new Date());
+    setToday(now);
+    setDateSheet(false);
+    setEditing(false);
+    setSelectedClassId(null); // the load picks the first class again
+    setVisit(v => v + 1);
+    if (now !== selectedDate) {
+      setSelectedDate(now); // the date effect above loads it
+    } else if (!isSundayIso(now)) {
+      loadClasses(now);
+    }
+  };
+
+  // Back from the review, the marks are kept (a save reloads above); coming
+  // back from anywhere else starts afresh. The first focus is the mount,
+  // already loading above.
   const focusedOnce = useRef(false);
+  const inReview = useRef(false);
   useFocusLoad(() => {
     if (!focusedOnce.current) {
       focusedOnce.current = true;
       return;
     }
-    setToday(toIso(new Date()));
-    if (!sunday && reviewing) loadClasses(selectedDate, true);
+    if (inReview.current) {
+      inReview.current = false;
+      return;
+    }
+    startFresh();
   });
 
   // The chosen class's students, freshly copied whenever the class or the
@@ -270,13 +292,15 @@ const MarkAttendanceScreen = ({ navigation, route }: any) => {
     setEditing(false);
   };
 
-  const openReview = () =>
+  const openReview = () => {
+    inReview.current = true;
     navigation.navigate('MarkAttendanceReview', {
       date: selectedDate,
       classLabel,
       students,
       returnKey: route?.key,
     });
+  };
 
   // ── Class pills, when there is more than one class ──
   const renderClassPills = () =>
@@ -467,7 +491,9 @@ const MarkAttendanceScreen = ({ navigation, route }: any) => {
         <VectorIcon iconSet="Ionicons" iconName="chevron-down" size={16} color={theme.colors.textMuted} />
       </TouchableOpacity>
 
-      <View style={s.fill}>{renderBody()}</View>
+      <View key={visit} style={s.fill}>
+        {renderBody()}
+      </View>
 
       <AttendanceDateSheet
         visible={dateSheet}
