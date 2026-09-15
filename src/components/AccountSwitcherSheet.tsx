@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Dimensions,
   Image,
-  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
@@ -15,7 +14,9 @@ import {
 } from 'react-native';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import VectorIcon from './VectorIcon';
+import { useKeyboardHeight } from '../hooks/useKeyboardLift';
 import { theme, onThemeChange } from '../utils/theme';
 import {
   activateAccount,
@@ -94,6 +95,12 @@ const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
 const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+
+  // The sheet rides up with the keyboard as it opens, instead of jumping.
+  const keyboardHeight = useKeyboardHeight();
+  const liftStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: -Math.max(0, keyboardHeight.value - insets.bottom) }],
+  }));
 
   const [mode, setMode] = useState<Mode>('list');
   const [accounts, setAccounts] = useState<StoredAccount[]>([]);
@@ -273,8 +280,9 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
         err?.message ??
         'Could not add the account. Please check your credentials.';
       setAddError(msg);
-      // A wrong email or admission number gets no reset offer — only a wrong password.
-      setWrongPassword(err?.response?.status === 401 && /password is incorrect/i.test(String(msg)));
+      // A wrong email or admission number gets no reset offer — only a wrong
+      // password ("The provided password is incorrect."), whatever the status.
+      setWrongPassword(/password/i.test(String(msg)) && /incorrect|invalid|wrong/i.test(String(msg)));
     } finally {
       setAdding(false);
     }
@@ -296,8 +304,9 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    // Drawn under the status and navigation bars, like every other popup, so
-    // opening it dims them with the page instead of changing their colour.
+    // Drawn under the status and navigation bars, so Android does not recolour
+    // them for the popup's own window; a strip in the status bar's colour keeps
+    // it exactly as it is on every screen.
     <Modal
       visible={visible}
       transparent
@@ -309,7 +318,8 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
       <View style={s.backdrop}>
         {/* Tap outside to close */}
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <KeyboardAvoidingView behavior="padding">
+        <View style={[s.statusStrip, { height: insets.top }]} />
+        <Animated.View style={liftStyle}>
           <View style={[s.sheet, { paddingBottom: insets.bottom + 16 }]}>
             <View style={s.handle} />
 
@@ -370,7 +380,7 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
               />
             )}
           </View>
-        </KeyboardAvoidingView>
+        </Animated.View>
       </View>
 
       {/* Remove confirmation, the same plain dialog as everywhere else */}
@@ -382,6 +392,7 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
         onRequestClose={() => setRemoveTarget(null)}
       >
         <View style={s.confirmOverlay}>
+          <View style={[s.statusStrip, { height: insets.top }]} />
           <View style={s.confirmCard}>
             <Text style={s.confirmTitle}>Remove account?</Text>
             <Text style={s.confirmDesc}>
@@ -578,6 +589,14 @@ const __mk_s = () => StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
+  },
+  // The status bar's own colour over the dimmed backdrop.
+  statusStrip: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: theme.colors.statusBar,
   },
   sheet: {
     backgroundColor: theme.colors.card,

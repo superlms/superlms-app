@@ -2,9 +2,12 @@ import { useEffect } from 'react';
 import { Keyboard, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  Easing,
   useAnimatedKeyboard,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
+  withTiming,
   type AnimatedStyle,
 } from 'react-native-reanimated';
 
@@ -55,6 +58,41 @@ export function useKeyboardLiftStyle(): AnimatedStyle {
     const height = Math.max(keyboard.height.value, jsHeight.value);
     return { paddingBottom: Math.max(0, height - insets.bottom) };
   });
+}
+
+/**
+ * The keyboard's height as it opens and closes, for something that rides above
+ * it — a bottom sheet in a Modal, say.
+ *
+ * Reanimated follows the keyboard frame by frame where the window reports it.
+ * An Android Modal is a window of its own, where that tracking can stay at zero
+ * and only React Native's events arrive, once the keyboard is already open or
+ * shut; their height is eased in and out rather than set, so nothing jumps
+ * into place.
+ */
+export function useKeyboardHeight() {
+  const keyboard = useAnimatedKeyboard();
+  const jsHeight = useSharedValue(0);
+
+  useEffect(() => {
+    // iOS announces the keyboard before it animates, Android only after.
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const ease = (to: number, duration?: number) =>
+      withTiming(to, { duration: duration || 250, easing: Easing.out(Easing.cubic) });
+
+    const subs = [
+      Keyboard.addListener(showEvent, e => {
+        jsHeight.value = ease(e?.endCoordinates?.height ?? 0, e?.duration);
+      }),
+      Keyboard.addListener(hideEvent, e => {
+        jsHeight.value = ease(0, e?.duration);
+      }),
+    ];
+    return () => subs.forEach(sub => sub.remove());
+  }, [jsHeight]);
+
+  return useDerivedValue(() => Math.max(keyboard.height.value, jsHeight.value));
 }
 
 export default useKeyboardLiftStyle;
