@@ -119,12 +119,10 @@ export const DayHead = ({ day, line }: { day: string; line?: string | null }) =>
 );
 
 // ── The tick a student marks homework complete with ─────────────────────────
-// Still to do: an empty ring with a faint check in it, like a box to tick.
-// Done: a solid green circle with a white check — Present's green on Mark
-// Attendance, deep enough for the white to show.
-const TICK = 24;
+// A box to tick: empty and grey while still to do, filled green once done —
+// Present's green on Mark Attendance.
+const TICK = 21;
 const TICK_GREEN = '#16A34A';
-const TICK_RING = '#CBD5E1';
 
 export const CompleteTick = ({ done, onPress }: { done: boolean; onPress?: () => void }) => (
   <TouchableOpacity
@@ -135,13 +133,12 @@ export const CompleteTick = ({ done, onPress }: { done: boolean; onPress?: () =>
     accessibilityRole="checkbox"
     accessibilityState={{ checked: done }}
     accessibilityLabel={done ? 'Completed' : 'Mark as complete'}
-    style={[s.tick, done ? s.tickDone : s.tickTodo]}
   >
     <VectorIcon
       iconSet="Ionicons"
-      iconName="checkmark-sharp"
-      size={15}
-      color={done ? theme.colors.white : TICK_RING}
+      iconName={done ? 'checkbox' : 'square-outline'}
+      size={TICK}
+      color={done ? TICK_GREEN : theme.colors.textMuted}
     />
   </TouchableOpacity>
 );
@@ -250,7 +247,7 @@ export const HomeworkSkeleton = ({
               <Skeleton width={17} height={17} radius={5} />
             </View>
           ) : (
-            <Skeleton width={TICK} height={TICK} radius={TICK / 2} />
+            <Skeleton width={17} height={17} radius={4} />
           )}
         </View>
         <View style={s.skSmall}>
@@ -324,11 +321,6 @@ const __mk_s = () => StyleSheet.create({
   titleDone: { color: theme.colors.textSecondary },
   desc: { fontSize: 13, lineHeight: 19, color: theme.colors.textSecondary, marginTop: 3 },
   descDone: { color: theme.colors.textMuted },
-
-  // Tick
-  tick: { width: TICK, height: TICK, borderRadius: TICK / 2, alignItems: 'center', justifyContent: 'center' },
-  tickTodo: { borderWidth: 1.5, borderColor: TICK_RING },
-  tickDone: { backgroundColor: TICK_GREEN },
 
   // Skeleton boxes, at the heights of the real lines
   skDayTitle: { height: 20, justifyContent: 'center' },
