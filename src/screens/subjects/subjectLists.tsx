@@ -48,7 +48,7 @@ export const SubjectRow = ({
   onPress: () => void;
 }) => (
     <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onPress}>
-      <SubjectIcon image={image} />
+      <SubjectIcon image={image} size={30} />
 
       <View style={s.body}>
         <Text style={s.name} numberOfLines={1}>
@@ -61,7 +61,7 @@ export const SubjectRow = ({
         )}
       </View>
 
-      <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={16} color={theme.colors.textMuted} />
+      <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />
     </TouchableOpacity>
 );
 
@@ -72,6 +72,30 @@ interface Item {
   meta?: string | null;
   onPress: () => void;
 }
+
+// ── Loading ──────────────────────────────────────────────────────────────────
+// The list line for line: the count, then each subject's icon tile, name, size
+// and arrow — a row per subject there was, or five before the first load.
+const ListSkeleton = ({ rows }: { rows: number }) => {
+  const n = rows > 0 ? Math.min(rows, 10) : 5;
+  return (
+    <View style={s.list}>
+      <View style={s.skeletonCount}>
+        <Skeleton width={70} height={12} />
+      </View>
+      {Array.from({ length: n }, (_, i) => (
+        <View key={i} style={[s.row, i < n - 1 && s.rowDivider]}>
+          <Skeleton width={30} height={30} radius={6} />
+          <View style={s.skeletonBody}>
+            <Skeleton width="45%" height={14} />
+            <Skeleton width="35%" height={12} />
+          </View>
+          <Skeleton width={8} height={13} />
+        </View>
+      ))}
+    </View>
+  );
+};
 
 const ListBody = ({
   loading,
@@ -90,21 +114,10 @@ const ListBody = ({
   items: Item[];
   empty: { title: string; subtitle: string };
 }) => {
-  // Coming back to the list refetches quietly, without blanking it.
-  if (loading && !refreshing && items.length === 0) {
-    return (
-      <View style={s.list}>
-        {[0, 1, 2, 3, 4].map(i => (
-          <View key={i} style={[s.row, i < 4 && s.rowDivider]}>
-            <Skeleton width={40} height={40} radius={theme.radius.sm} />
-            <View style={s.skeletonBody}>
-              <Skeleton width="45%" height={14} />
-              <Skeleton width="35%" height={12} />
-            </View>
-          </View>
-        ))}
-      </View>
-    );
+  // The first load and a pull to refresh show the skeleton; coming back to the
+  // list refetches quietly, without blanking it.
+  if (refreshing || (loading && items.length === 0)) {
+    return <ListSkeleton rows={items.length} />;
   }
 
   if (error && items.length === 0) {
@@ -297,6 +310,7 @@ const __mk_s = () => StyleSheet.create({
 
   // Loading
   skeletonBody: { flex: 1, gap: 8 },
+  skeletonCount: { paddingTop: 13, paddingBottom: 3 },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

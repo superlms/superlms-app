@@ -140,6 +140,40 @@ export const ChapterRow = ({
   );
 };
 
+// ── Loading ──────────────────────────────────────────────────────────────────
+// The page line for line: the subject's icon, name and size, then each
+// chapter's number, name, topic count and arrow — a row per chapter there was,
+// or four before the first load.
+const OutlineSkeleton = ({ rows }: { rows: number }) => {
+  const n = rows > 0 ? Math.min(rows, 10) : 4;
+  return (
+    <View style={s.fill}>
+      <View style={s.head}>
+        <Skeleton width={52} height={52} radius={10} />
+        <View style={[s.headText, s.skHeadText]}>
+          <Skeleton width="55%" height={22} />
+          <Skeleton width="40%" height={13} />
+        </View>
+      </View>
+      <View style={s.divider} />
+      <View style={s.list}>
+        {Array.from({ length: n }, (_, i) => (
+          <View key={i} style={[s.chapter, i < n - 1 && s.rowDivider]}>
+            <View style={s.skNo}>
+              <Skeleton width={12} height={15} />
+            </View>
+            <View style={s.skeletonBody}>
+              <Skeleton width="60%" height={15} />
+              <Skeleton width="22%" height={12} />
+            </View>
+            <Skeleton width={14} height={14} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
 // ── The page ─────────────────────────────────────────────────────────────────
 export interface ChapterOutlineProps {
   outline: ChaptersState;
@@ -177,8 +211,8 @@ export const ChapterOutline = ({
 }: ChapterOutlineProps) => {
   const { chapters, error, load, openIds, toggle } = outline;
 
-  if (chapters === null) {
-    return error ? (
+  if (chapters === null && error) {
+    return (
       <View style={s.centeredBox}>
         <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
         <Text style={s.errorText}>{error}</Text>
@@ -186,23 +220,13 @@ export const ChapterOutline = ({
           <Text style={s.linkText}>Try again</Text>
         </TouchableOpacity>
       </View>
-    ) : (
-      <View style={s.loading}>
-        <Skeleton width="45%" height={22} />
-        <Skeleton width="30%" height={12} />
-        <View style={s.loadingRows}>
-          {[0, 1, 2, 3].map(i => (
-            <View key={i} style={s.skeletonRow}>
-              <Skeleton width={14} height={14} />
-              <View style={s.skeletonBody}>
-                <Skeleton width="60%" height={14} />
-                <Skeleton width="25%" height={12} />
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
     );
+  }
+
+  // The first load and a pull to refresh show the skeleton; coming back to the
+  // page refetches quietly, without blanking it.
+  if (chapters === null || refreshing) {
+    return <OutlineSkeleton rows={chapters?.length ?? 0} />;
   }
 
   const topicCount = chapters.reduce((sum, c) => sum + c.topics.length, 0);
@@ -331,10 +355,9 @@ const __mk_s = () => StyleSheet.create({
   topicMuted: { color: theme.colors.textSecondary },
 
   // Loading
-  loading: { padding: 20, gap: 10 },
-  loadingRows: { marginTop: 22, gap: 22 },
-  skeletonRow: { flexDirection: 'row', alignItems: 'flex-start', gap: GAP },
   skeletonBody: { flex: 1, gap: 8 },
+  skNo: { width: NO_COL },
+  skHeadText: { gap: 8 },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

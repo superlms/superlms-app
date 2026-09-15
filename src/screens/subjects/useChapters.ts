@@ -23,21 +23,14 @@ export function useChapters(fetchChapters: () => Promise<SyllabusChapter[]>): Ch
 
   const [chapters, setChapters] = useState<SyllabusChapter[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Every chapter starts closed; the reader opens the ones they want.
   const [openIds, setOpenIds] = useState<number[]>([]);
-  // The first chapter with topics opens on arrival — once, so a refetch on
-  // coming back does not undo what the reader has opened and closed since.
-  const openedOnArrival = useRef(false);
 
   const load = useCallback(async () => {
     setError(null);
     try {
       const list = await fetchRef.current();
       setChapters(list);
-      if (!openedOnArrival.current) {
-        openedOnArrival.current = true;
-        const first = list.find(c => c.topics.length > 0);
-        if (first) setOpenIds([first.id]);
-      }
     } catch (e: any) {
       console.log('[getChapters] Error:', e?.response?.status, e?.message);
       // A failed refresh keeps whatever was already on screen.

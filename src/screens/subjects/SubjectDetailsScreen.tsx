@@ -15,7 +15,7 @@ const SubjectDetailsScreen = ({ navigation, route }: any) => {
   return (
     <OutlineScreen
       navigation={navigation}
-      headerTitle="Subject"
+      headerTitle="View Syllabus"
       title={subjectName}
       subtitle={combo ? comboClass(combo) : null}
       image={combo ? combo.subjectImage : route?.params?.subjectImage}
