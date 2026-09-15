@@ -1,13 +1,16 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   ScrollView,
   StyleProp,
   StyleSheet,
+  Text,
+  TextStyle,
   View,
   ViewStyle,
 } from 'react-native';
 import { theme, onThemeChange } from '../utils/theme';
+import VectorIcon from './VectorIcon';
 
 // ─── Base shimmering block ─────────────────────────────────────────────────────
 export const Skeleton = ({
@@ -41,6 +44,91 @@ export const Skeleton = ({
         style,
       ]}
     />
+  );
+};
+
+// ─── Text and icons as skeletons ───────────────────────────────────────────────
+// A skeleton drawn from what the page will say. The text is laid out in its own
+// style but unseen, so it takes exactly the room it will; a bar stands over each
+// line it wraps to, as long as that line and a little shorter than the type.
+// Margins on the text are allowed for; flex or alignSelf belong on a wrapper.
+// With numberOfLines, only the lines the text shows get bars. Screen readers
+// skip it.
+interface LineBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const sameLines = (a: LineBox[], b: LineBox[]) =>
+  a.length === b.length &&
+  a.every((l, i) => l.x === b[i].x && l.y === b[i].y && l.width === b[i].width && l.height === b[i].height);
+
+export const SkeletonText = ({
+  style,
+  numberOfLines,
+  children,
+}: {
+  style?: StyleProp<TextStyle>;
+  numberOfLines?: number;
+  children?: React.ReactNode;
+}) => {
+  const [lines, setLines] = useState<LineBox[]>([]);
+  // Where the text starts in its box, past any margin.
+  const [at, setAt] = useState({ x: 0, y: 0 });
+  const bar = Math.round((StyleSheet.flatten(style)?.fontSize ?? 14) * 0.85);
+
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Text
+        style={[style, s.unseen]}
+        numberOfLines={numberOfLines}
+        onLayout={e => {
+          const { x, y } = e.nativeEvent.layout;
+          setAt(p => (p.x === x && p.y === y ? p : { x, y }));
+        }}
+        onTextLayout={e => {
+          const next = e.nativeEvent.lines.map(({ x, y, width, height }) => ({ x, y, width, height }));
+          setLines(p => (sameLines(p, next) ? p : next));
+        }}
+      >
+        {children}
+      </Text>
+      {(numberOfLines ? lines.slice(0, numberOfLines) : lines).map((l, i) => (
+        <Skeleton
+          key={i}
+          width={l.width}
+          height={bar}
+          style={[s.line, { left: at.x + l.x, top: at.y + l.y + (l.height - bar) / 2 }]}
+        />
+      ))}
+    </View>
+  );
+};
+
+// An icon's glyph laid out unseen, with a box a fifth smaller centred over it.
+// Takes the same props as VectorIcon, so the two can stand in for each other.
+export const SkeletonIcon = ({
+  iconSet = 'Ionicons',
+  iconName,
+  size = 24,
+  style,
+}: {
+  iconSet?: string;
+  iconName: string;
+  size?: number;
+  color?: string;
+  style?: StyleProp<ViewStyle>;
+}) => {
+  const box = Math.round(size * 0.8);
+  return (
+    <View style={style}>
+      <VectorIcon iconSet={iconSet} iconName={iconName} size={size} color="transparent" />
+      <View style={s.iconBox}>
+        <Skeleton width={box} height={box} radius={Math.max(3, Math.round(size / 5))} />
+      </View>
+    </View>
   );
 };
 
@@ -263,6 +351,11 @@ const __mk_s = () => StyleSheet.create({
 
   dashLegend: { flexDirection: 'row', gap: 14, marginTop: 12 },
   perfRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 12 },
+
+  // Text and icons as skeletons
+  unseen: { color: 'transparent' },
+  line: { position: 'absolute' },
+  iconBox: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
 });
 
 

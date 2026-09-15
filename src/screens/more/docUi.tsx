@@ -13,7 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppAlert } from '../../components/AppDialog';
 import { downloadFile } from '../../api/pdfDownload';
 import Header from '../../components/Header';
-import { Skeleton } from '../../components/Skeleton';
+import { Skeleton, SkeletonIcon, SkeletonText } from '../../components/Skeleton';
 import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
 
@@ -213,22 +213,38 @@ export const DocPeople = ({
 );
 
 // Full "no data found" state shown inside the scroll so pull-to-refresh keeps
-// working.
+// working. As a skeleton, its icon is a box and its title and subtitle bars on
+// the lines they take.
 export const DocNoData = ({
   icon = 'document-text-outline',
   iconSet = 'Ionicons',
   title = 'No data found',
   subtitle,
+  skeleton,
 }: {
   icon?: string;
   iconSet?: IconSet;
   title?: string;
   subtitle?: string;
+  skeleton?: boolean;
 }) => (
   <View style={s.noData}>
-    <VectorIcon iconSet={iconSet as any} iconName={icon} size={32} color={theme.colors.textMuted} />
-    <Text style={s.noDataTitle}>{title}</Text>
-    {!!subtitle && <Text style={s.noDataSub}>{subtitle}</Text>}
+    {skeleton ? (
+      <SkeletonIcon iconSet={iconSet} iconName={icon} size={32} />
+    ) : (
+      <VectorIcon iconSet={iconSet as any} iconName={icon} size={32} color={theme.colors.textMuted} />
+    )}
+    {skeleton ? (
+      <SkeletonText style={s.noDataTitle}>{title}</SkeletonText>
+    ) : (
+      <Text style={s.noDataTitle}>{title}</Text>
+    )}
+    {!!subtitle &&
+      (skeleton ? (
+        <SkeletonText style={s.noDataSub}>{subtitle}</SkeletonText>
+      ) : (
+        <Text style={s.noDataSub}>{subtitle}</Text>
+      ))}
   </View>
 );
 

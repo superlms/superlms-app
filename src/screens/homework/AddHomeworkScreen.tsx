@@ -5,15 +5,17 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleProp,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  ViewStyle,
 } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import VectorIcon from '../../components/VectorIcon';
-import { Skeleton } from '../../components/Skeleton';
+import { Skeleton, SkeletonText } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
 import { quietCaps } from '../../utils/quietCaps';
 import { DocHeader, DocNoData } from '../more/docUi';
@@ -73,12 +75,82 @@ const fileKind = (f: PickedFile) => {
   return { label: 'File', icon: 'file' };
 };
 
-// The form while it loads: each label's width, and the height of its box.
-const SKELETON_FIELDS = [
-  { label: 112, box: 50 }, // Class and subject
-  { label: 32, box: 46 }, // Title
-  { label: 76, box: 120 }, // Description
-];
+// ── Loading ──────────────────────────────────────────────────────────────────
+// A box as big as a field will be: what the field holds is laid out unseen in
+// the field's own padding, and the box covers it.
+const FieldSkeleton = ({
+  style,
+  radius,
+  hug,
+  children,
+}: {
+  style: StyleProp<ViewStyle>;
+  radius: number;
+  // Only as wide as what it holds (the attachment chip).
+  hug?: boolean;
+  children: React.ReactNode;
+}) => (
+  <View style={hug && s.skHug}>
+    <View style={[style, s.skUnseenBox]}>{children}</View>
+    <Skeleton radius={radius} style={s.skFill} />
+  </View>
+);
+
+// The form while the classes load, at the size it will arrive: each label as a
+// bar, and each field as tall as what it will hold — the homework being edited,
+// or the placeholders — then its attachment, if it has one, and the button.
+const FormSkeleton = ({ editing }: { editing?: HomeworkItem }) => {
+  const kept = editing?.file_url ? fileKind(savedFile(editing)) : null;
+  return (
+    <View
+      style={s.form}
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <View>
+        <SkeletonText style={s.label}>Class and subject</SkeletonText>
+        <FieldSkeleton style={[s.field, s.picker]} radius={theme.radius.md}>
+          <Text style={[s.pickerText, s.unseen]} numberOfLines={1}>
+            {editing ? tripleLabel(ownTriple(editing)) : 'Choose a class and subject'}
+          </Text>
+          <VectorIcon iconSet="Ionicons" iconName="chevron-down" size={16} color="transparent" />
+        </FieldSkeleton>
+      </View>
+
+      <View>
+        <SkeletonText style={s.label}>Title</SkeletonText>
+        <FieldSkeleton style={s.field} radius={theme.radius.md}>
+          <Text style={[s.fieldText, s.unseen]}>
+            {editing?.title?.replace(/\n/g, ' ') || 'e.g. Chapter 3 Exercise'}
+          </Text>
+        </FieldSkeleton>
+      </View>
+
+      <View>
+        <SkeletonText style={s.label}>Description</SkeletonText>
+        <FieldSkeleton style={[s.field, s.fieldMulti]} radius={theme.radius.md}>
+          <Text style={[s.fieldText, s.fieldMultiText, s.unseen]}>
+            {editing?.description || 'What should the class do?'}
+          </Text>
+        </FieldSkeleton>
+      </View>
+
+      {!!kept && (
+        <View>
+          <SkeletonText style={s.label}>Attachment</SkeletonText>
+          <FieldSkeleton style={s.chip} radius={theme.radius.full} hug>
+            <VectorIcon iconSet="Feather" iconName={kept.icon} size={14} color="transparent" />
+            <Text style={[s.chipText, s.unseen]}>{kept.label}</Text>
+            <VectorIcon iconSet="Ionicons" iconName="close" size={16} color="transparent" />
+          </FieldSkeleton>
+        </View>
+      )}
+
+      <Skeleton width="100%" height={48} radius={theme.radius.md} />
+    </View>
+  );
+};
 
 // Opened with `{ homework }` it edits that homework; without, it adds a new one.
 const AddHomeworkScreen = ({ navigation, route }: any) => {
@@ -176,22 +248,7 @@ const AddHomeworkScreen = ({ navigation, route }: any) => {
   const shownFile = file ?? keptFile;
 
   const renderBody = () => {
-    if (loadingTriples) {
-      // The form as it will arrive: class, title and description, then Post.
-      return (
-        <View style={s.form}>
-          {SKELETON_FIELDS.map((f, i) => (
-            <View key={i}>
-              <View style={s.skLabel}>
-                <Skeleton width={f.label} height={11} />
-              </View>
-              <Skeleton width="100%" height={f.box} radius={theme.radius.md} />
-            </View>
-          ))}
-          <Skeleton width="100%" height={48} radius={theme.radius.md} />
-        </View>
-      );
-    }
+    if (loadingTriples) return <FormSkeleton editing={editing} />;
     if (triplesError) return <ErrorBox message={triplesError} onRetry={loadTriples} />;
     if (triples.length === 0) {
       return (
@@ -420,8 +477,13 @@ const __mk_s = () => StyleSheet.create({
   postBtnBusy: { opacity: 0.7 },
   postText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 
-  // Loading: a label's line, as tall as the label
-  skLabel: { height: 17, marginBottom: 8, justifyContent: 'center' },
+  // Loading: the fields' text as it will sit in them, unseen, under a grey box
+  fieldText: { fontSize: 15 },
+  fieldMultiText: { lineHeight: 22 },
+  unseen: { color: 'transparent' },
+  skUnseenBox: { borderColor: 'transparent', backgroundColor: 'transparent' },
+  skFill: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
+  skHug: { alignSelf: 'flex-start' },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

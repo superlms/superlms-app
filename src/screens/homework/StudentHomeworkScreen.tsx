@@ -28,10 +28,13 @@ import {
   ErrorBox,
   HOMEWORK_DAYS,
   HomeworkRow,
-  HomeworkSkeleton,
+  SectionTitle,
+  SkeletonList,
+  homeworkToDraw,
   periodLabel,
   tasks,
   todayKey,
+  useLastHomework,
 } from './homeworkUi';
 import { AppAlert } from '../../components/AppDialog';
 
@@ -60,8 +63,11 @@ const sendDeviceCompletions = async (studentId: number | undefined, list: Homewo
 const StudentHomeworkScreen = ({ navigation }: any) => {
   const [items, setItems] = useState<HomeworkItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // The list on screen came from the school, not a failed load.
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState(todayKey);
+  const [last, rememberLast] = useLastHomework('student');
 
   const [confirm, setConfirm] = useState<HomeworkItem | null>(null);
   const [saving, setSaving] = useState(false);
@@ -76,15 +82,19 @@ const StudentHomeworkScreen = ({ navigation }: any) => {
       const res = await getStudentHomework(HOMEWORK_DAYS);
       const list = res?.homeworks ?? [];
       const sent = await sendDeviceCompletions(res?.student_info?.id, list);
-      setItems(list.map(h => (sent.includes(h.id) ? { ...h, is_completed: true } : h)));
+      const next = list.map(h => (sent.includes(h.id) ? { ...h, is_completed: true } : h));
+      setItems(next);
+      setLoaded(true);
+      rememberLast({ items: next });
     } catch (e: any) {
       console.log('[getStudentHomework] Error:', e?.response?.status, e?.message);
       setError(homeworkErrorMessage(e));
       setItems([]);
+      setLoaded(false);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [rememberLast]);
 
   const reload = useCallback(() => load(true), [load]);
 
@@ -112,13 +122,79 @@ const StudentHomeworkScreen = ({ navigation }: any) => {
     [items],
   );
 
-  const dayItems = items.filter(h => h.assigned_date === selected);
+  // While it loads, the page is drawn as a skeleton from the homework it shows.
+  const shown = loading ? homeworkToDraw(loaded, items, last, selected) : items;
+  const dayItems = shown.filter(h => h.assigned_date === selected);
   const pending = dayItems.filter(h => !h.is_completed);
   const completed = dayItems.filter(h => h.is_completed);
 
   // "Mathematics · Ms. Patel"
   const headingFor = (hw: HomeworkItem) =>
     [quietCaps(hw.subject?.name), hw.assigned_by].filter(Boolean).join(' · ');
+
+  // The chosen day — its heading, then its homework or that there is none.
+  const page = (skeleton: boolean) => (
+    <>
+      <DayHead
+        day={selected}
+        skeleton={skeleton}
+        line={
+          dayItems.length > 0
+            ? [tasks(dayItems.length), completed.length > 0 ? `${completed.length} completed` : null]
+                .filter(Boolean)
+                .join(' · ')
+            : null
+        }
+      />
+
+      {dayItems.length === 0 ? (
+        <DocNoData
+          icon="create-outline"
+          title="No homework"
+          subtitle={
+            selected === todayKey()
+              ? 'Nothing has been set for today.'
+              : 'Nothing was set on this day.'
+          }
+          skeleton={skeleton}
+        />
+      ) : (
+        <>
+          {pending.map((hw, i) => (
+            <HomeworkRow
+              key={hw.id}
+              hw={hw}
+              period={periodLabel(hw)}
+              heading={headingFor(hw)}
+              trailing={<CompleteTick done={false} onPress={() => setConfirm(hw)} skeleton={skeleton} />}
+              isLast={i === pending.length - 1}
+              onPreviewImage={setPreview}
+              skeleton={skeleton}
+            />
+          ))}
+
+          {completed.length > 0 && (
+            <>
+              <SectionTitle title="Completed" first={pending.length === 0} skeleton={skeleton} />
+              {completed.map((hw, i) => (
+                <HomeworkRow
+                  key={hw.id}
+                  hw={hw}
+                  period={periodLabel(hw)}
+                  heading={headingFor(hw)}
+                  trailing={<CompleteTick done skeleton={skeleton} />}
+                  done
+                  isLast={i === completed.length - 1}
+                  onPreviewImage={setPreview}
+                  skeleton={skeleton}
+                />
+              ))}
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
 
   return (
     <View style={s.root}>
@@ -128,7 +204,7 @@ const StudentHomeworkScreen = ({ navigation }: any) => {
       <View style={s.fullDivider} />
 
       {loading ? (
-        <HomeworkSkeleton trailing="tick" />
+        <SkeletonList>{page(true)}</SkeletonList>
       ) : error && items.length === 0 ? (
         <ErrorBox message={error} onRetry={reload} />
       ) : (
@@ -139,60 +215,7 @@ const StudentHomeworkScreen = ({ navigation }: any) => {
           // The skeleton stands in for the spinner.
           refreshControl={<AppRefreshControl refreshing={false} onRefresh={reload} />}
         >
-          <DayHead
-            day={selected}
-            line={
-              dayItems.length > 0
-                ? [tasks(dayItems.length), completed.length > 0 ? `${completed.length} completed` : null]
-                    .filter(Boolean)
-                    .join(' · ')
-                : null
-            }
-          />
-
-          {dayItems.length === 0 ? (
-            <DocNoData
-              icon="create-outline"
-              title="No homework"
-              subtitle={
-                selected === todayKey()
-                  ? 'Nothing has been set for today.'
-                  : 'Nothing was set on this day.'
-              }
-            />
-          ) : (
-            <>
-              {pending.map((hw, i) => (
-                <HomeworkRow
-                  key={hw.id}
-                  hw={hw}
-                  period={periodLabel(hw)}
-                  heading={headingFor(hw)}
-                  trailing={<CompleteTick done={false} onPress={() => setConfirm(hw)} />}
-                  isLast={i === pending.length - 1}
-                  onPreviewImage={setPreview}
-                />
-              ))}
-
-              {completed.length > 0 && (
-                <>
-                  <Text style={[s.sectionTitle, pending.length === 0 && s.sectionTitleFirst]}>Completed</Text>
-                  {completed.map((hw, i) => (
-                    <HomeworkRow
-                      key={hw.id}
-                      hw={hw}
-                      period={periodLabel(hw)}
-                      heading={headingFor(hw)}
-                      trailing={<CompleteTick done />}
-                      done
-                      isLast={i === completed.length - 1}
-                      onPreviewImage={setPreview}
-                    />
-                  ))}
-                </>
-              )}
-            </>
-          )}
+          {page(false)}
         </ScrollView>
       )}
 
@@ -252,9 +275,6 @@ const __mk_s = () => StyleSheet.create({
   grow: { flexGrow: 1 },
   fullDivider: { height: 1, backgroundColor: theme.colors.border },
   list: { paddingHorizontal: 20, paddingBottom: 40 },
-
-  sectionTitle: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginTop: 22, marginBottom: 2 },
-  sectionTitleFirst: { marginTop: 10 },
 
   // Confirm
   modalOverlay: {

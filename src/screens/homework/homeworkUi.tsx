@@ -1,17 +1,20 @@
-import React, { useRef } from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
   Linking,
   ScrollView,
+  StyleProp,
   StyleSheet,
   Text,
+  TextStyle,
   TouchableOpacity,
   View,
 } from 'react-native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
-import { Skeleton } from '../../components/Skeleton';
+import { SkeletonIcon, SkeletonText } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
 import { quietCaps } from '../../utils/quietCaps';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { fmtTime } from '../../api/timetableApi';
 import type { HomeworkItem } from '../../api/homeworkApi';
 import { AppAlert } from '../../components/AppDialog';
@@ -22,6 +25,10 @@ import { AppAlert } from '../../components/AppDialog';
  * The last fortnight as a row of dated pills, then the chosen day's homework as
  * plain rows on hairlines: its period and file, whose it is, the task itself.
  * No accent bars, emoji tiles or pills.
+ *
+ * Every piece takes `skeleton`, and a load draws the page itself that way — the
+ * same heading, rows, lines and icons as grey bars and boxes — so the skeleton
+ * cannot drift from the page.
  */
 
 export const HOMEWORK_DAYS = 15;
@@ -60,6 +67,28 @@ export const openFile = async (url?: string | null) => {
     AppAlert.alert('Error', 'Unable to open this attachment.');
   }
 };
+
+// ── Text and icons, or their skeletons ───────────────────────────────────────
+const Words = ({
+  skeleton,
+  style,
+  children,
+}: {
+  skeleton?: boolean;
+  style: StyleProp<TextStyle>;
+  children: React.ReactNode;
+}) =>
+  skeleton ? <SkeletonText style={style}>{children}</SkeletonText> : <Text style={style}>{children}</Text>;
+
+const Glyph = ({
+  skeleton,
+  ...icon
+}: {
+  skeleton?: boolean;
+  iconName: string;
+  size: number;
+  color: string;
+}) => (skeleton ? <SkeletonIcon iconSet="Ionicons" {...icon} /> : <VectorIcon iconSet="Ionicons" {...icon} />);
 
 // ── Days ─────────────────────────────────────────────────────────────────────
 // The chosen day is filled; today, when it is not the chosen one, is outlined
@@ -111,11 +140,34 @@ export const DateStrip = ({
 };
 
 // ── Day heading ──────────────────────────────────────────────────────────────
-export const DayHead = ({ day, line }: { day: string; line?: string | null }) => (
+export const DayHead = ({
+  day,
+  line,
+  skeleton,
+}: {
+  day: string;
+  line?: string | null;
+  skeleton?: boolean;
+}) => (
   <View style={s.dayHead}>
-    <Text style={s.dayTitle}>{dayTitle(day)}</Text>
-    {!!line && <Text style={s.dayLine}>{line}</Text>}
+    <Words skeleton={skeleton} style={s.dayTitle}>{dayTitle(day)}</Words>
+    {!!line && <Words skeleton={skeleton} style={s.dayLine}>{line}</Words>}
   </View>
+);
+
+// ── A section of the day: a student's Completed ─────────────────────────────
+export const SectionTitle = ({
+  title,
+  first,
+  skeleton,
+}: {
+  title: string;
+  first?: boolean;
+  skeleton?: boolean;
+}) => (
+  <Words skeleton={skeleton} style={[s.sectionTitle, first && s.sectionTitleFirst]}>
+    {title}
+  </Words>
 );
 
 // ── The tick a student marks homework complete with ─────────────────────────
@@ -124,23 +176,51 @@ export const DayHead = ({ day, line }: { day: string; line?: string | null }) =>
 const TICK = 21;
 const TICK_GREEN = '#16A34A';
 
-export const CompleteTick = ({ done, onPress }: { done: boolean; onPress?: () => void }) => (
+export const CompleteTick = ({
+  done,
+  onPress,
+  skeleton,
+}: {
+  done: boolean;
+  onPress?: () => void;
+  skeleton?: boolean;
+}) => (
   <TouchableOpacity
     hitSlop={10}
     activeOpacity={0.6}
-    disabled={done || !onPress}
+    disabled={done || !onPress || skeleton}
     onPress={onPress}
     accessibilityRole="checkbox"
     accessibilityState={{ checked: done }}
     accessibilityLabel={done ? 'Completed' : 'Mark as complete'}
   >
-    <VectorIcon
-      iconSet="Ionicons"
+    <Glyph
+      skeleton={skeleton}
       iconName={done ? 'checkbox' : 'square-outline'}
       size={TICK}
       color={done ? TICK_GREEN : theme.colors.textMuted}
     />
   </TouchableOpacity>
+);
+
+// ── A teacher's edit and delete ──────────────────────────────────────────────
+export const RowActions = ({
+  onEdit,
+  onDelete,
+  skeleton,
+}: {
+  onEdit?: () => void;
+  onDelete?: () => void;
+  skeleton?: boolean;
+}) => (
+  <View style={s.actions}>
+    <TouchableOpacity onPress={onEdit} disabled={skeleton} hitSlop={10} activeOpacity={0.6}>
+      <Glyph skeleton={skeleton} iconName="create-outline" size={17} color={theme.colors.textMuted} />
+    </TouchableOpacity>
+    <TouchableOpacity onPress={onDelete} disabled={skeleton} hitSlop={10} activeOpacity={0.6}>
+      <Glyph skeleton={skeleton} iconName="trash-outline" size={17} color={theme.colors.textMuted} />
+    </TouchableOpacity>
+  </View>
 );
 
 // ── One homework ─────────────────────────────────────────────────────────────
@@ -159,6 +239,7 @@ export const HomeworkRow = ({
   done,
   isLast,
   onPreviewImage,
+  skeleton,
 }: {
   hw: HomeworkItem;
   period?: string | null;
@@ -169,6 +250,7 @@ export const HomeworkRow = ({
   done?: boolean;
   isLast: boolean;
   onPreviewImage: (url: string) => void;
+  skeleton?: boolean;
 }) => {
   const desc = hw.description?.trim();
   const isImage = hw.file_type === 'image';
@@ -182,90 +264,138 @@ export const HomeworkRow = ({
         <View style={s.topLeft}>
           {hasTop ? (
             <>
-              {!!period && <Text style={s.period}>{period}</Text>}
-              {!!period && hasFile && <Text style={s.heading}>·</Text>}
+              {!!period && <Words skeleton={skeleton} style={s.period}>{period}</Words>}
+              {/* The dot keeps its room in a skeleton, unseen */}
+              {!!period && hasFile && <Text style={[s.heading, skeleton && s.unseen]}>·</Text>}
               {hasFile && (
                 <TouchableOpacity
                   style={s.attach}
                   hitSlop={6}
                   activeOpacity={0.6}
+                  disabled={skeleton}
                   onPress={() => (isImage ? onPreviewImage(hw.file_url!) : openFile(hw.file_url))}
                 >
-                  <VectorIcon
-                    iconSet="Ionicons"
+                  <Glyph
+                    skeleton={skeleton}
                     iconName={isImage ? 'image-outline' : 'document-attach-outline'}
                     size={13}
                     color={theme.colors.primary}
                   />
-                  <Text style={s.attachText}>{isImage ? 'View image' : 'Open attachment'}</Text>
+                  <Words skeleton={skeleton} style={s.attachText}>
+                    {isImage ? 'View image' : 'Open attachment'}
+                  </Words>
                 </TouchableOpacity>
               )}
             </>
           ) : (
-            !!heading && <Text style={s.heading}>{heading}</Text>
+            !!heading && <Words skeleton={skeleton} style={s.heading}>{heading}</Words>
           )}
         </View>
         {trailing}
       </View>
-      {hasTop && !!heading && <Text style={s.heading}>{heading}</Text>}
-      <Text style={[s.title, done && s.titleDone]}>{quietCaps(hw.title)}</Text>
-      {!!desc && <Text style={[s.desc, done && s.descDone]}>{desc}</Text>}
+      {hasTop && !!heading && <Words skeleton={skeleton} style={s.heading}>{heading}</Words>}
+      <Words skeleton={skeleton} style={[s.title, done && s.titleDone]}>{quietCaps(hw.title)}</Words>
+      {!!desc && <Words skeleton={skeleton} style={[s.desc, done && s.descDone]}>{desc}</Words>}
     </View>
   );
 };
 
-// ── Loading / failing ────────────────────────────────────────────────────────
-// The rows as they will arrive, each box at the height of its line: the time
-// with the row's actions, the heading, the title and two lines of task.
-const HEAD_W = ['46%', '38%', '54%'];
-const TITLE_W = ['62%', '50%', '70%'];
-
-export const HomeworkSkeleton = ({
-  trailing,
+// ── Loading ──────────────────────────────────────────────────────────────────
+// A load or a pull to refresh shows the page as a skeleton: the day's heading,
+// its homework row for row — each one's time, file, whose it is, title and
+// task on the lines they take — a student's Completed section, or the empty
+// day. Still, and hidden from screen readers.
+export const SkeletonList = ({
+  bare,
+  children,
 }: {
-  // The right of each top line: the teacher's edit and delete, or a student's tick.
-  trailing: 'actions' | 'tick';
+  // Without the list's side padding, for a page that has none (No subject assigned).
+  bare?: boolean;
+  children: React.ReactNode;
 }) => (
-  <View style={s.list}>
-    <View style={s.dayHead}>
-      <View style={s.skDayTitle}>
-        <Skeleton width="45%" height={13} />
-      </View>
-      <View style={s.skDayLine}>
-        <Skeleton width={52} height={10} />
-      </View>
-    </View>
-    {[0, 1, 2].map(i => (
-      <View key={i} style={[s.row, i < 2 && s.rowDivider]}>
-        <View style={s.topLine}>
-          <View style={[s.topLeft, s.skSmall]}>
-            <Skeleton width={128} height={10} />
-          </View>
-          {trailing === 'actions' ? (
-            <View style={s.skActions}>
-              <Skeleton width={17} height={17} radius={5} />
-              <Skeleton width={17} height={17} radius={5} />
-            </View>
-          ) : (
-            <Skeleton width={17} height={17} radius={4} />
-          )}
-        </View>
-        <View style={s.skSmall}>
-          <Skeleton width={HEAD_W[i]} height={10} />
-        </View>
-        <View style={s.skTitle}>
-          <Skeleton width={TITLE_W[i]} height={13} />
-        </View>
-        <View style={[s.skDesc, s.skDescFirst]}>
-          <Skeleton width="92%" height={11} />
-        </View>
-        <View style={s.skDesc}>
-          <Skeleton width="58%" height={11} />
-        </View>
-      </View>
-    ))}
+  <View
+    style={s.skeleton}
+    pointerEvents="none"
+    accessibilityElementsHidden
+    importantForAccessibility="no-hide-descendants"
+  >
+    <View style={bare ? undefined : s.list}>{children}</View>
   </View>
 );
+
+/** What a list held the last time it loaded on this phone. */
+export interface LastHomework {
+  items: HomeworkItem[];
+  // A teacher with no subjects in the timetable.
+  noSubjects?: boolean;
+}
+
+// A day of ordinary homework, for a list never loaded on this phone.
+const sample = (
+  id: number,
+  day: string,
+  subject: string,
+  title: string,
+  description: string,
+  period: [string, string],
+  file: HomeworkItem['file_type'],
+): HomeworkItem => ({
+  id,
+  title,
+  description,
+  subject: { id, name: subject, code: null },
+  standard: '10th',
+  standard_id: null,
+  section: 'A',
+  section_id: null,
+  assigned_by: 'Class teacher',
+  assigned_date: day,
+  assigned_time: null,
+  days_ago: null,
+  file_url: file ? 'file' : null,
+  file_type: file,
+  period_start: period[0],
+  period_end: period[1],
+  is_completed: false,
+});
+
+const sampleDay = (day: string) => [
+  sample(-1, day, 'Mathematics', 'Chapter 3 exercise',
+    'Solve questions 1 to 10 from the exercise, showing every step of your working.', ['09:00', '09:45'], 'image'),
+  sample(-2, day, 'English', 'Reading comprehension',
+    'Read pages 42 to 48 and answer the questions at the end of the lesson.', ['10:00', '10:45'], null),
+  sample(-3, day, 'Science', 'The water cycle',
+    'Write a short note on the water cycle with a labelled diagram.', ['11:00', '11:45'], 'pdf'),
+];
+
+/**
+ * The homework a loading page is drawn from: what is on screen once the list
+ * has loaded; before that, what it held last time if that has the day; or a
+ * sample day.
+ */
+export const homeworkToDraw = (
+  loaded: boolean,
+  items: HomeworkItem[],
+  last: LastHomework | null | undefined,
+  day: string,
+) => (loaded ? items : last?.items?.some(h => h.assigned_date === day) ? last.items : sampleDay(day));
+
+/**
+ * What this list held the last time it loaded on this phone, for this account,
+ * and `remember` for each load. Only the words and whether there was a file are
+ * kept, never the file's link.
+ */
+export const useLastHomework = (who: 'student' | 'teacher') => {
+  const [last, remember] = useLastLoaded<LastHomework>(`homework:${who}`);
+
+  const rememberHomework = useCallback(
+    (next: LastHomework) =>
+      remember({ ...next, items: next.items.map(h => ({ ...h, file_url: h.file_url ? 'file' : null })) }),
+    [remember],
+  );
+
+  return [last, rememberHomework] as const;
+};
 
 export const ErrorBox = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
   <View style={s.centeredBox}>
@@ -301,11 +431,13 @@ const __mk_s = () => StyleSheet.create({
   dotOn: { backgroundColor: theme.colors.primary },
   dotActive: { backgroundColor: theme.colors.white },
 
-  // Day heading
+  // Day heading and sections
   list: { paddingHorizontal: 20, paddingBottom: 40 },
   dayHead: { paddingTop: 14, paddingBottom: 4 },
   dayTitle: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary },
   dayLine: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
+  sectionTitle: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginTop: 22, marginBottom: 2 },
+  sectionTitleFirst: { marginTop: 10 },
 
   // Row: the top line with its actions, then full-width lines
   row: { paddingVertical: 14, gap: 3 },
@@ -321,15 +453,12 @@ const __mk_s = () => StyleSheet.create({
   titleDone: { color: theme.colors.textSecondary },
   desc: { fontSize: 13, lineHeight: 19, color: theme.colors.textSecondary, marginTop: 3 },
   descDone: { color: theme.colors.textMuted },
+  // A teacher's edit and delete, side by side
+  actions: { flexDirection: 'row', gap: 18 },
 
-  // Skeleton boxes, at the heights of the real lines
-  skDayTitle: { height: 20, justifyContent: 'center' },
-  skDayLine: { height: 16, marginTop: 2, justifyContent: 'center' },
-  skSmall: { height: 17, justifyContent: 'center' },
-  skActions: { flexDirection: 'row', gap: 18 },
-  skTitle: { height: 20, justifyContent: 'center' },
-  skDesc: { height: 19, justifyContent: 'center' },
-  skDescFirst: { marginTop: 3 },
+  // Loading
+  skeleton: { flex: 1, overflow: 'hidden' },
+  unseen: { color: 'transparent' },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
