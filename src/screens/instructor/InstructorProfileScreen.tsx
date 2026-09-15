@@ -138,14 +138,29 @@ const InstructorProfileScreen = ({ navigation, route }: any) => {
     { label: 'Qualification', value: profile.qualification },
   ].filter(d => !!d.value) as { label: string; value: string; onPress?: () => void }[];
 
+  // The chat icon, as on each row of the instructors list, opens a conversation
+  // with this instructor (or the chats, from a server that does not say whose
+  // account they are).
+  const openChat = () =>
+    profile.user_id
+      ? navigation.navigate('UserChats', {
+          contact: {
+            user_id: profile.user_id,
+            name: profile.name,
+            avatar: profile.avatar,
+            subtitle: profile.subjects?.map(sub => sub.name).join(', ') || null,
+          },
+          userRole: 'student',
+        })
+      : navigation.navigate('ChatsList');
+
   return (
     <View style={s.root}>
-      {/* The chat icon, as on each row of the instructors list, opens the chats */}
       <DocHeader
         title={TITLE}
         onBackPress={() => navigation.goBack()}
         rightIcon="chatbubble-ellipses-outline"
-        onRightPress={() => navigation.navigate('ChatsList')}
+        onRightPress={openChat}
       />
 
       <ScrollView

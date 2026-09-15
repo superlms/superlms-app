@@ -44,3 +44,23 @@ export const pickPdf = async (): Promise<PickedFile | null> => {
 
 export const apiErr = (e: any, fallback: string) =>
   e?.response?.data?.message || e?.message || fallback;
+
+// Any common document — PDF, Word, Excel, PowerPoint or plain text.
+export const pickDocument = async (): Promise<PickedFile | null> => {
+  if (!DocPicker?.pick) {
+    AppAlert.alert('Picker unavailable', 'Rebuild the app to enable file uploads.');
+    return null;
+  }
+  const t = DocPicker.types ?? {};
+  const types = [t.pdf, t.doc, t.docx, t.xls, t.xlsx, t.ppt, t.pptx, t.plainText].filter(Boolean);
+  try {
+    const results = await DocPicker.pick({ type: types.length ? types : ['*/*'], allowMultiSelection: false });
+    const f = Array.isArray(results) ? results[0] : results;
+    if (!f?.uri) return null;
+    return { uri: f.uri, type: f.type ?? 'application/octet-stream', name: f.name ?? 'document' };
+  } catch (e: any) {
+    if (String(e?.code ?? e?.message ?? '').toLowerCase().includes('cancel')) return null;
+    AppAlert.alert('Could not pick file', e?.message ?? 'Please try again.');
+    return null;
+  }
+};

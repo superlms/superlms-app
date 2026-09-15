@@ -102,8 +102,20 @@ const InstructorScreen = () => {
   const openProfile = (item: Instructor) =>
     navigation.navigate('InstructorProfile', { instructor: item });
 
-  // Chat Now → the chats screen.
-  const openChat = (_item: Instructor) => navigation.navigate('ChatsList');
+  // Chat Now → a conversation with this instructor (or the chats, from a server
+  // that does not say whose account they are).
+  const openChat = (item: Instructor) =>
+    item.user_id
+      ? navigation.navigate('UserChats', {
+          contact: {
+            user_id: item.user_id,
+            name: item.name,
+            avatar: item.avatar,
+            subtitle: item.subjects?.map(sub => sub.name).join(', ') || null,
+          },
+          userRole: 'student',
+        })
+      : navigation.navigate('ChatsList');
 
   if (loading) {
     return (

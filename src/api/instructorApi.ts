@@ -17,6 +17,8 @@ export interface InstructorClass {
 
 export interface Instructor {
   id: number;
+  // The instructor's own account, for opening a chat with them.
+  user_id?: number;
   name: string;
   email: string;
   avatar: string | null;

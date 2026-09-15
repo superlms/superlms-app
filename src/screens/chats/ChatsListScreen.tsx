@@ -1,156 +1,40 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   FlatList,
   Image,
   Modal,
+  StyleProp,
   StyleSheet,
   Text,
   TextInput,
+  TextStyle,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
 import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
-import { useRefresh } from '../../hooks/useRefresh';
+import { Skeleton, SkeletonText } from '../../components/Skeleton';
+import { AppAlert } from '../../components/AppDialog';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { theme, onThemeChange } from '../../utils/theme';
 import { DocNoData } from '../more/docUi';
+import {
+  type ChatContact,
+  chatErrorMessage,
+  deleteChatConversations,
+  getChatContacts,
+} from '../../api/chatApi';
+import { onChatPush } from './chatEvents';
+import { listTimeLabel, previewLine, SAMPLE_CONTACTS } from './chatFormat';
 
 type DrawerRole = 'student' | 'teacher';
 
-export interface ChatItem {
-  id: string;
-  name: string;
-  subject?: string; // only for teacher contacts (student sees teacher's subject)
-  avatar: string;
-  lastMessage: string;
-  time: string;
-  unread: number;
-  online: boolean;
-}
-
-// Student sees → list of Teachers (each has a subject)
-const STUDENT_CHATS: ChatItem[] = [
-  {
-    id: '1',
-    name: 'Ravi Sharma',
-    subject: 'Physics',
-    avatar: 'https://randomuser.me/api/portraits/men/32.jpg',
-    lastMessage: 'Please submit your assignment by tomorrow.',
-    time: '10:42 AM',
-    unread: 2,
-    online: true,
-  },
-  {
-    id: '2',
-    name: 'Priya Mehta',
-    subject: 'Mathematics',
-    avatar: 'https://randomuser.me/api/portraits/women/44.jpg',
-    lastMessage: 'Great work on the last test!',
-    time: '9:15 AM',
-    unread: 0,
-    online: true,
-  },
-  {
-    id: '3',
-    name: 'Anil Verma',
-    subject: 'Chemistry',
-    avatar: 'https://randomuser.me/api/portraits/men/75.jpg',
-    lastMessage: 'Chapter 5 notes have been uploaded.',
-    time: 'Yesterday',
-    unread: 1,
-    online: false,
-  },
-  {
-    id: '4',
-    name: 'Sunita Rao',
-    subject: 'Biology',
-    avatar: 'https://randomuser.me/api/portraits/women/68.jpg',
-    lastMessage: 'Lab session rescheduled to Friday.',
-    time: 'Yesterday',
-    unread: 0,
-    online: false,
-  },
-  {
-    id: '5',
-    name: 'Deepak Singh',
-    subject: 'English',
-    avatar: 'https://randomuser.me/api/portraits/men/52.jpg',
-    lastMessage: 'Read chapter 3 before next class.',
-    time: 'Mon',
-    unread: 0,
-    online: true,
-  },
-  {
-    id: '6',
-    name: 'Kavita Joshi',
-    subject: 'History',
-    avatar: 'https://randomuser.me/api/portraits/women/90.jpg',
-    lastMessage: 'Quiz on Monday. Be prepared!',
-    time: 'Sun',
-    unread: 3,
-    online: false,
-  },
-];
-
-// Teacher sees → list of Students (no subject)
-const TEACHER_CHATS: ChatItem[] = [
-  {
-    id: '1',
-    name: 'Arjun Patel',
-    avatar: 'https://randomuser.me/api/portraits/men/11.jpg',
-    lastMessage: 'Sir, I have a doubt in chapter 4.',
-    time: '11:02 AM',
-    unread: 3,
-    online: true,
-  },
-  {
-    id: '2',
-    name: 'Sneha Gupta',
-    avatar: 'https://randomuser.me/api/portraits/women/21.jpg',
-    lastMessage: 'Thank you for the notes!',
-    time: '10:30 AM',
-    unread: 0,
-    online: true,
-  },
-  {
-    id: '3',
-    name: 'Rohan Mehta',
-    avatar: 'https://randomuser.me/api/portraits/men/33.jpg',
-    lastMessage: 'Can I submit the assignment tomorrow?',
-    time: 'Yesterday',
-    unread: 1,
-    online: false,
-  },
-  {
-    id: '4',
-    name: 'Pooja Singh',
-    avatar: 'https://randomuser.me/api/portraits/women/55.jpg',
-    lastMessage: 'I missed the class today.',
-    time: 'Yesterday',
-    unread: 0,
-    online: false,
-  },
-  {
-    id: '5',
-    name: 'Karan Shah',
-    avatar: 'https://randomuser.me/api/portraits/men/60.jpg',
-    lastMessage: 'Understood, thank you!',
-    time: 'Mon',
-    unread: 0,
-    online: true,
-  },
-  {
-    id: '6',
-    name: 'Nisha Verma',
-    avatar: 'https://randomuser.me/api/portraits/women/72.jpg',
-    lastMessage: 'Please share the study material.',
-    time: 'Sun',
-    unread: 2,
-    online: false,
-  },
-];
+// While the list is on screen it checks for new messages this often; a push
+// brings one in straight away.
+const POLL_MS = 15000;
 
 const initials = (name: string) =>
   name
@@ -160,102 +44,179 @@ const initials = (name: string) =>
     .join('')
     .toUpperCase();
 
+// A line of text, or its skeleton.
+const Words = ({
+  skeleton,
+  style,
+  children,
+}: {
+  skeleton?: boolean;
+  style: StyleProp<TextStyle>;
+  children: React.ReactNode;
+}) =>
+  skeleton ? (
+    <SkeletonText style={style} numberOfLines={1}>{children}</SkeletonText>
+  ) : (
+    <Text style={style} numberOfLines={1}>{children}</Text>
+  );
+
 // ── One conversation as a plain row, separated by a divider ──────────────────
-//   [photo]  Ravi Sharma · Physics            10:42 AM
-//            Please submit your assignment…          2
+//   [photo]  Ravi Sharma  Physics                10:42 AM
+//            Please submit your assignment…             2
+// A teacher's rows say the student's class where a student's say the subject.
 const ChatRow = ({
   item,
-  isStudent,
   selected,
   isLast,
   onPress,
   onLongPress,
+  skeleton,
 }: {
-  item: ChatItem;
-  isStudent: boolean;
+  item: ChatContact;
   selected: boolean;
   isLast: boolean;
   onPress: () => void;
   onLongPress: () => void;
-}) => (
-  <TouchableOpacity
-    style={[s.row, !isLast && s.rowDivider, selected && s.rowSelected]}
-    onPress={onPress}
-    onLongPress={onLongPress}
-    activeOpacity={0.6}
-  >
-    <View>
-      {item.avatar ? (
-        <Image source={{ uri: item.avatar }} style={s.avatar} />
-      ) : (
-        <View style={[s.avatar, s.avatarFallback]}>
-          <Text style={s.avatarInitials}>{initials(item.name)}</Text>
-        </View>
-      )}
-      {selected ? (
-        <View style={s.tick}>
-          <VectorIcon iconSet="Ionicons" iconName="checkmark" size={11} color={theme.colors.white} />
-        </View>
-      ) : (
-        item.online && <View style={s.onlineDot} />
-      )}
-    </View>
+  skeleton?: boolean;
+}) => {
+  const unread = item.unread > 0;
 
-    <View style={s.rowText}>
-      <View style={s.rowLine}>
-        <Text style={s.name} numberOfLines={1}>
-          {item.name}
-          {isStudent && item.subject ? (
-            <Text style={s.subject}>{`  ${item.subject}`}</Text>
-          ) : null}
-        </Text>
-        <Text style={[s.time, item.unread > 0 && s.timeUnread]}>{item.time}</Text>
-      </View>
-
-      <View style={s.rowLine}>
-        <Text style={[s.last, item.unread > 0 && s.lastUnread]} numberOfLines={1}>
-          {item.lastMessage}
-        </Text>
-        {item.unread > 0 && (
-          <View style={s.unread}>
-            <Text style={s.unreadText}>{item.unread}</Text>
+  return (
+    <TouchableOpacity
+      style={[s.row, !isLast && s.rowDivider, selected && s.rowSelected]}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      activeOpacity={0.6}
+      disabled={skeleton}
+    >
+      <View>
+        {skeleton ? (
+          <Skeleton width={46} height={46} radius={23} />
+        ) : item.avatar ? (
+          <Image source={{ uri: item.avatar }} style={s.avatar} />
+        ) : (
+          <View style={[s.avatar, s.avatarFallback]}>
+            <Text style={s.avatarInitials}>{initials(item.name)}</Text>
+          </View>
+        )}
+        {selected && (
+          <View style={s.tick}>
+            <VectorIcon iconSet="Ionicons" iconName="checkmark" size={11} color={theme.colors.white} />
           </View>
         )}
       </View>
-    </View>
-  </TouchableOpacity>
-);
+
+      <View style={s.rowText}>
+        <View style={s.rowLine}>
+          <View style={s.fill}>
+            <Words skeleton={skeleton} style={s.name}>
+              {item.name}
+              {item.subtitle ? <Text style={s.subject}>{`  ${item.subtitle}`}</Text> : null}
+            </Words>
+          </View>
+          {!!item.last_message && (
+            <Words skeleton={skeleton} style={[s.time, unread && s.timeUnread]}>
+              {listTimeLabel(item.last_message.created_at)}
+            </Words>
+          )}
+        </View>
+
+        <View style={s.rowLine}>
+          <View style={s.fill}>
+            <Words skeleton={skeleton} style={[s.last, unread && s.lastUnread, !item.last_message && s.lastNone]}>
+              {previewLine(item)}
+            </Words>
+          </View>
+          {unread &&
+            (skeleton ? (
+              <Skeleton width={18} height={18} radius={9} />
+            ) : (
+              <View style={s.unread}>
+                <Text style={s.unreadText}>{item.unread}</Text>
+              </View>
+            ))}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
 
 const ChatsListScreen = ({ navigation, route }: any) => {
   const userRole: DrawerRole = route?.params?.userRole === 'teacher' ? 'teacher' : 'student';
+  const isStudent = userRole === 'student';
 
-  const [chats, setChats] = useState<ChatItem[]>(
-    userRole === 'student' ? STUDENT_CHATS : TEACHER_CHATS,
-  );
+  const [contacts, setContacts] = useState<ChatContact[]>([]);
+  // The skeleton shows on the first load and on a pull to refresh; while the
+  // list is on screen it checks for new messages quietly.
+  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const loadedRef = useRef(false);
+  const [error, setError] = useState<string | null>(null);
+  const [last, rememberLast] = useLastLoaded<ChatContact[]>(`chats:${userRole}`);
+
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // TODO: wire to the chats API loader once integrated.
-  const { refreshing, onRefresh } = useRefresh(() => {});
+  const load = useCallback(
+    async (showSkeleton = false) => {
+      if (showSkeleton) setLoading(true);
+      try {
+        const list = await getChatContacts();
+        setContacts(list);
+        setError(null);
+        setLoaded(true);
+        loadedRef.current = true;
+        rememberLast(list);
+      } catch (e: any) {
+        console.log('[ChatsListScreen] load failed:', e?.response?.status, e?.message);
+        // A failed check keeps the list on screen; only a list never loaded says so.
+        if (!loadedRef.current) setError(chatErrorMessage(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [rememberLast],
+  );
+
+  const reload = useCallback(() => load(true), [load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+      const timer = setInterval(() => load(), POLL_MS);
+      const off = onChatPush(() => load());
+      return () => {
+        clearInterval(timer);
+        off();
+      };
+    }, [load]),
+  );
 
   const selectionMode = selectedIds.length > 0;
 
+  // While it loads, the list is drawn as a skeleton from the chats it shows.
+  const shown = loading ? (loaded ? contacts : Array.isArray(last) ? last : SAMPLE_CONTACTS) : contacts;
+
   const q = searchText.trim().toLowerCase();
   const filteredChats = q
-    ? chats.filter(
-        c => c.name.toLowerCase().includes(q) || (c.subject ?? '').toLowerCase().includes(q),
-      )
-    : chats;
+    ? shown.filter(c => c.name.toLowerCase().includes(q) || (c.subtitle ?? '').toLowerCase().includes(q))
+    : shown;
 
-  const toggleSelect = (id: string) =>
+  const toggleSelect = (id: number) =>
     setSelectedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
 
-  const deleteSelected = () => {
-    setChats(prev => prev.filter(c => !selectedIds.includes(c.id)));
-    setSelectedIds([]);
+  const deleteSelected = async () => {
+    const ids = selectedIds;
     setConfirmDelete(false);
+    setSelectedIds([]);
+    try {
+      await deleteChatConversations(ids);
+    } catch (e: any) {
+      AppAlert.alert('Could not delete', chatErrorMessage(e));
+    }
+    load();
   };
 
   const closeSearch = () => {
@@ -316,33 +277,61 @@ const ChatsListScreen = ({ navigation, route }: any) => {
         </View>
       )}
 
-      <FlatList
-        data={filteredChats}
-        keyExtractor={i => i.id}
-        contentContainerStyle={[s.list, filteredChats.length === 0 && s.listEmpty]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={
-          <DocNoData
-            icon="chatbubbles-outline"
-            title="No chats found"
-            subtitle={q ? 'Nothing matches that search.' : 'Your conversations will appear here.'}
-          />
-        }
-        renderItem={({ item, index }) => (
-          <ChatRow
-            item={item}
-            isStudent={userRole === 'student'}
-            selected={selectedIds.includes(item.id)}
-            isLast={index === filteredChats.length - 1}
-            onPress={() => {
-              if (selectionMode) toggleSelect(item.id);
-              else navigation.navigate('UserChats', { chat: item, userRole });
-            }}
-            onLongPress={() => toggleSelect(item.id)}
-          />
-        )}
-      />
+      {error && !loaded && !loading ? (
+        <View style={s.centeredBox}>
+          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
+          <Text style={s.errorText}>{error}</Text>
+          <TouchableOpacity onPress={reload} hitSlop={10}>
+            <Text style={s.linkText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredChats}
+          keyExtractor={i => String(i.user_id)}
+          contentContainerStyle={[s.list, filteredChats.length === 0 && s.listEmpty]}
+          showsVerticalScrollIndicator={false}
+          // The skeleton stands in for the spinner.
+          refreshControl={<AppRefreshControl refreshing={false} onRefresh={reload} />}
+          ListEmptyComponent={
+            <DocNoData
+              icon="chatbubbles-outline"
+              title={q ? 'No chats found' : 'No chats yet'}
+              subtitle={
+                q
+                  ? 'Nothing matches that search.'
+                  : isStudent
+                  ? 'The teachers of your class will appear here.'
+                  : 'The students of the classes you teach will appear here.'
+              }
+              skeleton={loading}
+            />
+          }
+          renderItem={({ item, index }) => (
+            <ChatRow
+              item={item}
+              skeleton={loading}
+              selected={selectedIds.includes(item.user_id)}
+              isLast={index === filteredChats.length - 1}
+              onPress={() => {
+                if (selectionMode) toggleSelect(item.user_id);
+                else
+                  navigation.navigate('UserChats', {
+                    contact: {
+                      user_id: item.user_id,
+                      name: item.name,
+                      avatar: item.avatar,
+                      subtitle: item.subtitle,
+                    },
+                    userRole,
+                  });
+              }}
+              // Only a chat with messages has anything to delete.
+              onLongPress={() => item.conversation_id && toggleSelect(item.user_id)}
+            />
+          )}
+        />
+      )}
 
       {/* Delete confirmation */}
       <Modal
@@ -357,7 +346,7 @@ const ChatsListScreen = ({ navigation, route }: any) => {
               Delete {selectedIds.length === 1 ? 'chat' : `${selectedIds.length} chats`}?
             </Text>
             <Text style={s.modalDesc}>
-              The conversation and its messages will be removed. This cannot be undone.
+              The messages will be removed for you. The other person keeps their copy.
             </Text>
             <View style={s.modalActions}>
               <TouchableOpacity
@@ -425,17 +414,6 @@ const __mk_s = () => StyleSheet.create({
   avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: theme.colors.background },
   avatarFallback: { alignItems: 'center', justifyContent: 'center' },
   avatarInitials: { fontSize: 15, fontWeight: '600', color: theme.colors.textSecondary },
-  onlineDot: {
-    position: 'absolute',
-    right: 1,
-    bottom: 1,
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    backgroundColor: theme.colors.success,
-    borderWidth: 2,
-    borderColor: theme.colors.card,
-  },
   tick: {
     position: 'absolute',
     right: 0,
@@ -452,12 +430,14 @@ const __mk_s = () => StyleSheet.create({
 
   rowText: { flex: 1, gap: 3 },
   rowLine: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  name: { flex: 1, fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  fill: { flex: 1 },
+  name: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   subject: { fontSize: 13, fontWeight: '400', color: theme.colors.textMuted },
   time: { fontSize: 12, color: theme.colors.textMuted },
   timeUnread: { color: theme.colors.primary, fontWeight: '500' },
-  last: { flex: 1, fontSize: 13, color: theme.colors.textSecondary },
+  last: { fontSize: 13, color: theme.colors.textSecondary },
   lastUnread: { color: theme.colors.textPrimary, fontWeight: '500' },
+  lastNone: { color: theme.colors.textMuted },
   unread: {
     minWidth: 18,
     height: 18,
@@ -468,6 +448,11 @@ const __mk_s = () => StyleSheet.create({
     justifyContent: 'center',
   },
   unreadText: { fontSize: 11, fontWeight: '600', color: theme.colors.white },
+
+  // Error
+  centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
+  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  linkText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 
   // Confirm modal
   modalOverlay: {

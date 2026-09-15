@@ -16,6 +16,7 @@ import messaging, {
 } from '@react-native-firebase/messaging';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { notify } from './index';
+import { emitChatPush, isChatOpenWith } from '../screens/chats/chatEvents';
 import { NotifData, NotificationType } from './catalog';
 import {
   registerDeviceToken,
@@ -39,6 +40,16 @@ export async function handleRemoteMessage(
       parsedParams = JSON.parse(params);
     } catch {
       parsedParams = undefined;
+    }
+  }
+
+  // A chat message: an open chat screen fetches it at once, and the
+  // conversation already on screen takes it without a banner.
+  if (type === 'chat_message') {
+    const from = Number(parsedParams?.contact?.user_id);
+    if (from) {
+      emitChatPush(from);
+      if (isChatOpenWith(from)) return;
     }
   }
 

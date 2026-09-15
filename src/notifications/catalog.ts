@@ -73,6 +73,7 @@ export type NotificationType =
   | 'leave_approved'
   | 'general'
   | 'promo'
+  | 'chat_message'
   | (string & {});
 
 export const CATALOG: Record<string, CatalogEntry> = {
@@ -146,6 +147,12 @@ export const CATALOG: Record<string, CatalogEntry> = {
   },
   promo: {
     category: 'Announcement',
+  },
+  // A student or teacher sent a chat message; the push carries their name and words.
+  chat_message: {
+    category: 'General',
+    buildTitle: () => 'New message',
+    buildBody: () => 'You have a new chat message.',
   },
 };
 
