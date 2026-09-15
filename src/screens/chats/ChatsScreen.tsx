@@ -508,7 +508,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
               </View>
             )}
             <View style={s.topInfo}>
-              <Text style={s.topName} numberOfLines={1}>
+              <Text style={s.topInfoName} numberOfLines={1}>
                 {contact.name}
               </Text>
               <Text style={s.topSubtitle} numberOfLines={1}>
@@ -680,9 +680,11 @@ const __mk_s = () => StyleSheet.create({
   topAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: CH.page },
   topAvatarFallback: { alignItems: 'center', justifyContent: 'center' },
   topAvatarInitials: { fontSize: 13, fontWeight: '600', color: CH.sub },
-  topInfo: { flex: 1 },
+  // The name and the line under it sit together, centred on the photo.
+  topInfo: { flex: 1, justifyContent: 'center' },
+  topInfoName: { fontSize: 15, lineHeight: 19, fontWeight: '600', color: CH.ink },
   topName: { flex: 1, fontSize: 15, fontWeight: '600', color: CH.ink },
-  topSubtitle: { fontSize: 12, color: CH.muted, marginTop: 1 },
+  topSubtitle: { fontSize: 12, lineHeight: 15, color: CH.muted },
 
   // Messages
   msgList: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 14 },

@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { Keyboard, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Easing,
   useAnimatedKeyboard,
@@ -29,12 +28,12 @@ import {
  * The JS keyboard events are still watched and the larger of the two heights
  * wins, so the screen lifts even on a device where only one of them reports.
  *
- * The app already sits above the bottom safe area (App.tsx wraps everything in
- * a SafeAreaView with the bottom edge), so only the part of the keyboard that
- * actually overlaps the content is made up for.
+ * Both heights already leave out the phone's navigation bar, which the app sits
+ * above (App.tsx wraps everything in a SafeAreaView with the bottom edge), so
+ * the content is lifted by the whole of either — taking the bar off again left
+ * a chat's composer under the keyboard by the bar's height.
  */
 export function useKeyboardLiftStyle(): AnimatedStyle {
-  const insets = useSafeAreaInsets();
   const keyboard = useAnimatedKeyboard();
   const jsHeight = useSharedValue(0);
 
@@ -54,10 +53,9 @@ export function useKeyboardLiftStyle(): AnimatedStyle {
     return () => subs.forEach(sub => sub.remove());
   }, [jsHeight]);
 
-  return useAnimatedStyle(() => {
-    const height = Math.max(keyboard.height.value, jsHeight.value);
-    return { paddingBottom: Math.max(0, height - insets.bottom) };
-  });
+  return useAnimatedStyle(() => ({
+    paddingBottom: Math.max(keyboard.height.value, jsHeight.value),
+  }));
 }
 
 /**

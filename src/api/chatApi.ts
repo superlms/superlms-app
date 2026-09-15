@@ -24,6 +24,11 @@ export interface ChatPerson {
   avatar: string | null;
   // A student's teacher: the subjects they teach the class. A teacher's student: "10th A".
   subtitle: string | null;
+  // A teacher: each subject they teach the student's class.
+  subjects?: string[];
+  // A student: their class and section, to pick a class before a student.
+  standard?: { id: number; name: string } | null;
+  section?: { id: number; name: string } | null;
 }
 
 export interface ChatContact extends ChatPerson {

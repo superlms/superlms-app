@@ -80,6 +80,8 @@ const ChatRow = ({
   skeleton?: boolean;
 }) => {
   const unread = item.unread > 0;
+  // By the name: a teacher's subjects, or a student's class · section.
+  const detail = [item.standard?.name, item.section?.name].filter(Boolean).join(' · ') || item.subtitle;
 
   return (
     <TouchableOpacity
@@ -111,7 +113,7 @@ const ChatRow = ({
           <View style={s.fill}>
             <Words skeleton={skeleton} style={s.name}>
               {item.name}
-              {item.subtitle ? <Text style={s.subject}>{`  ${item.subtitle}`}</Text> : null}
+              {detail ? <Text style={s.subject}>{`  ${detail}`}</Text> : null}
             </Words>
           </View>
           {!!item.last_message && (
@@ -196,8 +198,11 @@ const ChatsListScreen = ({ navigation, route }: any) => {
 
   const selectionMode = selectedIds.length > 0;
 
-  // While it loads, the list is drawn as a skeleton from the chats it shows.
-  const shown = loading ? (loaded ? contacts : Array.isArray(last) ? last : SAMPLE_CONTACTS) : contacts;
+  // Only people there has been a conversation with — + starts a new one. While
+  // it loads, the list is drawn as a skeleton from the chats it shows.
+  const shown = (loading ? (loaded ? contacts : Array.isArray(last) ? last : SAMPLE_CONTACTS) : contacts).filter(
+    c => !!c.last_message,
+  );
 
   const q = searchText.trim().toLowerCase();
   const filteredChats = q
@@ -232,25 +237,38 @@ const ChatsListScreen = ({ navigation, route }: any) => {
         height={50}
         onBackPress={() => (selectionMode ? setSelectedIds([]) : navigation.goBack())}
         rightSlot={
-          <TouchableOpacity
-            style={s.headBtn}
-            activeOpacity={0.6}
-            hitSlop={8}
-            onPress={() =>
-              selectionMode
-                ? setConfirmDelete(true)
-                : searchOpen
-                ? closeSearch()
-                : setSearchOpen(true)
-            }
-          >
-            <VectorIcon
-              iconSet="Ionicons"
-              iconName={selectionMode ? 'trash-outline' : searchOpen ? 'close' : 'search'}
-              size={19}
-              color={selectionMode ? theme.colors.danger : theme.colors.primary}
-            />
-          </TouchableOpacity>
+          <View style={s.headActions}>
+            <TouchableOpacity
+              style={s.headBtn}
+              activeOpacity={0.6}
+              hitSlop={8}
+              onPress={() =>
+                selectionMode
+                  ? setConfirmDelete(true)
+                  : searchOpen
+                  ? closeSearch()
+                  : setSearchOpen(true)
+              }
+            >
+              <VectorIcon
+                iconSet="Ionicons"
+                iconName={selectionMode ? 'trash-outline' : searchOpen ? 'close' : 'search'}
+                size={19}
+                color={selectionMode ? theme.colors.danger : theme.colors.primary}
+              />
+            </TouchableOpacity>
+            {/* + starts a chat: a student picks a teacher, a teacher a class and then a student */}
+            {!selectionMode && (
+              <TouchableOpacity
+                style={s.headBtn}
+                activeOpacity={0.6}
+                hitSlop={8}
+                onPress={() => navigation.navigate('NewChat', { userRole })}
+              >
+                <VectorIcon iconSet="Ionicons" iconName="add" size={24} color={theme.colors.primary} />
+              </TouchableOpacity>
+            )}
+          </View>
         }
       />
 
@@ -301,8 +319,8 @@ const ChatsListScreen = ({ navigation, route }: any) => {
                 q
                   ? 'Nothing matches that search.'
                   : isStudent
-                  ? 'The teachers of your class will appear here.'
-                  : 'The students of the classes you teach will appear here.'
+                  ? 'Tap + to message a teacher of your class.'
+                  : 'Tap + to choose a class and message a student.'
               }
               skeleton={loading}
             />
@@ -377,6 +395,7 @@ const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
 
   headBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  headActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 
   // Search
   searchWrap: {
@@ -432,7 +451,7 @@ const __mk_s = () => StyleSheet.create({
   rowLine: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   fill: { flex: 1 },
   name: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  subject: { fontSize: 13, fontWeight: '400', color: theme.colors.textMuted },
+  subject: { fontSize: 11, fontWeight: '400', color: theme.colors.textMuted },
   time: { fontSize: 12, color: theme.colors.textMuted },
   timeUnread: { color: theme.colors.primary, fontWeight: '500' },
   last: { fontSize: 13, color: theme.colors.textSecondary },
