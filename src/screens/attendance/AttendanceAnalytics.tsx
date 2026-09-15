@@ -63,12 +63,15 @@ interface MonthAnalytics {
   absentDays: number;
   holidayDays: number;
   pct: number;
+  /** The month's first day marked present or absent, if any. */
+  firstMarked: string | null;
 }
 
 // ── Loading ──────────────────────────────────────────────────────────────────
-// The page line for line: the year's percentage and its line, the four totals,
-// then a row per month — its name and percentage, bar, counts and arrow.
-const AnalyticsSkeleton = ({ months }: { months: number }) => {
+// The page line for line: the year's percentage, its line and the from–to
+// dates, the four totals, then a row per month — its name and percentage, bar,
+// counts and arrow.
+const AnalyticsSkeleton = ({ months, range }: { months: number; range: boolean }) => {
   const n = Math.max(months, 1);
   return (
     <View>
@@ -76,6 +79,7 @@ const AnalyticsSkeleton = ({ months }: { months: number }) => {
         <Skeleton width={130} height={11} />
         <Skeleton width={96} height={40} />
         <Skeleton width="62%" height={13} />
+        {range && <Skeleton width="52%" height={13} />}
       </View>
 
       <FullDivider />
@@ -106,7 +110,7 @@ const AnalyticsSkeleton = ({ months }: { months: number }) => {
                 </View>
                 <Skeleton width={34} height={14} />
               </View>
-              <Skeleton width="100%" height={4} radius={2} />
+              <Skeleton width="70%" height={4} radius={2} />
               <Skeleton width="58%" height={12} />
             </View>
             <Skeleton width={10} height={14} />
@@ -135,6 +139,12 @@ const AttendanceAnalyticsScreen = ({ navigation, route }: any) => {
         const workDays = sum?.working_days ?? 0;
         const presentDays = sum?.present_days ?? 0;
         const absentDays = sum?.absent_days ?? 0;
+        // Holidays don't count — Sundays come back as holidays unmarked.
+        const firstMarked =
+          r?.days
+            .filter(d => d.status === 'present' || d.status === 'absent')
+            .map(d => d.date)
+            .sort()[0] ?? null;
         return {
           key,
           label: moment(key, 'YYYY-MM').format('MMM YYYY'),
@@ -143,6 +153,7 @@ const AttendanceAnalyticsScreen = ({ navigation, route }: any) => {
           absentDays,
           holidayDays,
           pct: workDays > 0 ? Math.round((presentDays / workDays) * 100) : 0,
+          firstMarked,
         };
       }),
     );
@@ -185,13 +196,23 @@ const AttendanceAnalyticsScreen = ({ navigation, route }: any) => {
   // A month the year has not reached yet has nothing to say.
   const recorded = months.filter(m => m.workDays > 0);
 
+  // The span the figures cover: from the first day attendance was marked this
+  // year, up to today.
+  const firstMarked = months
+    .map(m => m.firstMarked)
+    .filter((d): d is string => !!d)
+    .sort()[0];
+
   return (
     <View style={s.root}>
       <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
 
       {loading || refreshing ? (
         // A row per month there was, or per month of the year before the first load.
-        <AnalyticsSkeleton months={months.length > 0 ? recorded.length : sessionMonthKeys().length} />
+        <AnalyticsSkeleton
+          months={months.length > 0 ? recorded.length : sessionMonthKeys().length}
+          range={months.length === 0 || !!firstMarked}
+        />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -205,6 +226,12 @@ const AttendanceAnalyticsScreen = ({ navigation, route }: any) => {
             <Text style={s.band}>
               {bandFor(overallPct)} · {overall.presentDays} of {overall.workDays} working days
             </Text>
+            {!!firstMarked && (
+              <Text style={s.range}>
+                From <Text style={s.rangeDate}>{moment(firstMarked).format('D MMM YYYY')}</Text> to{' '}
+                <Text style={s.rangeDate}>{moment().format('D MMM YYYY')}</Text>
+              </Text>
+            )}
           </View>
 
           <FullDivider />
@@ -285,6 +312,8 @@ const __mk_s = () => StyleSheet.create({
     marginTop: 4,
   },
   band: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 2 },
+  range: { fontSize: 13, color: theme.colors.textMuted, marginTop: 8 },
+  rangeDate: { fontWeight: '600', color: theme.colors.textPrimary },
 
   // Totals
   body: { paddingHorizontal: 20, paddingTop: 2 },
@@ -305,7 +334,14 @@ const __mk_s = () => StyleSheet.create({
   monthPctLow: { color: theme.colors.danger },
   monthMeta: { fontSize: 12, color: theme.colors.textMuted },
 
-  barBg: { height: 4, borderRadius: 2, backgroundColor: theme.colors.border, overflow: 'hidden' },
+  // The bar runs across part of the row, not all of it.
+  barBg: {
+    width: '70%',
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.border,
+    overflow: 'hidden',
+  },
   barFill: { height: '100%', borderRadius: 2, backgroundColor: theme.colors.primary },
   barFillLow: { backgroundColor: theme.colors.danger },
 
