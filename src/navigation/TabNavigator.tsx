@@ -11,6 +11,7 @@ import StudentHomeworkScreen from '../screens/homework/StudentHomeworkScreen';
 import markAttendanceScreen from '../screens/markAttendance/markAttendanceScreen';
 import FeesScreen from '../screens/fees/FeesScreen';
 import SubjectsScreen from '../screens/subjects/SubjectsScreen';
+import TeacherSubjectsScreen from '../screens/subjects/TeacherSubjectsScreen';
 import TeacherTImetableScreen from '../screens/timetable/TeacherTImetableScreen';
 import AttendanceScreen from '../screens/attendance/AttendanceScreen';
 
@@ -95,7 +96,10 @@ const TabNavigator = ({ route }: any) => {
       })}
     >
       <Tab.Screen name="Dashboard" component={DashboardComponent} />
-      <Tab.Screen name="Subjects" component={SubjectsScreen} />
+      <Tab.Screen
+        name="Subjects"
+        component={role === 'teacher' ? TeacherSubjectsScreen : SubjectsScreen}
+      />
 
       {/* The middle tab: a teacher's timetable, a student's attendance */}
       {role === 'teacher' ? (

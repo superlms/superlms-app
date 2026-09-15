@@ -39,6 +39,7 @@ import TransportScreen from '../screens/transport/TransportScreen';
 import TeacherSyllabusScreen from '../screens/syllabus/TeacherSyllabusScreen';
 import StudentSyllabusScreen from '../screens/syllabus/StudentSyllabusScreen';
 import SubjectsScreen from '../screens/subjects/SubjectsScreen';
+import TeacherSubjectsScreen from '../screens/subjects/TeacherSubjectsScreen';
 import StudentTimetableScreen from '../screens/timetable/StudentTimetableScreen';
 import TeacherTImetableScreen from '../screens/timetable/TeacherTImetableScreen';
 import ExamMainScreen from '../screens/exam/ExamMainScreen';
@@ -439,7 +440,7 @@ const DrawerNavigator = ({ route }: any) => {
       />
       <Drawer.Screen
         name="Subjects"
-        component={SubjectsScreen}
+        component={role === 'teacher' ? TeacherSubjectsScreen : SubjectsScreen}
         initialParams={{ title: 'Subjects' }}
       />
       <Drawer.Screen
