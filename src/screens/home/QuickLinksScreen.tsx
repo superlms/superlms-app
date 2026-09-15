@@ -240,7 +240,7 @@ const QuickLinksScreen = () => {
 
   return (
     <View style={s.root}>
-      <Header title="Quick Links" showBack={false} height={50} />
+      <Header title="Quick Links" showBack={false} divider height={50} />
 
       {/* Search */}
       <View style={s.search}>

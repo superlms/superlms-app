@@ -279,6 +279,7 @@ const AttendanceScreen = ({ navigation, route }: any) => {
     <View style={s.root}>
       <Header
         title={TITLE}
+        divider
         height={50}
         rightSlot={
           // Analytics — a small chart on the accent's own tint.
