@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { CommonActions, useNavigation } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import VectorIcon from './VectorIcon';
 import { useKeyboardHeight } from '../hooks/useKeyboardLift';
@@ -94,7 +94,15 @@ const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
 // ─── Sheet ────────────────────────────────────────────────────────────────────
 const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
   const navigation = useNavigation<any>();
-  const insets = useSafeAreaInsets();
+  // Inside the popup the screen's insets can come through as zero — the
+  // navigators nest their own providers within the app's safe area — which left
+  // the status bar dimmed and slid the sheet under the navigation bar. The
+  // window's own insets, measured at launch, fill in.
+  const contextInsets = useSafeAreaInsets();
+  const insets = {
+    top: Math.max(contextInsets.top, initialWindowMetrics?.insets.top ?? 0),
+    bottom: Math.max(contextInsets.bottom, initialWindowMetrics?.insets.bottom ?? 0),
+  };
 
   // The sheet rides up with the keyboard as it opens, instead of jumping.
   const keyboardHeight = useKeyboardHeight();
@@ -476,8 +484,13 @@ const ListBody = ({ bootstrapping, accounts, activeId, busyId, onSwitch, onRemov
               ) : isActive ? (
                 <VectorIcon iconSet="Ionicons" iconName="checkmark-circle" size={22} color={theme.colors.primary} />
               ) : (
-                <TouchableOpacity onPress={() => onRemove(acct)} hitSlop={10} activeOpacity={0.6}>
-                  <Text style={s.removeText}>Remove</Text>
+                <TouchableOpacity
+                  onPress={() => onRemove(acct)}
+                  hitSlop={10}
+                  activeOpacity={0.6}
+                  accessibilityLabel={`Remove ${acct.name}`}
+                >
+                  <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={20} color={theme.colors.textMuted} />
                 </TouchableOpacity>
               )}
             </TouchableOpacity>
@@ -651,7 +664,6 @@ const __mk_s = () => StyleSheet.create({
   rowName: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   rowNameActive: { fontWeight: '600' },
   rowMeta: { fontSize: 12, color: theme.colors.textMuted },
-  removeText: { fontSize: 13, fontWeight: '500', color: theme.colors.textMuted },
 
   addIcon: { alignItems: 'center', justifyContent: 'center' },
   addText: { fontSize: 15, fontWeight: '600', color: theme.colors.primary },
