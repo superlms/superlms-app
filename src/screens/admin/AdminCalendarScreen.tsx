@@ -61,7 +61,6 @@ const AdminCalendarScreen = ({ navigation }: any) => {
     <View style={s.root}>
       <Header
         title={TITLE}
-        divider
         height={50}
         onBackPress={() =>
           navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome')

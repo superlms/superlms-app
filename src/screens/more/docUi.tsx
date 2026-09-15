@@ -37,8 +37,8 @@ export const lastUpdated = (date?: string | null) => {
   return `Last updated ${d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`;
 };
 
-// ── Screen header: compact 50px bar, with a thin line under it that separates it
-// from the white page ──────────────────────────────────────────────────────────
+// ── Screen header: compact 50px bar with no line under it, in the status bar's
+// white, so status bar, header and page read as one surface ───────────────────
 export const DocHeader = ({
   title,
   onBackPress,
@@ -55,7 +55,6 @@ export const DocHeader = ({
     onBackPress={onBackPress}
     rightIcon={rightIcon}
     onRightPress={onRightPress}
-    divider
     height={50}
   />
 );

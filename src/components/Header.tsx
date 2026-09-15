@@ -22,8 +22,6 @@ interface HeaderProps {
   rightText?: string;
   /** Optional custom right-side content (e.g. multiple action buttons). */
   rightSlot?: React.ReactNode;
-  /** Draw a thin line between the header and the screen below. */
-  divider?: boolean;
   /** Bar height (default 60). */
   height?: number;
 }
@@ -37,7 +35,6 @@ const Header = ({
   onRightPress,
   rightText,
   rightSlot,
-  divider,
   height = 60,
 }: HeaderProps) => {
   const navigation = useNavigation<any>();
@@ -57,7 +54,7 @@ const Header = ({
         backgroundColor={theme.colors.statusBar}
         translucent={false}
       />
-      <View style={[styles.container, { backgroundColor: headerBg, height }, divider && styles.divider]}>
+      <View style={[styles.container, { backgroundColor: headerBg, height }]}>
         <View style={styles.side}>
           {showBack ? (
             <TouchableOpacity
@@ -116,10 +113,6 @@ const __mk_styles = () => StyleSheet.create({
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing.sm,
-  },
-  divider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.divider,
   },
   side: {
     width: 36,

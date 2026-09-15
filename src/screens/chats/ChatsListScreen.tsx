@@ -267,7 +267,6 @@ const ChatsListScreen = ({ navigation, route }: any) => {
     <View style={s.root}>
       <Header
         title={selectionMode ? `${selectedIds.length} selected` : 'Chats'}
-        divider
         height={50}
         onBackPress={() => (selectionMode ? setSelectedIds([]) : navigation.goBack())}
         rightSlot={

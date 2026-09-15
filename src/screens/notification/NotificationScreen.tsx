@@ -113,7 +113,6 @@ const NotificationScreen = ({ navigation }: any) => {
     <View style={s.root}>
       <Header
         title={selectionMode ? `${selectedIds.length} selected` : TITLE}
-        divider
         height={50}
         onBackPress={() => (selectionMode ? clearSelection() : navigation.goBack())}
         rightSlot={
