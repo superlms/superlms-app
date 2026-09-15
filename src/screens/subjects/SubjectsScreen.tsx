@@ -1,18 +1,7 @@
 import React from 'react';
 import { StudentSubjectList } from './subjectLists';
 
-const SubjectsScreen = ({ navigation }: any) => (
-  <StudentSubjectList
-    navigation={navigation}
-    title="Subjects"
-    onOpen={sub =>
-      navigation.navigate('SubjectDetails', {
-        subjectId: sub.id,
-        subjectName: sub.name,
-        subjectImage: sub.image,
-      })
-    }
-  />
-);
+// A student's subjects, as the list alone — a subject opens nothing.
+const SubjectsScreen = ({ navigation }: any) => <StudentSubjectList navigation={navigation} title="Subjects" />;
 
 export default SubjectsScreen;

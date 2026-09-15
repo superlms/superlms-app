@@ -27,12 +27,14 @@ import { SubjectIcon } from './subjectIcon';
 
 /**
  * The first screen of Subjects, Syllabus and Study Content: the subjects as
- * plain rows, each opening onto that subject's chapters.
+ * plain rows, each opening onto that subject's chapters — except a student's
+ * Subjects, which is the list alone.
  */
 
 // ── One subject ──────────────────────────────────────────────────────────────
 //   (icon)  English                                          >
 //           10 chapters · 24 topics
+// Without onPress the row opens nothing, and has no arrow.
 export const SubjectRow = ({
   image,
   title,
@@ -44,9 +46,10 @@ export const SubjectRow = ({
   title: string;
   meta?: string | null;
   isLast: boolean;
-  onPress: () => void;
-}) => (
-    <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onPress}>
+  onPress?: () => void;
+}) => {
+  const body = (
+    <>
       <SubjectIcon image={image} size={30} />
 
       <View style={s.body}>
@@ -60,22 +63,34 @@ export const SubjectRow = ({
         )}
       </View>
 
-      <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />
+      {!!onPress && (
+        <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />
+      )}
+    </>
+  );
+
+  return onPress ? (
+    <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onPress}>
+      {body}
     </TouchableOpacity>
-);
+  ) : (
+    <View style={[s.row, !isLast && s.rowDivider]}>{body}</View>
+  );
+};
 
 interface Item {
   key: string;
   image?: string | null;
   title: string;
   meta?: string | null;
-  onPress: () => void;
+  onPress?: () => void;
 }
 
 // ── Loading ──────────────────────────────────────────────────────────────────
 // The list line for line: the count, then each subject's icon tile, name, size
-// and arrow — a row per subject there was, or five before the first load.
-const ListSkeleton = ({ rows }: { rows: number }) => {
+// and arrow (where rows open) — a row per subject there was, or five before the
+// first load.
+const ListSkeleton = ({ rows, arrows }: { rows: number; arrows: boolean }) => {
   const n = rows > 0 ? Math.min(rows, 10) : 5;
   return (
     <View style={s.list}>
@@ -89,7 +104,7 @@ const ListSkeleton = ({ rows }: { rows: number }) => {
             <Skeleton width="45%" height={14} />
             <Skeleton width="35%" height={12} />
           </View>
-          <Skeleton width={8} height={13} />
+          {arrows && <Skeleton width={8} height={13} />}
         </View>
       ))}
     </View>
@@ -103,6 +118,7 @@ const ListBody = ({
   error,
   onRetry,
   items,
+  openable,
   empty,
 }: {
   loading: boolean;
@@ -111,12 +127,14 @@ const ListBody = ({
   error: string | null;
   onRetry: () => void;
   items: Item[];
+  /** Whether the rows open onto anything — the skeleton draws their arrows. */
+  openable: boolean;
   empty: { title: string; subtitle: string };
 }) => {
   // The first load and a pull to refresh show the skeleton; coming back to the
   // list refetches quietly, without blanking it.
   if (refreshing || (loading && items.length === 0)) {
-    return <ListSkeleton rows={items.length} />;
+    return <ListSkeleton rows={items.length} arrows={openable} />;
   }
 
   if (error && items.length === 0) {
@@ -178,7 +196,8 @@ export const StudentSubjectList = ({
   navigation: any;
   title: string;
   metaFor?: (subject: SubjectWithChapters) => string | null;
-  onOpen: (subject: SubjectWithChapters) => void;
+  /** Leave out for a list that opens nothing. */
+  onOpen?: (subject: SubjectWithChapters) => void;
 }) => {
   const [subjects, setSubjects] = useState<SubjectWithChapters[]>([]);
   const [loading, setLoading] = useState(true);
@@ -218,7 +237,7 @@ export const StudentSubjectList = ({
     // The name as the school typed it in the admin panel.
     title: sub.name,
     meta: metaFor(sub),
-    onPress: () => onOpen(sub),
+    onPress: onOpen ? () => onOpen(sub) : undefined,
   }));
 
   return (
@@ -231,6 +250,7 @@ export const StudentSubjectList = ({
         error={error}
         onRetry={load}
         items={items}
+        openable={!!onOpen}
         empty={{ title: 'No subjects yet', subtitle: 'No subjects have been assigned to your class.' }}
       />
     </View>
@@ -287,6 +307,7 @@ export const TeacherSubjectList = ({
         error={error}
         onRetry={load}
         items={items}
+        openable
         empty={{ title: 'No subjects assigned', subtitle: 'You don’t teach any class and subject yet.' }}
       />
     </View>
