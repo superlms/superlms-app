@@ -113,7 +113,7 @@ const TopBar = ({ userName, onBellPress, onAvatarPress }: TopBarProps) => {
   return (
     <View style={styles.container}>
       {/* White status-bar tint with dark icons. */}
-      <StatusBar translucent={false} backgroundColor={theme.colors.statusBar} barStyle="dark-content" />
+      <StatusBar translucent backgroundColor={theme.colors.statusBar} barStyle="dark-content" />
       {/* Paint the safe-area inset (notch / status-bar strip) white. */}
       <View style={[styles.statusBackdrop, { top: -insets.top, height: insets.top }]} />
 

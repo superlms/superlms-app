@@ -50,6 +50,9 @@ const AppInner = () => {
 
   // The status-bar strip is painted with the same colour as the top bars so
   // the two read as one surface; the bottom inset keeps the page background.
+  // The bar is translucent so the page reaches up under it and this strip is
+  // what shows there: Android 15+ ignores a status bar colour, and a bar that is
+  // not translucent shows the window's own grey (#FAFAFA) above the header.
   return (
     <View
       style={[
@@ -60,7 +63,7 @@ const AppInner = () => {
       <StatusBar
         barStyle="dark-content"
         backgroundColor={theme.colors.statusBar}
-        translucent={false}
+        translucent
       />
       <SafeAreaView
         style={[styles.safeArea, { backgroundColor: theme.colors.background }]}

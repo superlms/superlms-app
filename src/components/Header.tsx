@@ -51,11 +51,12 @@ const Header = ({
 
   return (
     <>
-      {/* Status bar tinted the same as the header, so there's no seam. */}
+      {/* Translucent, as at the app's root, whose white strip under the status
+          bar meets the header with no seam. */}
       <StatusBar
         barStyle="dark-content"
         backgroundColor={theme.colors.statusBar}
-        translucent={false}
+        translucent
       />
       <View style={[styles.container, { backgroundColor: headerBg, height }, divider && styles.divider]}>
         <View style={styles.side}>
