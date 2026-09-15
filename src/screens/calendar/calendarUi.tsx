@@ -82,19 +82,22 @@ export const MonthBar = ({
 // ── Month grid ───────────────────────────────────────────────────────────────
 // Weeks start on Monday. Sundays are muted, today is written in the accent
 // colour, the selected day is a filled circle, and a day with events gets one
-// small dot underneath. `onlyMarked` limits tapping to days that have events.
+// small dot underneath. `onlyMarked` limits tapping to days that have events;
+// `disabledDate` greys out, and blocks, the days it returns true for.
 export const MonthGrid = ({
   month,
   selected,
   marked,
   onSelectDate,
   onlyMarked,
+  disabledDate,
 }: {
   month: moment.Moment;
   selected?: string;
   marked: Record<string, boolean>;
   onSelectDate?: (date: string) => void;
   onlyMarked?: boolean;
+  disabledDate?: (date: string) => boolean;
 }) => {
   const today = moment().format('YYYY-MM-DD');
 
@@ -129,7 +132,8 @@ export const MonthGrid = ({
             const isToday = day === today;
             const hasEvents = !!marked[day];
             const isSunday = moment(day).day() === 0;
-            const tappable = !!onSelectDate && (!onlyMarked || hasEvents);
+            const disabled = !!disabledDate?.(day);
+            const tappable = !!onSelectDate && !disabled && (!onlyMarked || hasEvents);
 
             return (
               <TouchableOpacity
@@ -150,6 +154,7 @@ export const MonthGrid = ({
                     style={[
                       s.dayNum,
                       isSunday && s.dayNumSunday,
+                      disabled && s.dayNumDisabled,
                       isToday && !isSelected && s.dayNumToday,
                       isSelected && s.dayNumSelected,
                     ]}
@@ -260,6 +265,7 @@ const __mk_s = () => StyleSheet.create({
   dayInnerSelected: { backgroundColor: theme.colors.primary, borderRadius: DAY / 2 },
   dayNum: { fontSize: 14, color: theme.colors.textPrimary },
   dayNumSunday: { color: theme.colors.textMuted },
+  dayNumDisabled: { color: theme.colors.textMuted, opacity: 0.35 },
   dayNumToday: { color: theme.colors.primary, fontWeight: '700' },
   dayNumSelected: { color: theme.colors.white, fontWeight: '600' },
   dot: { width: 4, height: 4, borderRadius: 2, marginTop: 3, backgroundColor: 'transparent' },

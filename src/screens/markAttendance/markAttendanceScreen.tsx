@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,21 +9,20 @@ import {
 } from 'react-native';
 import {
   AttendanceStatus,
-  STATUS_CODE,
   STATUS_CONFIG,
   formatLong,
-  getRecentMarkableDates,
+  isSundayIso,
+  sessionStartIso,
+  toIso,
 } from './markAttendanceData';
 import {
   attendanceErrorMessage,
   getStudentsForAttendance,
   markHoliday,
-  submitAttendance,
   type AttendanceClass,
   type AttendanceStudent,
 } from '../../api/attendanceApi';
 import { theme, onThemeChange } from '../../utils/theme';
-import constant from '../../utils/constant';
 import VectorIcon from '../../components/VectorIcon';
 import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
@@ -33,31 +30,13 @@ import { AppDialog, AppAlert } from '../../components/AppDialog';
 import { useFocusLoad, useRefresh } from '../../hooks/useRefresh';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { ErrorBox } from '../homework/homeworkUi';
-
-interface MarkStudent {
-  id: number; // student_detail_id
-  rollNo: string;
-  name: string;
-  photo: string | null;
-  status: AttendanceStatus;
-}
-
-// Teachers may mark the last 7 working days — Sundays (auto-holidays) are
-// skipped. Kept in sync with MARKABLE_DAYS in the API's AttendanceController.
-const MARKABLE_DAYS = 7;
+import AttendanceDateSheet from './AttendanceDateSheet';
+import { Avatar, countByStatus, type MarkStudent } from './markAttendanceUi';
 
 const STATUS_ORDER: AttendanceStatus[] = ['present', 'absent', 'holiday'];
 // "Mark all" sets the list only; a holiday for everyone is its own button,
 // saved straight away.
 const MARK_ALL: AttendanceStatus[] = ['present', 'absent'];
-
-// Resolve a (possibly relative) photo path into a full URL.
-const FILE_ORIGIN = constant.API_BASE_URL.replace(/\/api\/v\d+\/?$/, '');
-const resolveFileUrl = (url?: string | null): string | undefined => {
-  if (!url) return undefined;
-  if (/^https?:\/\//i.test(url)) return url;
-  return `${FILE_ORIGIN}/${url.replace(/^\/+/, '')}`;
-};
 
 // Map the server's per-student attendance into the P/A/Holiday model.
 const mapStatus = (a: AttendanceStudent['attendance']): AttendanceStatus => {
@@ -69,35 +48,13 @@ const mapStatus = (a: AttendanceStudent['attendance']): AttendanceStatus => {
 const toMarkStudent = (st: AttendanceStudent): MarkStudent => ({
   id: st.student_id,
   rollNo: String(st.roll_no ?? ''),
+  admissionNo: String(st.admission_no ?? ''),
   name: st.full_name,
   photo: st.photo ?? null,
   status: mapStatus(st.attendance),
 });
 
-const countByStatus = (students: MarkStudent[]) =>
-  students.reduce(
-    (acc, st) => {
-      acc[st.status]++;
-      return acc;
-    },
-    { present: 0, absent: 0, holiday: 0 } as Record<AttendanceStatus, number>,
-  );
-
-// ── Student photo with first-letter fallback ──
-const Avatar = ({ name, photo }: { name: string; photo: string | null }) => {
-  const uri = resolveFileUrl(photo);
-  const [failed, setFailed] = useState(false);
-  if (uri && !failed) {
-    return <Image source={{ uri }} style={s.avatar} onError={() => setFailed(true)} />;
-  }
-  return (
-    <View style={[s.avatar, s.avatarFallback]}>
-      <Text style={s.avatarInitial}>{(name || '?').charAt(0).toUpperCase()}</Text>
-    </View>
-  );
-};
-
-// ── One student: roll no, photo, name, then P / A / H ──
+// ── One student: roll no, photo, name over admission no, then P / A / H ──
 const StudentRow = ({
   student,
   last,
@@ -110,9 +67,14 @@ const StudentRow = ({
   <View style={[s.row, !last && s.rowDivider]}>
     <Text style={s.roll}>{student.rollNo || '—'}</Text>
     <Avatar name={student.name} photo={student.photo} />
-    <Text style={s.name} numberOfLines={1}>
-      {student.name}
-    </Text>
+    <View style={s.fill}>
+      <Text style={s.name} numberOfLines={1}>
+        {student.name}
+      </Text>
+      <Text style={s.admission} numberOfLines={1}>
+        Adm. No. {student.admissionNo || '—'}
+      </Text>
+    </View>
     <View style={s.toggles}>
       {STATUS_ORDER.map(st => {
         const active = student.status === st;
@@ -142,8 +104,9 @@ const ListSkeleton = () => (
     {[0, 1, 2, 3, 4, 5].map(i => (
       <View key={i} style={[s.row, s.rowDivider]}>
         <Skeleton width={34} height={34} radius={17} />
-        <View style={s.fill}>
+        <View style={[s.fill, s.skLines]}>
           <Skeleton width="60%" height={13} />
+          <Skeleton width="35%" height={11} />
         </View>
         <Skeleton width={114} height={34} radius={17} />
       </View>
@@ -151,10 +114,12 @@ const ListSkeleton = () => (
   </View>
 );
 
-const MarkAttendanceScreen = () => {
-  const [dates, setDates] = useState(() => getRecentMarkableDates(MARKABLE_DAYS));
-  const [selectedDate, setSelectedDate] = useState<string>(() => dates[dates.length - 1].iso);
-  const stripRef = useRef<ScrollView>(null);
+const MarkAttendanceScreen = ({ navigation }: any) => {
+  // Any day of the session, from 1 April up to today; it opens on today.
+  const [today, setToday] = useState(() => toIso(new Date()));
+  const [selectedDate, setSelectedDate] = useState<string>(today);
+  const [dateSheet, setDateSheet] = useState(false);
+  const sunday = isSundayIso(selectedDate);
 
   const [classes, setClasses] = useState<AttendanceClass[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
@@ -162,12 +127,10 @@ const MarkAttendanceScreen = () => {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [markingHoliday, setMarkingHoliday] = useState(false);
 
   // Dialogs
   const [holidayConfirm, setHolidayConfirm] = useState(false);
-  const [submitConfirm, setSubmitConfirm] = useState(false);
   const [success, setSuccess] = useState<{ title: string; message: string } | null>(null);
 
   const counts = countByStatus(students);
@@ -212,25 +175,26 @@ const MarkAttendanceScreen = () => {
     }
   }, []);
 
+  // A Sunday is already a holiday: there is nothing to load or mark.
   useEffect(() => {
+    if (sunday) {
+      setLoading(false);
+      setError(null);
+      return;
+    }
     loadClasses(selectedDate);
-  }, [selectedDate, loadClasses]);
+  }, [selectedDate, sunday, loadClasses]);
 
-  // Coming back to the screen shows what is saved now, so a day marked earlier
-  // opens ready to update. The first focus is the mount, already loading above.
+  // Coming back to the screen — after submitting on the review, say — shows
+  // what is saved now. The first focus is the mount, already loading above.
   const focusedOnce = useRef(false);
   useFocusLoad(() => {
     if (!focusedOnce.current) {
       focusedOnce.current = true;
       return;
     }
-    const next = getRecentMarkableDates(MARKABLE_DAYS);
-    setDates(next);
-    if (!next.some(d => d.iso === selectedDate)) {
-      setSelectedDate(next[next.length - 1].iso); // the effect above reloads
-      return;
-    }
-    loadClasses(selectedDate, true);
+    setToday(toIso(new Date()));
+    if (!sunday) loadClasses(selectedDate, true);
   });
 
   // The chosen class's students, freshly copied to mark whenever the class or
@@ -248,29 +212,13 @@ const MarkAttendanceScreen = () => {
   const markAll = (status: AttendanceStatus) =>
     setStudents(prev => prev.map(st => ({ ...st, status })));
 
-  // After saving, stay here: the reload shows what was saved, ready to update.
-  const doSubmit = async () => {
-    setSubmitConfirm(false);
-    if (!students.length) return;
-    setSubmitting(true);
-    try {
-      const attendances = students.map(st => ({
-        student_detail_id: st.id,
-        status: STATUS_CODE[st.status],
-        remarks: null,
-      }));
-      await submitAttendance(selectedDate, attendances);
-      setSuccess({
-        title: alreadyMarked ? 'Attendance Updated' : 'Attendance Submitted',
-        message: `${classLabel} · ${formatLong(selectedDate)}\nPresent ${counts.present} · Absent ${counts.absent} · Holiday ${counts.holiday}`,
-      });
-      loadClasses(selectedDate, true);
-    } catch (e: any) {
-      AppAlert.alert('Submit failed', attendanceErrorMessage(e));
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  // Submitting goes by way of a review of who is present and who is absent.
+  const openReview = () =>
+    navigation.navigate('MarkAttendanceReview', {
+      date: selectedDate,
+      classLabel,
+      students,
+    });
 
   const doMarkHoliday = async () => {
     if (!selectedClass) return;
@@ -295,16 +243,6 @@ const MarkAttendanceScreen = () => {
       setMarkingHoliday(false);
     }
   };
-
-  // The confirm stands in for a review: the totals, and who is marked absent.
-  const absentees = students.filter(st => st.status === 'absent').map(st => st.name);
-  const confirmMessage = [
-    `${classLabel} · ${formatLong(selectedDate)}`,
-    `Present ${counts.present} · Absent ${counts.absent} · Holiday ${counts.holiday}`,
-    absentees.length > 0 && absentees.length <= 8 ? `Absent: ${absentees.join(', ')}` : null,
-  ]
-    .filter(Boolean)
-    .join('\n');
 
   // ── Class pills, the class, its totals and "mark all" ──
   const renderListHead = () => (
@@ -338,7 +276,7 @@ const MarkAttendanceScreen = () => {
       <View style={s.summary}>
         <Text style={s.className}>{classLabel}</Text>
         <Text style={s.classMeta}>
-          {formatLong(selectedDate)} · {students.length} {students.length === 1 ? 'student' : 'students'}
+          {students.length} {students.length === 1 ? 'student' : 'students'}
           {savedAsHoliday ? ' · marked as holiday' : alreadyMarked ? ' · already marked' : ''}
         </Text>
 
@@ -368,6 +306,17 @@ const MarkAttendanceScreen = () => {
   );
 
   const renderBody = () => {
+    if (sunday) {
+      return (
+        <ScrollView contentContainerStyle={s.fillGrow}>
+          <DocNoData
+            icon="sunny-outline"
+            title="Sunday is a holiday"
+            subtitle={`${formatLong(selectedDate)} is a Sunday, already marked as a holiday. Choose another date to mark attendance.`}
+          />
+        </ScrollView>
+      );
+    }
     if (loading) return <ListSkeleton />;
     if (error) return <ErrorBox message={error} onRetry={() => loadClasses(selectedDate)} />;
     if (classes.length === 0) {
@@ -405,47 +354,25 @@ const MarkAttendanceScreen = () => {
     );
   };
 
-  const canAct = !loading && !error && !!selectedClass && students.length > 0;
-  const busy = submitting || markingHoliday;
+  const canAct = !sunday && !loading && !error && !!selectedClass && students.length > 0;
 
   return (
     <View style={s.root}>
       <DocHeader title="Mark Attendance" />
 
-      {/* The markable days, oldest to today: chosen one filled, today outlined.
-          The strip opens scrolled to its end, where today is. */}
+      {/* The day being marked — tap to pick another from the calendar */}
       <View style={s.top}>
-        <ScrollView
-          ref={stripRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={s.stripBar}
-          contentContainerStyle={s.strip}
-          onContentSizeChange={() => stripRef.current?.scrollToEnd({ animated: false })}
-        >
-          {dates.map(d => {
-            const active = d.iso === selectedDate;
-            const today = !active && d.isToday;
-            return (
-              <TouchableOpacity
-                key={d.iso}
-                activeOpacity={0.7}
-                onPress={() => setSelectedDate(d.iso)}
-                style={[s.day, active && s.dayActive, today && s.dayToday]}
-              >
-                <Text style={[s.dayName, active && s.dayTextActive, today && s.dayTextToday]}>
-                  {d.weekday}
-                </Text>
-                <Text style={[s.dayDate, active && s.dayTextActive, today && s.dayTextToday]}>
-                  {Number(d.day)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-        <Text style={s.note}>
-          You can mark and update the last {MARKABLE_DAYS} working days. Sundays are holidays.
-        </Text>
+        <TouchableOpacity style={s.dateField} activeOpacity={0.7} onPress={() => setDateSheet(true)}>
+          <VectorIcon iconSet="Ionicons" iconName="calendar-outline" size={18} color={theme.colors.primary} />
+          <View style={s.fill}>
+            <Text style={s.dateLabel}>Date</Text>
+            <Text style={s.dateValue} numberOfLines={1}>
+              {formatLong(selectedDate)}
+              {selectedDate === today ? ' · Today' : ''}
+            </Text>
+          </View>
+          <VectorIcon iconSet="Ionicons" iconName="chevron-down" size={16} color={theme.colors.textMuted} />
+        </TouchableOpacity>
       </View>
 
       <View style={s.fill}>{renderBody()}</View>
@@ -453,9 +380,9 @@ const MarkAttendanceScreen = () => {
       {canAct && (
         <View style={s.bar}>
           <TouchableOpacity
-            style={[s.holidayBtn, busy && s.btnBusy]}
+            style={[s.holidayBtn, markingHoliday && s.btnBusy]}
             activeOpacity={0.7}
-            disabled={busy}
+            disabled={markingHoliday}
             onPress={() => setHolidayConfirm(true)}
           >
             <VectorIcon
@@ -469,21 +396,26 @@ const MarkAttendanceScreen = () => {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[s.submitBtn, busy && s.btnBusy]}
+            style={[s.submitBtn, markingHoliday && s.btnBusy]}
             activeOpacity={0.85}
-            disabled={busy}
-            onPress={() => setSubmitConfirm(true)}
+            disabled={markingHoliday}
+            onPress={openReview}
           >
-            {submitting ? (
-              <ActivityIndicator size="small" color={theme.colors.white} />
-            ) : (
-              <Text style={s.submitText} numberOfLines={1}>
-                {alreadyMarked ? 'Update attendance' : 'Submit attendance'}
-              </Text>
-            )}
+            <Text style={s.submitText} numberOfLines={1}>
+              {alreadyMarked ? 'Update attendance' : 'Submit attendance'}
+            </Text>
           </TouchableOpacity>
         </View>
       )}
+
+      <AttendanceDateSheet
+        visible={dateSheet}
+        selected={selectedDate}
+        minDate={sessionStartIso()}
+        maxDate={today}
+        onClose={() => setDateSheet(false)}
+        onSelect={setSelectedDate}
+      />
 
       {/* Whole class holiday — saved straight away */}
       <AppDialog
@@ -495,18 +427,6 @@ const MarkAttendanceScreen = () => {
           { text: 'Mark Holiday', onPress: doMarkHoliday, loading: markingHoliday },
         ]}
         onRequestClose={() => setHolidayConfirm(false)}
-      />
-
-      {/* Submit confirmation */}
-      <AppDialog
-        visible={submitConfirm}
-        title={alreadyMarked ? 'Update attendance?' : 'Submit attendance?'}
-        message={confirmMessage}
-        actions={[
-          { text: 'Cancel', style: 'cancel', onPress: () => setSubmitConfirm(false) },
-          { text: alreadyMarked ? 'Update' : 'Submit', onPress: doSubmit, loading: submitting },
-        ]}
-        onRequestClose={() => setSubmitConfirm(false)}
       />
 
       {/* Saved */}
@@ -528,26 +448,25 @@ const __mk_s = () => StyleSheet.create({
   fill: { flex: 1 },
   fillGrow: { flexGrow: 1 },
 
-  // Days
-  top: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  stripBar: { flexGrow: 0 },
-  strip: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8, gap: 8 },
-  day: {
-    width: 48,
+  // Date
+  top: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+  },
+  dateField: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: theme.radius.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.card,
   },
-  dayActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-  dayToday: { borderColor: theme.colors.primary },
-  dayName: { fontSize: 11, fontWeight: '500', color: theme.colors.textMuted },
-  dayDate: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginTop: 2 },
-  dayTextActive: { color: theme.colors.white },
-  dayTextToday: { color: theme.colors.primary },
-  note: { paddingHorizontal: 20, paddingBottom: 12, fontSize: 12, lineHeight: 17, color: theme.colors.textMuted },
+  dateLabel: { fontSize: 11, color: theme.colors.textMuted },
+  dateValue: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginTop: 1 },
 
   list: { paddingHorizontal: 20, paddingBottom: 24 },
 
@@ -581,14 +500,8 @@ const __mk_s = () => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
   roll: { width: 26, fontSize: 13, color: theme.colors.textMuted },
-  avatar: { width: 34, height: 34, borderRadius: 17 },
-  avatarFallback: {
-    backgroundColor: theme.colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitial: { fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary },
-  name: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
+  name: { fontSize: 15, color: theme.colors.textPrimary },
+  admission: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
   toggles: { flexDirection: 'row', gap: 6 },
   toggle: {
     width: 34,
@@ -641,6 +554,7 @@ const __mk_s = () => StyleSheet.create({
 
   // Loading
   skHead: { gap: 8, paddingTop: 16, paddingBottom: 12 },
+  skLines: { gap: 6 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

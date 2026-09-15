@@ -43,6 +43,7 @@ export interface AttendanceStudent {
   student_id: number;
   user_id: number;
   roll_no: string | number | null;
+  admission_no?: string | number | null;
   full_name: string;
   photo: string | null;
   standard_id: number;

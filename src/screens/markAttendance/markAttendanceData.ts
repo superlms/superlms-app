@@ -162,6 +162,18 @@ export const formatLong = (iso: string): string => {
   return `${WEEKDAYS[date.getDay()]}, ${pad(d)} ${MONTHS[m - 1]} ${y}`;
 };
 
+// The session starts on 1 April — from January to March, last year's April.
+// Kept in sync with AcademicYear::start() on the server.
+export const sessionStartIso = (today = new Date()): string => {
+  const year = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
+  return `${year}-04-01`;
+};
+
+export const isSundayIso = (iso: string): boolean => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay() === 0;
+};
+
 // Teachers may mark today + the previous 2 days (3 days total). Kept in sync
 // with the server-side window in AttendanceController.
 export const EDIT_WINDOW_DAYS = 2;
