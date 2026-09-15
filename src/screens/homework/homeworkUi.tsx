@@ -458,7 +458,8 @@ const __mk_s = () => StyleSheet.create({
 
   // Loading
   skeleton: { flex: 1, overflow: 'hidden' },
-  unseen: { color: 'transparent' },
+  // Hidden by opacity: on Android a transparent text colour draws as black.
+  unseen: { opacity: 0 },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

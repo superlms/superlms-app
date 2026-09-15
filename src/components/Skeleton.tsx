@@ -124,7 +124,7 @@ export const SkeletonIcon = ({
   const box = Math.round(size * 0.8);
   return (
     <View style={style}>
-      <VectorIcon iconSet={iconSet} iconName={iconName} size={size} color="transparent" />
+      <VectorIcon iconSet={iconSet} iconName={iconName} size={size} style={s.unseen} />
       <View style={s.iconBox}>
         <Skeleton width={box} height={box} radius={Math.max(3, Math.round(size / 5))} />
       </View>
@@ -353,7 +353,8 @@ const __mk_s = () => StyleSheet.create({
   perfRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 12 },
 
   // Text and icons as skeletons
-  unseen: { color: 'transparent' },
+  // Hidden by opacity: on Android a transparent text colour draws as black.
+  unseen: { opacity: 0 },
   line: { position: 'absolute' },
   iconBox: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
 });

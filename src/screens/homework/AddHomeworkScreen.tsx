@@ -480,8 +480,9 @@ const __mk_s = () => StyleSheet.create({
   // Loading: the fields' text as it will sit in them, unseen, under a grey box
   fieldText: { fontSize: 15 },
   fieldMultiText: { lineHeight: 22 },
-  unseen: { color: 'transparent' },
-  skUnseenBox: { borderColor: 'transparent', backgroundColor: 'transparent' },
+  // Hidden by opacity: on Android a transparent colour draws text and borders black.
+  unseen: { opacity: 0 },
+  skUnseenBox: { opacity: 0 },
   skFill: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },
   skHug: { alignSelf: 'flex-start' },
 });
