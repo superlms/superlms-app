@@ -11,7 +11,6 @@ import {
   AttendanceStatus,
   STATUS_CODE,
   STATUS_CONFIG,
-  STATUS_ORDER,
   formatLong,
 } from './markAttendanceData';
 import { attendanceErrorMessage, submitAttendance } from '../../api/attendanceApi';
@@ -20,12 +19,13 @@ import { AppDialog, AppAlert } from '../../components/AppDialog';
 import { DocHeader } from '../more/docUi';
 import { Avatar, countByStatus, type MarkStudent } from './markAttendanceUi';
 
-// Absent first — the names worth a second look before saving.
-const GROUP_ORDER: AttendanceStatus[] = ['absent', 'present', 'holiday'];
+// Present first, then absent, then holiday.
+const GROUP_ORDER: AttendanceStatus[] = ['present', 'absent', 'holiday'];
 
 /**
- * Before attendance is saved: the class, the day and its totals, then who is
- * absent, present and on holiday, and the button that submits it.
+ * Before attendance is saved, in the Subjects screens' plain look: the day,
+ * the class and a line of totals, then the students under Present, Absent and
+ * Holiday, and Submit attendance after the last of them.
  */
 const MarkAttendanceReviewScreen = ({ navigation, route }: any) => {
   const date: string = route?.params?.date;
@@ -71,55 +71,50 @@ const MarkAttendanceReviewScreen = ({ navigation, route }: any) => {
     <View style={s.root}>
       <DocHeader title="Review Attendance" onBackPress={() => navigation.goBack()} />
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        <View style={s.summary}>
-          <Text style={s.className}>{classLabel}</Text>
-          <Text style={s.meta}>
-            {formatLong(date)} · {students.length} {students.length === 1 ? 'student' : 'students'}
-          </Text>
-
+      <ScrollView contentContainerStyle={s.list} showsVerticalScrollIndicator={false}>
+        {/* Tue, 15 Sep 2026 / Class 5 - A / Present 30  Absent 2 */}
+        <View style={s.intro}>
+          <Text style={s.introTitle}>{formatLong(date)}</Text>
+          {!!classLabel && <Text style={s.meta}>{classLabel}</Text>}
           <View style={s.totals}>
-            {STATUS_ORDER.map(st => (
-              <View key={st} style={[s.total, { backgroundColor: STATUS_CONFIG[st].color + '1A' }]}>
-                <Text style={[s.totalNum, { color: STATUS_CONFIG[st].color }]}>{counts[st]}</Text>
-                <Text style={[s.totalLabel, { color: STATUS_CONFIG[st].color }]}>
-                  {STATUS_CONFIG[st].full}
+            {groups.map(g => (
+              <Text key={g.status} style={s.total}>
+                {STATUS_CONFIG[g.status].full}{' '}
+                <Text style={[s.totalNum, { color: STATUS_CONFIG[g.status].color }]}>
+                  {counts[g.status]}
                 </Text>
-              </View>
+              </Text>
             ))}
           </View>
         </View>
 
         {groups.map(g => (
-          <View key={g.status} style={s.group}>
-            <View style={s.groupHead}>
-              <View style={[s.groupDot, { backgroundColor: STATUS_CONFIG[g.status].color }]} />
-              <Text style={s.groupTitle}>{STATUS_CONFIG[g.status].full}</Text>
-              <Text style={s.groupCount}>{g.list.length}</Text>
-            </View>
+          <View key={g.status}>
+            <Text style={s.groupTitle}>
+              {STATUS_CONFIG[g.status].full} · {g.list.length}
+            </Text>
 
             {g.list.map((st, i) => (
               <View key={st.id} style={[s.row, i < g.list.length - 1 && s.rowDivider]}>
                 <Text style={s.roll}>{st.rollNo || '—'}</Text>
                 <Avatar name={st.name} photo={st.photo} />
-                <View style={s.fill}>
+                <View style={s.body}>
                   <Text style={s.name} numberOfLines={1}>
                     {st.name}
                   </Text>
-                  <Text style={s.admission} numberOfLines={1}>
-                    Adm. No. {st.admissionNo || '—'}
+                  <Text style={s.meta} numberOfLines={1}>
+                    {st.admissionNo || '—'}
                   </Text>
                 </View>
-                <View style={[s.badge, { backgroundColor: STATUS_CONFIG[st.status].color }]}>
-                  <Text style={s.badgeText}>{STATUS_CONFIG[st.status].short}</Text>
-                </View>
+                <Text style={[s.status, { color: STATUS_CONFIG[st.status].color }]}>
+                  {STATUS_CONFIG[st.status].full}
+                </Text>
               </View>
             ))}
           </View>
         ))}
-      </ScrollView>
 
-      <View style={s.bar}>
+        {/* Submit sits after the last student, reached by scrolling down. */}
         <TouchableOpacity
           style={[s.submitBtn, submitting && s.btnBusy]}
           activeOpacity={0.85}
@@ -132,12 +127,12 @@ const MarkAttendanceReviewScreen = ({ navigation, route }: any) => {
             <Text style={s.submitText}>Submit attendance</Text>
           )}
         </TouchableOpacity>
-      </View>
+      </ScrollView>
 
       <AppDialog
         visible={submitted}
         title="Attendance submitted successfully"
-        message={`${classLabel} · ${formatLong(date)}`}
+        message={`${classLabel ? `${classLabel} · ` : ''}${formatLong(date)}`}
         actions={[{ text: 'Done', onPress: finish }]}
         onRequestClose={finish}
       />
@@ -149,49 +144,35 @@ export default MarkAttendanceReviewScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
-  fill: { flex: 1 },
-  scroll: { paddingHorizontal: 20, paddingBottom: 24 },
+  list: { paddingHorizontal: 20, paddingBottom: 40 },
 
-  // The class, the day, the totals
-  summary: { paddingTop: 16, paddingBottom: 16 },
-  className: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
-  meta: { fontSize: 12, color: theme.colors.textMuted, marginTop: 3 },
-  totals: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  total: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: theme.radius.md },
-  totalNum: { fontSize: 20, fontWeight: '700' },
-  totalLabel: { fontSize: 12, fontWeight: '500', marginTop: 2 },
-
-  // One status and its students
-  group: { borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 14, paddingBottom: 6 },
-  groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  groupDot: { width: 8, height: 8, borderRadius: 4 },
-  groupTitle: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary },
-  groupCount: { fontSize: 13, fontWeight: '600', color: theme.colors.textMuted },
-
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
-  rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-  roll: { width: 26, fontSize: 13, color: theme.colors.textMuted },
-  name: { fontSize: 15, color: theme.colors.textPrimary },
-  admission: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
-  badge: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
+  // The day, the class, the totals
+  intro: {
+    paddingTop: 16,
+    paddingBottom: 14,
+    gap: 3,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
   },
-  badgeText: { fontSize: 12, fontWeight: '700', color: theme.colors.white },
+  introTitle: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  totals: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 6 },
+  total: { fontSize: 13, color: theme.colors.textSecondary },
+  totalNum: { fontWeight: '600' },
 
-  // Submit
-  bar: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    backgroundColor: theme.colors.card,
-  },
+  // A status and its students
+  groupTitle: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 16, paddingBottom: 2 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  roll: { width: 24, fontSize: 13, color: theme.colors.textMuted },
+  body: { flex: 1, gap: 3 },
+  name: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  meta: { fontSize: 13, color: theme.colors.textSecondary },
+  status: { fontSize: 13, fontWeight: '500' },
+
+  // Submit, after the last student
   submitBtn: {
     height: 48,
+    marginTop: 24,
     borderRadius: theme.radius.md,
     backgroundColor: theme.colors.primary,
     alignItems: 'center',
