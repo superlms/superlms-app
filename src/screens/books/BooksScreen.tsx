@@ -12,10 +12,11 @@ import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { theme, onThemeChange } from '../../utils/theme';
 import BookCard from './BookCard';
-import { resolveFileUrl, subjectLabel } from './bookData';
+import { resolveFileUrl } from './bookData';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { getBooks, type ApiBook } from '../../api/booksApi';
 import { getStoredRole } from '../../api/authApi';
+import { AppAlert } from '../../components/AppDialog';
 
 const TITLE = 'Books';
 const ALL = 'All';
@@ -34,14 +35,15 @@ const BooksScreen = ({ navigation, route }: any) => {
   const [activeSubject, setActiveSubject] = useState<string>(ALL);
 
   // The tabs are built from the books we actually got back — every subject the
-  // caller is entitled to see, with how many books each holds.
+  // caller is entitled to see, named as the school saved it, with how many
+  // books each holds.
   const subjects = useMemo(() => {
     const counts = new Map<string, number>();
     books.forEach(b => {
       const name = b.subject?.name;
       if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
     });
-    return Array.from(counts, ([name, count]) => ({ name, label: subjectLabel(name), count })).sort(
+    return Array.from(counts, ([name, count]) => ({ name, label: name, count })).sort(
       (a, b) => a.label.localeCompare(b.label),
     );
   }, [books]);
@@ -90,11 +92,14 @@ const BooksScreen = ({ navigation, route }: any) => {
     fetchBooks({ silent: true });
   }, [fetchBooks]);
 
-  // Open the book in the in-app PDF reader (with go-to-page support). Rows
-  // without a PDF are not tappable, so there is always something to open.
+  // Open the book in the in-app PDF reader (with go-to-page support); a book
+  // with no PDF only says so.
   const openBook = useCallback(
     (book: ApiBook) => {
-      if (!book.pdf_url) return;
+      if (!book.pdf_url) {
+        AppAlert.alert('No PDF added yet');
+        return;
+      }
       navigation.navigate('BookReader', {
         url: resolveFileUrl(book.pdf_url),
         title: book.title,
@@ -110,7 +115,7 @@ const BooksScreen = ({ navigation, route }: any) => {
         <View style={s.list}>
           {[0, 1, 2, 3, 4].map(i => (
             <View key={i} style={[s.skeletonRow, i < 4 && s.rowDivider]}>
-              <Skeleton width={38} height={50} radius={4} />
+              <Skeleton width={30} height={30} radius={6} />
               <View style={s.skeletonBody}>
                 <Skeleton width="70%" height={14} />
                 <Skeleton width="45%" height={12} />
