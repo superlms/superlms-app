@@ -1,7 +1,8 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
+import Header from '../../components/Header';
 import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
@@ -10,8 +11,6 @@ import { LEGEND, STATUS_META, type AttendanceStatus } from './attendanceTypes';
 import { WEEK_LABELS, chunkWeeks } from '../calendar/calendarTypes';
 import { CELL, DAY, FullDivider, MonthBar } from '../calendar/calendarUi';
 import MonthYearPicker from '../calendar/MonthYearPicker';
-import AttendanceAnalyticsModal from './AttendanceAnalytics';
-import { DocHeader } from '../more/docUi';
 import {
   getMyAttendance,
   attendanceErrorMessage,
@@ -20,6 +19,20 @@ import {
 } from '../../api/attendanceApi';
 
 const TITLE = 'Attendance';
+
+// The month as weeks starting on Monday, with null for the neighbouring
+// months' days.
+const monthWeeks = (month: moment.Moment) => {
+  const start = month.clone().startOf('month');
+  const end = month.clone().endOf('month');
+  const offset = (start.day() + 6) % 7;
+  const days: (string | null)[] = Array(offset).fill(null);
+  for (let d = start.clone(); d.isSameOrBefore(end); d.add(1, 'day')) {
+    days.push(d.format('YYYY-MM-DD'));
+  }
+  while (days.length % 7 !== 0) days.push(null);
+  return chunkWeeks(days);
+};
 
 // ── The month, with each day wearing its status ──────────────────────────────
 // Weeks start on Monday. A recorded day carries a soft tint behind its number;
@@ -36,18 +49,7 @@ const AttendanceGrid = ({
   onSelectDate: (iso: string) => void;
 }) => {
   const today = moment().format('YYYY-MM-DD');
-
-  const weeks = useMemo(() => {
-    const start = month.clone().startOf('month');
-    const end = month.clone().endOf('month');
-    const offset = (start.day() + 6) % 7;
-    const days: (string | null)[] = Array(offset).fill(null);
-    for (let d = start.clone(); d.isSameOrBefore(end); d.add(1, 'day')) {
-      days.push(d.format('YYYY-MM-DD'));
-    }
-    while (days.length % 7 !== 0) days.push(null);
-    return chunkWeeks(days);
-  }, [month]);
+  const weeks = useMemo(() => monthWeeks(month), [month]);
 
   return (
     <View>
@@ -104,10 +106,63 @@ const AttendanceGrid = ({
   );
 };
 
-const AttendanceScreen = () => {
+// ── Loading ──────────────────────────────────────────────────────────────────
+// The page line for line, for the month being loaded: the week labels and a
+// circle on each of its days, in its real weeks; the legend; then the
+// percentage and the four totals.
+const AttendanceSkeleton = ({ month, legendCount }: { month: moment.Moment; legendCount: number }) => {
+  const weeks = useMemo(() => monthWeeks(month), [month]);
+
+  return (
+    <View>
+      <View style={s.grid}>
+        <View style={s.weekRow}>
+          {WEEK_LABELS.map((_, i) => (
+            <View key={i} style={[s.cell, s.skWeekLabel]}>
+              <Skeleton width={12} height={10} />
+            </View>
+          ))}
+        </View>
+        {weeks.map((week, wi) => (
+          <View key={wi} style={s.weekRow}>
+            {week.map((iso, di) => (
+              <View key={di} style={s.cell}>
+                {iso ? <Skeleton width={DAY} height={DAY} radius={DAY / 2} /> : <View style={s.skEmptyDay} />}
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+
+      <View style={s.legend}>
+        {Array.from({ length: legendCount }, (_, i) => (
+          <Skeleton key={i} width={58} height={12} />
+        ))}
+      </View>
+
+      <FullDivider />
+
+      <View style={s.body}>
+        <View style={s.skPctRow}>
+          <Skeleton width={96} height={30} />
+          <Skeleton width={110} height={13} />
+        </View>
+        {[0, 1, 2, 3].map(i => (
+          <View key={i} style={[s.infoRow, i < 3 && s.infoRowBorder]}>
+            <View style={s.fill}>
+              <Skeleton width="40%" height={13} />
+            </View>
+            <Skeleton width={24} height={13} />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+const AttendanceScreen = ({ navigation, route }: any) => {
   const [currentMonth, setCurrentMonth] = useState(moment());
   const [pickerVisible, setPickerVisible] = useState(false);
-  const [analyticsVisible, setAnalyticsVisible] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -116,23 +171,59 @@ const AttendanceScreen = () => {
 
   const monthKey = currentMonth.format('YYYY-MM');
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setResp(await getMyAttendance(monthKey));
-    } catch (e: any) {
-      console.log('[getMyAttendance] ❌', e?.response?.status, e?.message);
-      setError(attendanceErrorMessage(e));
-      setResp(null);
-    } finally {
-      setLoading(false);
+  // Only the latest request lands — paging quickly, or a quiet refresh racing
+  // a new month, never shows an older answer.
+  const requestRef = useRef(0);
+  const load = useCallback(
+    async (quiet = false) => {
+      const id = ++requestRef.current;
+      if (!quiet) setLoading(true);
+      setError(null);
+      try {
+        const next = await getMyAttendance(monthKey);
+        if (id === requestRef.current) setResp(next);
+      } catch (e: any) {
+        console.log('[getMyAttendance] ❌', e?.response?.status, e?.message);
+        if (id === requestRef.current) {
+          setError(attendanceErrorMessage(e));
+          setResp(null);
+        }
+      } finally {
+        if (id === requestRef.current) setLoading(false);
+      }
+    },
+    [monthKey],
+  );
+
+  // Each month loads when it is shown, the first one included.
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Coming back to the screen refreshes the month quietly, without blanking it.
+  const focusedOnce = useRef(false);
+  useFocusLoad(() => {
+    if (!focusedOnce.current) {
+      focusedOnce.current = true;
+      return;
     }
-  }, [monthKey]);
+    load(true);
+  });
 
-  const { refreshing, onRefresh } = useRefresh(load);
+  // The skeleton stands in while a pull to refresh runs.
+  const { refreshing, onRefresh } = useRefresh(() => load(true));
 
-  useFocusLoad(load);
+  // Back from Analytics with a month tapped: show that month.
+  const pickedMonth: string | undefined = route?.params?.month;
+  const pickedAt: number | undefined = route?.params?.monthAt;
+  useEffect(() => {
+    if (!pickedMonth || !pickedAt) return;
+    setSelected(null);
+    setCurrentMonth(moment(pickedMonth, 'YYYY-MM'));
+  }, [pickedMonth, pickedAt]);
+
+  const openAnalytics = () =>
+    navigation.navigate('AttendanceAnalytics', { returnKey: route?.key });
 
   // date → status, for a quick lookup from the grid.
   const statusByDate = useMemo(() => {
@@ -186,10 +277,22 @@ const AttendanceScreen = () => {
 
   return (
     <View style={s.root}>
-      <DocHeader
+      <Header
         title={TITLE}
-        rightIcon="stats-chart-outline"
-        onRightPress={() => setAnalyticsVisible(true)}
+        divider
+        height={50}
+        rightSlot={
+          // Analytics — a small chart on the accent's own tint.
+          <TouchableOpacity
+            style={s.analyticsBtn}
+            activeOpacity={0.7}
+            hitSlop={6}
+            onPress={openAnalytics}
+            accessibilityLabel="Attendance analytics"
+          >
+            <VectorIcon iconSet="Ionicons" iconName="stats-chart" size={15} color={theme.colors.primary} />
+          </TouchableOpacity>
+        }
       />
 
       <MonthBar
@@ -200,20 +303,13 @@ const AttendanceScreen = () => {
       />
       <FullDivider />
 
-      {loading && !refreshing ? (
-        <View style={s.loading}>
-          <Skeleton width="100%" height={250} radius={12} />
-          <View style={s.loadingRows}>
-            {[0, 1, 2, 3].map(i => (
-              <Skeleton key={i} width="100%" height={14} />
-            ))}
-          </View>
-        </View>
+      {loading || refreshing ? (
+        <AttendanceSkeleton month={currentMonth} legendCount={legend.length || 3} />
       ) : error ? (
         <View style={s.centeredBox}>
           <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
           <Text style={s.errorText}>{error}</Text>
-          <TouchableOpacity onPress={load} hitSlop={10}>
+          <TouchableOpacity onPress={() => load()} hitSlop={10}>
             <Text style={s.linkText}>Try again</Text>
           </TouchableOpacity>
         </View>
@@ -277,11 +373,6 @@ const AttendanceScreen = () => {
           setCurrentMonth(m);
         }}
       />
-
-      <AttendanceAnalyticsModal
-        visible={analyticsVisible}
-        onClose={() => setAnalyticsVisible(false)}
-      />
     </View>
   );
 };
@@ -290,7 +381,18 @@ export default AttendanceScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
+  fill: { flex: 1 },
   scroll: { paddingBottom: 40 },
+
+  // Header — analytics on the accent's tint
+  analyticsBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: theme.radius.full,
+    backgroundColor: theme.colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   // Grid
   grid: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
@@ -337,8 +439,9 @@ const __mk_s = () => StyleSheet.create({
   infoValue: { fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
 
   // Loading
-  loading: { paddingHorizontal: 20, paddingTop: 16 },
-  loadingRows: { marginTop: 26, gap: 16 },
+  skWeekLabel: { paddingVertical: 8 },
+  skEmptyDay: { width: DAY, height: DAY },
+  skPctRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 15 },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

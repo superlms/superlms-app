@@ -38,6 +38,7 @@ import ManageEntriesScreen from '../screens/teacherUpload/ManageEntriesScreen';
 import AddHomeworkScreen from '../screens/homework/AddHomeworkScreen';
 import ManageSyllabusScreen from '../screens/syllabus/ManageSyllabusScreen';
 import MarkAttendanceReviewScreen from '../screens/markAttendance/MarkAttendanceReviewScreen';
+import AttendanceAnalyticsScreen from '../screens/attendance/AttendanceAnalytics';
 import SyllabusDetailScreen from '../screens/syllabus/SyllabusDetailScreen';
 import ContentDetailScreen from '../screens/content/ContentDetailScreen';
 import ManageQuizScreen from '../screens/quiz/ManageQuizScreen';
@@ -132,6 +133,7 @@ const AppNavigator = () => {
 
       {/* Attendance */}
       <Stack.Screen name="MarkAttendanceReview" component={MarkAttendanceReviewScreen} />
+      <Stack.Screen name="AttendanceAnalytics" component={AttendanceAnalyticsScreen} />
 
       {/* Quiz */}
       <Stack.Screen name="ManageQuiz" component={ManageQuizScreen} />
