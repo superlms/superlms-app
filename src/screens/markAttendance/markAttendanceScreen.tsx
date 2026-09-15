@@ -97,10 +97,21 @@ const StudentRow = ({
   </View>
 );
 
+// The page line for line: "Mark all as" and its three buttons, then the
+// students — roll no, photo, name over admission no, and P / A / H.
 const ListSkeleton = () => (
   <View style={s.list}>
-    {[0, 1, 2, 3, 4, 5].map(i => (
-      <View key={i} style={[s.row, i < 5 && s.rowDivider]}>
+    <View style={s.markAll}>
+      <Skeleton width={74} height={13} />
+      <Skeleton width={70} height={28} radius={14} />
+      <Skeleton width={64} height={28} radius={14} />
+      <Skeleton width={68} height={28} radius={14} />
+    </View>
+    {[0, 1, 2, 3, 4, 5, 6].map(i => (
+      <View key={i} style={[s.row, i < 6 && s.rowDivider]}>
+        <View style={s.skRoll}>
+          <Skeleton width={16} height={12} />
+        </View>
         <Skeleton width={34} height={34} radius={17} />
         <View style={s.skeletonBody}>
           <Skeleton width="55%" height={14} />
@@ -445,6 +456,7 @@ const __mk_s = () => StyleSheet.create({
 
   // Loading
   skeletonBody: { flex: 1, gap: 8 },
+  skRoll: { width: 24 },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

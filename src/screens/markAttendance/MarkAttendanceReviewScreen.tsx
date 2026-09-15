@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  InteractionManager,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,10 +18,42 @@ import { attendanceErrorMessage, submitAttendance } from '../../api/attendanceAp
 import { theme, onThemeChange } from '../../utils/theme';
 import { AppDialog, AppAlert } from '../../components/AppDialog';
 import { DocHeader } from '../more/docUi';
+import { Skeleton } from '../../components/Skeleton';
 import { Avatar, countByStatus, type MarkStudent } from './markAttendanceUi';
 
 // Present first, then absent, then holiday.
 const GROUP_ORDER: AttendanceStatus[] = ['present', 'absent', 'holiday'];
+
+// The page line for line: the day, the class and the totals, then a status
+// heading and its students — roll no, photo, name over admission no, status.
+const ReviewSkeleton = () => (
+  <View style={s.list}>
+    <View style={s.intro}>
+      <Skeleton width="50%" height={15} />
+      <Skeleton width="28%" height={13} />
+      <View style={s.totals}>
+        <Skeleton width={78} height={13} />
+        <Skeleton width={70} height={13} />
+      </View>
+    </View>
+    <View style={s.skGroupTitle}>
+      <Skeleton width={80} height={12} />
+    </View>
+    {[0, 1, 2, 3, 4, 5].map(i => (
+      <View key={i} style={[s.row, i < 5 && s.rowDivider]}>
+        <View style={s.skRoll}>
+          <Skeleton width={16} height={12} />
+        </View>
+        <Skeleton width={34} height={34} radius={17} />
+        <View style={s.skBody}>
+          <Skeleton width="55%" height={14} />
+          <Skeleton width="30%" height={12} />
+        </View>
+        <Skeleton width={52} height={13} />
+      </View>
+    ))}
+  </View>
+);
 
 /**
  * Before attendance is saved, in the Subjects screens' plain look: the day,
@@ -34,6 +67,14 @@ const MarkAttendanceReviewScreen = ({ navigation, route }: any) => {
 
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  // The list draws once the screen has finished sliding in, so a big class
+  // does not stall the transition; its skeleton stands in until then.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => setReady(true));
+    return () => task.cancel();
+  }, []);
 
   const counts = countByStatus(students);
   const groups = GROUP_ORDER.map(status => ({
@@ -66,6 +107,15 @@ const MarkAttendanceReviewScreen = ({ navigation, route }: any) => {
     setSubmitted(false);
     navigation.goBack();
   };
+
+  if (!ready) {
+    return (
+      <View style={s.root}>
+        <DocHeader title="Review Attendance" onBackPress={() => navigation.goBack()} />
+        <ReviewSkeleton />
+      </View>
+    );
+  }
 
   return (
     <View style={s.root}>
@@ -168,6 +218,11 @@ const __mk_s = () => StyleSheet.create({
   name: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   meta: { fontSize: 13, color: theme.colors.textSecondary },
   status: { fontSize: 13, fontWeight: '500' },
+
+  // Loading
+  skGroupTitle: { paddingTop: 16, paddingBottom: 6 },
+  skRoll: { width: 24 },
+  skBody: { flex: 1, gap: 8 },
 
   // Submit, after the last student
   submitBtn: {
