@@ -17,6 +17,8 @@ export type Announcement = {
   creatorEmail?: string;
   creatorAvatar?: string;
   organizationName?: string;
+  // Opened by this user, as the server has it.
+  isRead?: boolean;
 };
 
 export type FilterKey = 'Today' | '7 Days' | '15 Days' | '30 Days';
@@ -66,6 +68,7 @@ export const mapApiItem = (apiItem: any): Announcement => {
     creatorEmail: apiItem.creator_email,
     creatorAvatar: apiItem.creator_avatar,
     organizationName: apiItem.organization_name ?? apiItem.organization?.name,
+    isRead: !!apiItem.is_read,
   };
 };
 

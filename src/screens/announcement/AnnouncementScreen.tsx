@@ -9,7 +9,7 @@ import { theme, onThemeChange } from '../../utils/theme';
 import apiClient from '../../api/apiClient';
 import { FILTERS, mapApiItem } from './announcementData';
 import type { Announcement, FilterKey } from './announcementData';
-import { useAnnouncementReads } from './announcementReads';
+import { syncAnnouncementReads, useAnnouncementReads } from './announcementReads';
 import { DocHeader, DocNoData } from '../more/docUi';
 import {
   BODY,
@@ -63,7 +63,9 @@ const AnnouncementScreen = ({ navigation }: any) => {
       });
 
       const items = data?.data ?? data?.announcements ?? [];
-      setAnnouncements(items.map(mapApiItem));
+      const list: Announcement[] = items.map(mapApiItem);
+      setAnnouncements(list);
+      syncAnnouncementReads(list);
       loadedOnce.current = true;
     } catch (err: any) {
       console.error('[Announcement] ❌', err?.response?.data);
@@ -145,7 +147,7 @@ const AnnouncementScreen = ({ navigation }: any) => {
                   body={item.content}
                   time={at ? timeLabel(at) : undefined}
                   tinted
-                  dot={!!reads && !reads.has(item.id)}
+                  dot={!!reads && !item.isRead && !reads.has(item.id)}
                   isLast={index === section.data.length - 1}
                   onPress={() => navigation.navigate('ViewAnnouncement', { item })}
                 />

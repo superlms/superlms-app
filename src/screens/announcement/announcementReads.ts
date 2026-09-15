@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiClient from '../../api/apiClient';
 
-// Which announcements this user has opened. The server keeps no read receipts
-// for announcements, so the list lives on the device — one per signed-in user,
-// since accounts can be switched.
+// Which announcements this user has opened. The server keeps the read receipts,
+// so they survive reinstalling the app or signing in on another phone. The
+// device keeps a copy — one per signed-in user, since accounts can be switched —
+// so the dots are right before the list arrives and while offline.
 
 const MAX_IDS = 500;
 
@@ -32,14 +34,42 @@ export async function loadAnnouncementReads(): Promise<Set<string>> {
   return ids;
 }
 
-export async function markAnnouncementRead(id: string): Promise<void> {
-  const ids = await loadAnnouncementReads();
-  if (ids.has(id)) return;
-  ids.add(id);
+const saveReads = async (ids: Set<string>) => {
   const key = await storageKey();
   // A Set keeps insertion order, so the newest reads are the ones kept.
   AsyncStorage.setItem(key, JSON.stringify(Array.from(ids).slice(-MAX_IDS))).catch(() => {});
   listeners.forEach(fn => fn());
+};
+
+// Tell the server. A call that fails is sent again by the next list sync.
+const sendReads = (ids: string[]) => {
+  if (ids.length === 0) return;
+  apiClient.post('/announcement/read', { ids: ids.map(Number) }).catch(() => {});
+};
+
+export async function markAnnouncementRead(id: string): Promise<void> {
+  const ids = await loadAnnouncementReads();
+  sendReads([id]);
+  if (ids.has(id)) return;
+  ids.add(id);
+  saveReads(ids);
+}
+
+/**
+ * Line the device up with the server once the list arrives: what the server
+ * has as read is read here too, and what was only read on this device (before
+ * the server kept receipts, or while offline) is sent up.
+ */
+export async function syncAnnouncementReads(
+  items: { id: string; isRead?: boolean }[],
+): Promise<void> {
+  const ids = await loadAnnouncementReads();
+  sendReads(items.filter(a => !a.isRead && ids.has(a.id)).map(a => a.id));
+
+  const fromServer = items.filter(a => a.isRead && !ids.has(a.id));
+  if (fromServer.length === 0) return;
+  fromServer.forEach(a => ids.add(a.id));
+  saveReads(ids);
 }
 
 /** The opened announcement ids, or null until they have been read off the device. */
