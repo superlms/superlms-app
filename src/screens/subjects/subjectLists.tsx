@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
   FlatList,
-  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -23,8 +22,9 @@ import {
   type SyllabusChapter,
   type TeacherCombo,
 } from '../../api/contentApi';
-import { plural, resolveFileUrl } from './subjectsUi';
+import { plural } from './subjectsUi';
 import { comboClass } from './outlineUi';
+import { SubjectIcon } from './subjectIcon';
 
 /**
  * The first screen of Subjects, Syllabus and Study Content: the subjects as
@@ -46,24 +46,9 @@ export const SubjectRow = ({
   meta?: string | null;
   isLast: boolean;
   onPress: () => void;
-}) => {
-  const [imgFailed, setImgFailed] = useState(false);
-  const imageUrl = resolveFileUrl(image);
-
-  return (
+}) => (
     <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onPress}>
-      <View style={s.iconSlot}>
-        {imageUrl && !imgFailed ? (
-          <Image
-            source={{ uri: imageUrl }}
-            style={s.icon}
-            resizeMode="contain"
-            onError={() => setImgFailed(true)}
-          />
-        ) : (
-          <VectorIcon iconSet="Ionicons" iconName="albums-outline" size={20} color={theme.colors.textMuted} />
-        )}
-      </View>
+      <SubjectIcon image={image} />
 
       <View style={s.body}>
         <Text style={s.name} numberOfLines={1}>
@@ -78,8 +63,7 @@ export const SubjectRow = ({
 
       <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={16} color={theme.colors.textMuted} />
     </TouchableOpacity>
-  );
-};
+);
 
 interface Item {
   key: string;
@@ -304,18 +288,9 @@ const __mk_s = () => StyleSheet.create({
   listEmpty: { flexGrow: 1 },
   count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
 
-  // Row — the subject's own icon on the page's grey, then its name and size
+  // Row — the subject's own coloured icon tile, then its name and size
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  iconSlot: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  icon: { width: 26, height: 26 },
   body: { flex: 1, gap: 3 },
   name: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   meta: { fontSize: 13, color: theme.colors.textSecondary },

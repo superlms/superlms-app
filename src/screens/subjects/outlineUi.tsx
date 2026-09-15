@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
@@ -8,7 +8,8 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { quietCaps } from '../../utils/quietCaps';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { getChapters, type SyllabusChapter, type TeacherCombo } from '../../api/contentApi';
-import { plural, resolveFileUrl } from './subjectsUi';
+import { plural } from './subjectsUi';
+import { SubjectIcon } from './subjectIcon';
 import { useChapters, type ChaptersState } from './useChapters';
 
 /**
@@ -16,8 +17,8 @@ import { useChapters, type ChaptersState } from './useChapters';
  * Content, so all three read the same once a subject has been picked.
  *
  * The subject's icon, its name and how much it holds, then the chapters as a
- * numbered outline on hairlines. A chapter opens to show its topics under its
- * name as 1.1, 1.2 …
+ * numbered outline on hairlines, without their descriptions. A chapter opens to
+ * show its topics on one line under its name, separated by dots.
  */
 
 // "10th A" — the class half of a teacher's class-and-subject pair.
@@ -72,7 +73,7 @@ export const TopicLine = ({
 // ── Chapter ──────────────────────────────────────────────────────────────────
 //   1   Motion and Laws                                    ⌄
 //       3 topics
-//         1.1   Introduction to Motion
+//       Introduction to Motion · Newton's Laws · Friction
 export const ChapterRow = ({
   number,
   chapter,
@@ -81,6 +82,7 @@ export const ChapterRow = ({
   isLast,
   expandable,
   trailing,
+  showDescription,
   children,
 }: {
   number: number;
@@ -92,7 +94,9 @@ export const ChapterRow = ({
   expandable?: boolean;
   /** Replaces the chevron — a spinner while the chapter is being changed. */
   trailing?: React.ReactNode;
-  /** What the chapter opens onto; its topics as plain lines by default. */
+  /** The chapter's description under its name — only where it is being edited. */
+  showDescription?: boolean;
+  /** What the chapter opens onto; its topics on one line, dot-separated, by default. */
   children?: React.ReactNode;
 }) => {
   const count = chapter.topics.length;
@@ -104,7 +108,7 @@ export const ChapterRow = ({
         <Text style={s.chapterNo}>{number}</Text>
         <View style={s.body}>
           <Text style={s.chapterName}>{quietCaps(chapter.name)}</Text>
-          {!!chapter.description && (
+          {showDescription && !!chapter.description && (
             <Text style={s.chapterDesc} numberOfLines={open ? undefined : 1}>
               {chapter.description}
             </Text>
@@ -125,10 +129,11 @@ export const ChapterRow = ({
 
       {open && canOpen && (
         <View style={s.topics}>
-          {children ??
-            chapter.topics.map((topic, i) => (
-              <TopicLine key={topic.id} label={`${number}.${i + 1}`} name={topic.name} />
-            ))}
+          {children ?? (
+            <Text style={s.topicsInline}>
+              {chapter.topics.map(topic => quietCaps(topic.name)).join('  ·  ')}
+            </Text>
+          )}
         </View>
       )}
     </View>
@@ -152,6 +157,8 @@ export interface ChapterOutlineProps {
   renderTopics?: (chapter: SyllabusChapter, number: number) => React.ReactNode;
   chapterExpandable?: (chapter: SyllabusChapter) => boolean;
   renderTrailing?: (chapter: SyllabusChapter) => React.ReactNode;
+  /** Chapter descriptions under their names — only where the syllabus is edited. */
+  showDescriptions?: boolean;
 }
 
 export const ChapterOutline = ({
@@ -166,8 +173,8 @@ export const ChapterOutline = ({
   renderTopics,
   chapterExpandable,
   renderTrailing,
+  showDescriptions,
 }: ChapterOutlineProps) => {
-  const [imgFailed, setImgFailed] = useState(false);
   const { chapters, error, load, openIds, toggle } = outline;
 
   if (chapters === null) {
@@ -198,7 +205,6 @@ export const ChapterOutline = ({
     );
   }
 
-  const imageUrl = resolveFileUrl(image);
   const topicCount = chapters.reduce((sum, c) => sum + c.topics.length, 0);
   const size = [
     subtitle,
@@ -218,16 +224,7 @@ export const ChapterOutline = ({
     >
       {/* The subject, and how much of it there is */}
       <View style={s.head}>
-        {!!imageUrl && !imgFailed && (
-          <View style={s.headIcon}>
-            <Image
-              source={{ uri: imageUrl }}
-              style={s.headImage}
-              resizeMode="contain"
-              onError={() => setImgFailed(true)}
-            />
-          </View>
-        )}
+        <SubjectIcon image={image} size={52} />
         <View style={s.headText}>
           <Text style={s.title}>{quietCaps(title)}</Text>
           <Text style={s.size}>{size}</Text>
@@ -249,6 +246,7 @@ export const ChapterOutline = ({
               isLast={i === chapters.length - 1}
               expandable={chapterExpandable?.(chapter)}
               trailing={renderTrailing?.(chapter)}
+              showDescription={showDescriptions}
             >
               {renderTopics?.(chapter, i + 1)}
             </ChapterRow>
@@ -307,15 +305,6 @@ const __mk_s = () => StyleSheet.create({
     paddingTop: 22,
     paddingBottom: 20,
   },
-  headIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headImage: { width: 34, height: 34 },
   headText: { flex: 1 },
   title: { fontSize: 22, fontWeight: '700', lineHeight: 29, color: theme.colors.textPrimary },
   size: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 3 },
@@ -335,6 +324,7 @@ const __mk_s = () => StyleSheet.create({
 
   // Topics, set in under the chapter's name
   topics: { marginLeft: NO_COL + GAP, paddingBottom: 12 },
+  topicsInline: { fontSize: 14, lineHeight: 22, color: theme.colors.textSecondary },
   topic: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
   topicNo: { width: 34, fontSize: 13, lineHeight: 20, color: theme.colors.textMuted },
   topicName: { flex: 1, fontSize: 14, lineHeight: 20, color: theme.colors.textPrimary },

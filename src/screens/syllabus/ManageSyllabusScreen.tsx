@@ -301,6 +301,7 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
         image={combo.subjectImage}
         refreshing={refreshing}
         onRefresh={onRefresh}
+        showDescriptions
         emptyChapters={{
           title: 'No chapters yet',
           subtitle: 'Add the first chapter with the button below.',
