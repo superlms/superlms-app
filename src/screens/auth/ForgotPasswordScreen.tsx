@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  StatusBar,
   Image,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,7 +14,7 @@ import {
 import React, { useState, useEffect, useRef } from 'react';
 import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import Header from '../../components/Header';
 import {
   forgotPassword,
@@ -23,6 +22,9 @@ import {
   resendOtp,
   changePassword,
 } from '../../api/authApi';
+import { addAccount } from '../../api/switchAccountApi';
+import { upsertAccount } from '../../utils/accountStore';
+import { AppAlert } from '../../components/AppDialog';
 
 // Six independent boxes so the user can tap any box and retype just that
 // digit (selectTextOnFocus replaces the old one). Typing auto-advances,
@@ -134,6 +136,10 @@ const passwordRules: { label: string; test: (p: string) => boolean }[] = [
 
 const ForgotPasswordScreen = () => {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  // Opened from Add account after a wrong password: once the password is
+  // changed, that account is added with the new one.
+  const addAccountIdentifier: string | undefined = route.params?.addAccountIdentifier;
   const scrollRef = useRef<ScrollView>(null);
   const [step, setStep] = useState(1);
   const { width: windowWidth } = useWindowDimensions();
@@ -167,7 +173,7 @@ const ForgotPasswordScreen = () => {
     );
   };
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState<string>(route.params?.email ?? '');
   const [otp, setOtp] = useState('');
   const [userId, setUserId] = useState<string | number>('');
   const [timer, setTimer] = useState(120);
@@ -203,6 +209,36 @@ const ForgotPasswordScreen = () => {
     }, 4000);
     return () => clearTimeout(popupTimer);
   }, [error, errorAnim]);
+
+  // After a reset started from Add account: add that account with the new
+  // password, then go back to where the user was — their own account stays
+  // the one in use.
+  const addResetAccount = async (identifier: string, newPassword: string) => {
+    try {
+      const { account, token } = await addAccount({ identifier, password: newPassword });
+      await upsertAccount({
+        user_id: account.user_id,
+        user_type: account.user_type,
+        name: account.name,
+        email: account.email,
+        image: account.image,
+        organization: account.organization,
+        class_info: account.class_info,
+        token,
+        added_at: Date.now(),
+      });
+      AppAlert.alert(
+        'Account added',
+        `Your password has been changed and ${account.name} has been added. Switch to it any time from Switch account.`,
+      );
+    } catch (e: any) {
+      AppAlert.alert(
+        'Password changed',
+        `${e?.response?.data?.message ?? e?.message ?? 'The account could not be added.'} Add it again from Switch account with your new password.`,
+      );
+    }
+    navigation.goBack();
+  };
 
   const handleBackPress = () => {
     if (step === 1) {
@@ -585,7 +621,11 @@ const ForgotPasswordScreen = () => {
                     '[ChangePassword] ✅ Response:',
                     JSON.stringify(res, null, 2),
                   );
-                  navigation.replace('Login');
+                  if (addAccountIdentifier) {
+                    await addResetAccount(addAccountIdentifier, password);
+                  } else {
+                    navigation.replace('Login');
+                  }
                 } catch (e: any) {
                   console.log(
                     '[ChangePassword] ❌ Error:',

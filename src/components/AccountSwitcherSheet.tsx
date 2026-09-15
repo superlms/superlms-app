@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { CommonActions, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import VectorIcon from './VectorIcon';
 import { theme, onThemeChange } from '../utils/theme';
 import {
@@ -92,6 +93,7 @@ const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
 // ─── Sheet ────────────────────────────────────────────────────────────────────
 const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
 
   const [mode, setMode] = useState<Mode>('list');
   const [accounts, setAccounts] = useState<StoredAccount[]>([]);
@@ -106,6 +108,8 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
   const [showPass, setShowPass] = useState(false);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState('');
+  // The last try failed on the password itself — offer to reset it.
+  const [wrongPassword, setWrongPassword] = useState(false);
 
   const refresh = useCallback(async () => {
     const [list, id] = await Promise.all([listAccounts(), getActiveAccountId()]);
@@ -226,6 +230,7 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
     setPassword('');
     setShowPass(false);
     setAddError('');
+    setWrongPassword(false);
   };
 
   const onSubmitAdd = async () => {
@@ -239,6 +244,7 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
       return;
     }
     setAddError('');
+    setWrongPassword(false);
     setAdding(true);
     try {
       // No login_type — the backend auto-detects the role from the identifier.
@@ -267,19 +273,44 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
         err?.message ??
         'Could not add the account. Please check your credentials.';
       setAddError(msg);
+      // A wrong email or admission number gets no reset offer — only a wrong password.
+      setWrongPassword(err?.response?.status === 401 && /password is incorrect/i.test(String(msg)));
     } finally {
       setAdding(false);
     }
   };
 
+  // Reset the password on the Forgot Password screen; once it is changed there,
+  // that screen adds this account with the new password.
+  const onForgot = () => {
+    const id = identifier.trim();
+    resetAddForm();
+    setMode('list');
+    onClose();
+    navigation.navigate('ForgotPassword', {
+      addAccountIdentifier: id,
+      // The reset goes by email, so an email typed here fills it in.
+      email: id.includes('@') ? id : undefined,
+    });
+  };
+
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    // Drawn under the status and navigation bars, like every other popup, so
+    // opening it dims them with the page instead of changing their colour.
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={onClose}
+    >
       <View style={s.backdrop}>
         {/* Tap outside to close */}
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <KeyboardAvoidingView behavior="padding">
-          <View style={s.sheet}>
+          <View style={[s.sheet, { paddingBottom: insets.bottom + 16 }]}>
             <View style={s.handle} />
 
             {/* Header */}
@@ -322,6 +353,7 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
                 setIdentifier={t => {
                   setIdent(t);
                   setAddError('');
+                  setWrongPassword(false);
                 }}
                 password={password}
                 setPassword={t => {
@@ -331,6 +363,8 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
                 showPass={showPass}
                 toggleShowPass={() => setShowPass(v => !v)}
                 error={addError}
+                showForgot={wrongPassword}
+                onForgot={onForgot}
                 loading={adding}
                 onSubmit={onSubmitAdd}
               />
@@ -342,6 +376,7 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
       {/* Remove confirmation, the same plain dialog as everywhere else */}
       <Modal
         transparent
+        statusBarTranslucent
         visible={!!removeTarget}
         animationType="fade"
         onRequestClose={() => setRemoveTarget(null)}
@@ -462,62 +497,80 @@ interface AddBodyProps {
   showPass: boolean;
   toggleShowPass: () => void;
   error: string;
+  /** The password was wrong — offer to reset it. */
+  showForgot: boolean;
+  onForgot: () => void;
   loading: boolean;
   onSubmit: () => void;
 }
 
-const AddBody = (p: AddBodyProps) => (
-  <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.addContent} showsVerticalScrollIndicator={false}>
-    {/* Identifier — role is auto-detected (admission number = student, email = staff) */}
-    <Text style={s.label}>Email or admission number</Text>
-    <TextInput
-      placeholder="you@school.com or 2026DMO650015"
-      placeholderTextColor={theme.colors.textMuted}
-      value={p.identifier}
-      onChangeText={p.setIdentifier}
-      autoCapitalize="none"
-      autoCorrect={false}
-      style={s.field}
-    />
+const AddBody = (p: AddBodyProps) => {
+  // The field being typed in wears the blue outline.
+  const [focused, setFocused] = useState<'identifier' | 'password' | null>(null);
 
-    <Text style={[s.label, s.labelGap]}>Password</Text>
-    <View style={[s.field, s.passField]}>
+  return (
+    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.addContent} showsVerticalScrollIndicator={false}>
+      {/* Identifier — role is auto-detected (admission number = student, email = staff) */}
+      <Text style={s.label}>Email or admission number</Text>
       <TextInput
-        placeholder="Enter password"
+        placeholder="you@school.com or 2026DMO650015"
         placeholderTextColor={theme.colors.textMuted}
-        secureTextEntry={!p.showPass}
-        value={p.password}
-        onChangeText={p.setPassword}
-        style={s.passInput}
+        value={p.identifier}
+        onChangeText={p.setIdentifier}
+        onFocus={() => setFocused('identifier')}
+        onBlur={() => setFocused(null)}
+        autoCapitalize="none"
+        autoCorrect={false}
+        style={[s.field, focused === 'identifier' && s.fieldFocused]}
       />
-      <TouchableOpacity onPress={p.toggleShowPass} hitSlop={10} activeOpacity={0.6}>
-        <VectorIcon
-          iconSet="Ionicons"
-          iconName={p.showPass ? 'eye-off-outline' : 'eye-outline'}
-          size={20}
-          color={theme.colors.textMuted}
+
+      <Text style={[s.label, s.labelGap]}>Password</Text>
+      <View style={[s.field, s.passField, focused === 'password' && s.fieldFocused]}>
+        <TextInput
+          placeholder="Enter password"
+          placeholderTextColor={theme.colors.textMuted}
+          secureTextEntry={!p.showPass}
+          value={p.password}
+          onChangeText={p.setPassword}
+          onFocus={() => setFocused('password')}
+          onBlur={() => setFocused(null)}
+          style={s.passInput}
         />
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity onPress={p.toggleShowPass} hitSlop={10} activeOpacity={0.6}>
+          <VectorIcon
+            iconSet="Ionicons"
+            iconName={p.showPass ? 'eye-off-outline' : 'eye-outline'}
+            size={20}
+            color={theme.colors.textMuted}
+          />
+        </TouchableOpacity>
+      </View>
 
-    {!!p.error && <Text style={s.errorText}>{p.error}</Text>}
+      {!!p.error && <Text style={s.errorText}>{p.error}</Text>}
 
-    <TouchableOpacity
-      activeOpacity={0.85}
-      onPress={p.onSubmit}
-      disabled={p.loading}
-      style={[s.saveBtn, p.loading && s.saveBtnBusy]}
-    >
-      {p.loading ? (
-        <ActivityIndicator color={theme.colors.white} />
-      ) : (
-        <Text style={s.saveBtnText}>Add account</Text>
+      {p.showForgot && (
+        <TouchableOpacity onPress={p.onForgot} hitSlop={8} activeOpacity={0.6} style={s.forgotBtn}>
+          <Text style={s.forgotText}>Forgot password?</Text>
+        </TouchableOpacity>
       )}
-    </TouchableOpacity>
 
-    <Text style={s.hint}>Your current account stays signed in. You can switch any time from here.</Text>
-  </ScrollView>
-);
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={p.onSubmit}
+        disabled={p.loading}
+        style={[s.saveBtn, p.loading && s.saveBtnBusy]}
+      >
+        {p.loading ? (
+          <ActivityIndicator color={theme.colors.white} />
+        ) : (
+          <Text style={s.saveBtnText}>Add account</Text>
+        )}
+      </TouchableOpacity>
+
+      <Text style={s.hint}>Your current account stays signed in. You can switch any time from here.</Text>
+    </ScrollView>
+  );
+};
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const __mk_s = () => StyleSheet.create({
@@ -618,8 +671,11 @@ const __mk_s = () => StyleSheet.create({
   addContent: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 8 },
   label: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 8 },
   labelGap: { marginTop: 18 },
+  // No fill: the outline takes the grey the fill used to be, and turns blue
+  // while typing.
   field: {
-    backgroundColor: theme.colors.background,
+    borderWidth: 1,
+    borderColor: theme.colors.background,
     borderRadius: theme.radius.md,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -628,8 +684,11 @@ const __mk_s = () => StyleSheet.create({
   },
   passField: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 0 },
   passInput: { flex: 1, paddingVertical: 12, fontSize: 15, color: theme.colors.textPrimary },
+  fieldFocused: { borderColor: theme.colors.primary },
 
   errorText: { fontSize: 13, color: theme.colors.danger, lineHeight: 19, marginTop: 12 },
+  forgotBtn: { alignSelf: 'flex-start', marginTop: 8 },
+  forgotText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
 
   saveBtn: {
     height: 48,
