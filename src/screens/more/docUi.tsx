@@ -86,22 +86,33 @@ export const DocIntro = ({
 };
 
 // ── Section: a heading and its content ────────────────────────────────────────
+// As a skeleton, the heading and body are bars on the lines they take.
 export const DocSection = ({
   title,
   children,
+  skeleton,
 }: {
   title?: string;
   children: React.ReactNode;
+  skeleton?: boolean;
 }) => (
   <View>
-    {!!title && <Text style={s.sectionTitle}>{title}</Text>}
+    {!!title &&
+      (skeleton ? (
+        <SkeletonText style={s.sectionTitle}>{title}</SkeletonText>
+      ) : (
+        <Text style={s.sectionTitle}>{title}</Text>
+      ))}
     {children}
   </View>
 );
 
-export const DocBody = ({ children }: { children: React.ReactNode }) => (
-  <Text style={s.bodyText}>{children}</Text>
-);
+export const DocBody = ({ children, skeleton }: { children: React.ReactNode; skeleton?: boolean }) =>
+  skeleton ? (
+    <SkeletonText style={s.bodyText}>{children}</SkeletonText>
+  ) : (
+    <Text style={s.bodyText}>{children}</Text>
+  );
 
 // ── Container for list data (DocRow / DocPeople) ──────────────────────────────
 export const DocList = ({ children }: { children: React.ReactNode }) => (
