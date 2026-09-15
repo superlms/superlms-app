@@ -184,14 +184,6 @@ const BooksScreen = ({ navigation, route }: any) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[s.list, filtered.length === 0 && s.listEmpty]}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListHeaderComponent={
-          // With tabs on screen the counts are already there.
-          !showTabs && filtered.length > 0 ? (
-            <Text style={s.count}>
-              {filtered.length} {filtered.length === 1 ? 'book' : 'books'}
-            </Text>
-          ) : null
-        }
         renderItem={({ item, index }) => (
           <BookCard
             item={item}
@@ -236,7 +228,6 @@ const __mk_s = () => StyleSheet.create({
   // List
   list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
   listEmpty: { flexGrow: 1 },
-  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
 
   // Loading
