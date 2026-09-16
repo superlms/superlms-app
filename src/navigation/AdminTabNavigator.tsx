@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { TouchableOpacity } from 'react-native';
 import VectorIcon from '../components/VectorIcon';
@@ -7,8 +7,8 @@ import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
 import AdminAttendanceScreen from '../screens/admin/AdminAttendanceScreen';
 import AdminComingSoonScreen from '../screens/admin/AdminComingSoonScreen';
 import { AdminStudentsStack, AdminTeachersStack } from './adminStacks';
-import { AdminUser, getStoredUser } from '../api/authApi';
 import { canAccessAdminModule } from '../screens/admin/adminModules';
+import { useAdminProfile } from '../screens/admin/useAdminProfile';
 
 const Tab = createBottomTabNavigator();
 
@@ -35,13 +35,7 @@ const TAB_PERMS: Record<string, string> = {
  * Students, Teachers, Attendance and Fees.
  */
 const AdminTabNavigator = () => {
-  const [permissions, setPermissions] = useState<string[] | undefined>(undefined);
-
-  useEffect(() => {
-    getStoredUser()
-      .then(u => setPermissions((u as AdminUser | null)?.permissions))
-      .catch(() => setPermissions(undefined));
-  }, []);
+  const permissions = useAdminProfile()?.permissions;
 
   const allowed = (name: string) =>
     canAccessAdminModule({ perm: TAB_PERMS[name] }, permissions);

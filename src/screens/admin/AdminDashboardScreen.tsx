@@ -16,6 +16,7 @@ import { ChartCard, Donut, MiniBars, StackedBar, HBar } from '../../components/C
 import ListRow from '../../components/ListRow';
 import { AdminAnalytics, getAdminAnalytics } from '../../api/adminApi';
 import { getAssistantStatus } from '../../api/assistantApi';
+import { useAdminProfile } from './useAdminProfile';
 
 const PRESENT = '#22C55E';
 const ABSENT = '#EF4444';
@@ -84,6 +85,7 @@ const AdminDashboardScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
   // LMS Assist's button shows only where the assistant is switched on.
   const [assistant, setAssistant] = useState(false);
+  const profile = useAdminProfile();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -130,8 +132,10 @@ const AdminDashboardScreen = ({ navigation }: any) => {
 
   return (
     <View style={s.root}>
-      {/* The student and teacher top bar: account switch, notifications, messages */}
+      {/* The student and teacher top bar, with the school in place of the person:
+          account switch, notifications, messages */}
       <TopBar
+        school={profile?.organization ?? null}
         onBellPress={() => navigation.navigate('Notifications')}
         onMessagePress={() => navigation.navigate('AdminMessages')}
       />

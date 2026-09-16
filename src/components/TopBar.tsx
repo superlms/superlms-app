@@ -30,6 +30,11 @@ interface TopBarProps {
    * notifications and messages only).
    */
   onMessagePress?: () => void;
+  /**
+   * Given (the admin's bar), the school is shown instead of the person: its
+   * logo beside the menu, and its name in the greeting's size.
+   */
+  school?: { name?: string; logo?: string | null } | null;
 }
 
 const getGreeting = () => {
@@ -46,7 +51,7 @@ const getGreeting = () => {
  * outline icon like the bell beside it. The admin's bar shows messages there
  * instead.
  */
-const TopBar = ({ userName, onBellPress, onAvatarPress, onMessagePress }: TopBarProps) => {
+const TopBar = ({ userName, onBellPress, onAvatarPress, onMessagePress, school }: TopBarProps) => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const unreadCount = useUnreadCount();
@@ -54,6 +59,8 @@ const TopBar = ({ userName, onBellPress, onAvatarPress, onMessagePress }: TopBar
   const [displayName, setDisplayName] = useState<string>(userName ?? '');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [avatarBroken, setAvatarBroken] = useState(false);
+  const [logoBroken, setLogoBroken] = useState(false);
+  const schoolMode = school !== undefined;
 
   const refreshAccount = useCallback(async () => {
     // Paint instantly from local data: the switcher's active account, or the
@@ -128,11 +135,24 @@ const TopBar = ({ userName, onBellPress, onAvatarPress, onMessagePress }: TopBar
           <VectorIcon iconSet="Feather" iconName="menu" size={21} color={theme.colors.textPrimary} />
         </TouchableOpacity>
 
+        {schoolMode &&
+          (school?.logo && !logoBroken ? (
+            <Image
+              source={{ uri: school.logo }}
+              onError={() => setLogoBroken(true)}
+              style={styles.schoolLogo}
+            />
+          ) : (
+            <View style={styles.iconBtn}>
+              <VectorIcon iconSet="Ionicons" iconName="school-outline" size={22} color={theme.colors.primary} />
+            </View>
+          ))}
+
         <TouchableOpacity style={styles.userInfo} activeOpacity={0.6} onPress={() => setSwitcherOpen(true)}>
           <Text style={styles.greeting}>{getGreeting()}</Text>
           <View style={styles.nameRow}>
-            <Text style={styles.userName} numberOfLines={1}>
-              {displayName || 'Account'}
+            <Text style={schoolMode ? styles.schoolName : styles.userName} numberOfLines={1}>
+              {schoolMode ? school?.name || 'School' : displayName || 'Account'}
             </Text>
             <VectorIcon iconSet="Feather" iconName="chevron-down" size={17} color={theme.colors.textMuted} />
           </View>
@@ -212,6 +232,17 @@ const __mk_styles = () => StyleSheet.create({
   },
   userName: {
     fontSize: 17,
+    fontWeight: '600',
+    color: theme.colors.textPrimary,
+    flexShrink: 1,
+  },
+  schoolLogo: {
+    width: 36,
+    height: 36,
+    resizeMode: 'contain',
+  },
+  schoolName: {
+    fontSize: 12,
     fontWeight: '600',
     color: theme.colors.textPrimary,
     flexShrink: 1,

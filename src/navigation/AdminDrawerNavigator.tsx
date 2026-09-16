@@ -48,7 +48,8 @@ import {
   AdminPerformanceStack,
   AdminExamCopyStack,
 } from './adminStacks';
-import { AdminUser, getStoredUser, logout } from '../api/authApi';
+import { logout } from '../api/authApi';
+import { useAdminProfile } from '../screens/admin/useAdminProfile';
 import { visibleAdminModules } from '../screens/admin/adminModules';
 
 const Drawer = createDrawerNavigator();
@@ -118,22 +119,10 @@ const AdminDrawerNavigator = () => {
   const CustomDrawer = (props: any) => {
     const { navigation, state } = props;
     const [logoutVisible, setLogoutVisible] = useState(false);
-    const [org, setOrg] = useState<{ name?: string; logo?: string | null } | null>(null);
-    const [permissions, setPermissions] = useState<string[] | undefined>(undefined);
     const [logoBroken, setLogoBroken] = useState(false);
-
-    useEffect(() => {
-      getStoredUser()
-        .then(u => {
-          const admin = u as AdminUser | null;
-          setOrg(admin?.organization ?? null);
-          setPermissions(admin?.permissions);
-        })
-        .catch(() => {
-          setOrg(null);
-          setPermissions(undefined);
-        });
-    }, []);
+    const profile = useAdminProfile();
+    const org = profile?.organization ?? null;
+    const permissions = profile?.permissions;
 
     // A sub-admin sees only what the school granted them on the web; Home is
     // where the app opens, so it always shows.
