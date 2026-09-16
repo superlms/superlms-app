@@ -33,6 +33,7 @@ import AdminTcCertificateScreen from '../screens/admin/AdminTcCertificateScreen'
 import AdminListsScreen from '../screens/admin/AdminListsScreen';
 import AdminComingSoonScreen from '../screens/admin/AdminComingSoonScreen';
 import AdminAssistantScreen from '../screens/admin/AdminAssistantScreen';
+import SettingsScreen from '../screens/setting/SettingsScreen';
 import {
   AdminStandardStack,
   AdminAnnouncementStack,
@@ -102,6 +103,9 @@ const activeKey = (state: any): string | null => {
       ) ?? null
     );
   }
+  if (route?.name === 'AdminSettings') {
+    return 'settings';
+  }
   return (
     Object.keys(ADMIN_MODULE_TARGETS).find(
       key => !ADMIN_MODULE_TARGETS[key].params && ADMIN_MODULE_TARGETS[key].route === route?.name,
@@ -112,8 +116,9 @@ const activeKey = (state: any): string | null => {
 /**
  * The school admin's sidebar: the web admin panel's — the school's logo and
  * name, then every module under "Dashboard" in the web's order, as far as this
- * admin may use them — drawn like the student and teacher sidebar, with a line
- * between rows and Log out at the foot.
+ * admin may use them, with Settings above More as in the student app — drawn
+ * like the student and teacher sidebar, with a line between rows and Log out at
+ * the foot. (Profile is under More.)
  */
 const AdminDrawerNavigator = () => {
   const CustomDrawer = (props: any) => {
@@ -175,20 +180,20 @@ const AdminDrawerNavigator = () => {
 
     const current = activeKey(state);
 
-    const rows = [
-      ...items.map(m => ({
-        key: m.key,
-        label: m.label,
-        icon: MENU_ICONS[m.key] ?? 'ellipse-outline',
-        onPress: () => openAdminModule(navigation, m),
-      })),
-      {
-        key: 'profile',
-        label: 'Profile',
-        icon: 'person-circle-outline',
-        onPress: () => navigation.navigate('AdminProfile'),
-      },
-    ];
+    const rows = items.map(m => ({
+      key: m.key,
+      label: m.label,
+      icon: MENU_ICONS[m.key] ?? 'ellipse-outline',
+      onPress: () => openAdminModule(navigation, m),
+    }));
+    // Settings (notifications, biometric unlock, password), just above More.
+    const moreAt = rows.findIndex(r => r.key === 'more');
+    rows.splice(moreAt < 0 ? rows.length : moreAt, 0, {
+      key: 'settings',
+      label: 'Settings',
+      icon: 'settings-outline',
+      onPress: () => navigation.navigate('AdminSettings'),
+    });
 
     return (
       <>
@@ -367,6 +372,7 @@ const AdminDrawerNavigator = () => {
       <Drawer.Screen name="AdminReportCard" component={AdminReportCardScreen} />
       <Drawer.Screen name="AdminTcCertificate" component={AdminTcCertificateScreen} />
       <Drawer.Screen name="AdminCredit" component={AdminCreditScreen} />
+      <Drawer.Screen name="AdminSettings" component={SettingsScreen} />
       <Drawer.Screen name="AdminMore" component={AdminMoreStack} />
       {/* The top bar's message icon — admin chat isn't in the app yet */}
       <Drawer.Screen

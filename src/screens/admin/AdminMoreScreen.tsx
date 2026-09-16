@@ -18,6 +18,7 @@ interface MoreItem {
 }
 
 const ITEMS: MoreItem[] = [
+  { title: 'Profile', description: 'Your details and photo', icon: 'person-circle-outline', route: 'AdminProfile' },
   { title: 'Users', description: 'Staff and sub-admin accounts', icon: 'people-outline', route: 'AdminUsers' },
   { title: 'Admissions', description: 'Admission enquiries and pipeline', icon: 'person-add-outline', route: 'AdminAdmissions' },
   { title: 'Lists', description: 'Student and staff lists', icon: 'list-outline', route: 'AdminLists' },
