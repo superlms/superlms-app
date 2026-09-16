@@ -1,5 +1,7 @@
+import axios from 'axios';
 import apiClient from './apiClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import constant from '../utils/constant';
 import { syncDeviceToken, clearDeviceToken } from '../notifications';
 
 export type UserRole = 'student' | 'teacher' | 'admin' | 'accounts';
@@ -71,19 +73,27 @@ export interface UnifiedAuthResponse {
   token: string;
   user: AuthUser;
   role: UserRole; // 'student' | 'teacher' | 'admin' | 'accounts'
-  // School-admin sign-ins gate on an email OTP before the session is stored
-  // (mirrors the web admin login). When true, the auth is NOT yet persisted —
-  // finish it with completeLogin() after the OTP is verified.
-  requiresOtp: boolean;
+}
+
+// A school admin's sign-in waits on the code mailed to them, as on the web: no
+// session exists yet. Finish it with verifyLoginOtp().
+export interface LoginOtpChallenge {
+  otpRequired: true;
+  userId: number;
+  email: string;
+  otpToken: string;
+  resendIn: number;
 }
 
 export const login = async (
   identifier: string,
   password: string,
-): Promise<UnifiedAuthResponse> => {
+): Promise<UnifiedAuthResponse | LoginOtpChallenge> => {
   const form = new FormData();
   form.append('identifier', identifier);
   form.append('password', password);
+  // This app shows the admin's code step.
+  form.append('otp_supported', '1');
 
   const { data } = await apiClient.post('/login', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -92,6 +102,23 @@ export const login = async (
   console.log('[login] Raw response:', JSON.stringify(data, null, 2));
 
   const payload = (data as any)?.data ?? data;
+
+  if (payload?.otp_required) {
+    return {
+      otpRequired: true,
+      userId: Number(payload.user_id),
+      email: payload.email ?? identifier,
+      otpToken: String(payload.otp_token),
+      resendIn: Number(payload.resend_in) || 120,
+    };
+  }
+
+  return _finishLogin(data);
+};
+
+// The token and who it belongs to, from a /login-shaped reply, saved.
+const _finishLogin = async (data: any): Promise<UnifiedAuthResponse> => {
+  const payload = data?.data ?? data;
   const token = payload?.token ?? payload?.access_token;
   const user = payload?.user ?? payload;
   // Friendly account type chosen by the backend; fall back to mapping the raw role.
@@ -101,22 +128,48 @@ export const login = async (
     throw new Error('No token in response: ' + JSON.stringify(data));
   }
 
-  // Credentials are valid at this point. School admins must still clear an
-  // email OTP, so hold the session in memory and let the OTP screen persist it.
-  const requiresOtp = role === 'admin';
-  if (!requiresOtp) {
-    await _persistAuth({ token, user }, role);
-  }
-  return { token, user, role, requiresOtp };
+  await _persistAuth({ token, user }, role);
+  return { token, user, role };
 };
 
-// Finalise a deferred (OTP-gated) login once the OTP has been verified.
-export const completeLogin = async (
-  token: string,
-  user: AuthUser,
-  role: UserRole,
-): Promise<void> => {
-  await _persistAuth({ token, user }, role);
+// The admin's code endpoints are called without the app's client: nothing is
+// signed in yet, and a wrong code (401) must not clear another session.
+const publicPost = async (path: string, body: object) => {
+  const { data } = await axios.post(`${constant.API_BASE_URL}${path}`, body, {
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    timeout: 20000,
+  });
+  return data;
+};
+
+// ─── Admin sign-in code ──────────────────────────────────────────────────────
+// Signs the admin in once the code mailed for this sign-in is right.
+export const verifyLoginOtp = async (
+  userId: number,
+  otpToken: string,
+  otp: string,
+): Promise<UnifiedAuthResponse> => {
+  const data = await publicPost('/login/verify-otp', {
+    user_id: userId,
+    otp_token: otpToken,
+    otp,
+  });
+  return _finishLogin(data);
+};
+
+// Mails a new code for the same sign-in ('switch': an account being added
+// to the account switcher).
+export const resendLoginOtp = async (
+  userId: number,
+  otpToken: string,
+  purpose: 'login' | 'switch' = 'login',
+): Promise<{ resendIn: number }> => {
+  const data = await publicPost('/login/resend-otp', {
+    user_id: userId,
+    otp_token: otpToken,
+    purpose,
+  });
+  return { resendIn: Number(data?.data?.resend_in) || 120 };
 };
 
 // Map any backend role/user_type to the app's stored role values.

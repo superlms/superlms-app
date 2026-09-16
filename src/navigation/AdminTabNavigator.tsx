@@ -1,28 +1,55 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { TouchableOpacity, View, StyleSheet } from 'react-native';
+import { TouchableOpacity } from 'react-native';
 import VectorIcon from '../components/VectorIcon';
-import { theme, onThemeChange } from '../utils/theme';
+import { theme } from '../utils/theme';
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
-import AdminQuickLinksScreen from '../screens/admin/AdminQuickLinksScreen';
+import AdminAttendanceScreen from '../screens/admin/AdminAttendanceScreen';
 import AdminComingSoonScreen from '../screens/admin/AdminComingSoonScreen';
+import { AdminStudentsStack, AdminTeachersStack } from './adminStacks';
+import { AdminUser, getStoredUser } from '../api/authApi';
+import { canAccessAdminModule } from '../screens/admin/adminModules';
 
 const Tab = createBottomTabNavigator();
 
 const NoRippleButton = (props: any) => <TouchableOpacity {...props} activeOpacity={1} />;
 
-// Center "FAB" button for the Quick Links tab — same treatment as the student app.
-const QuickLinkButton = ({ children, onPress }: any) => (
-  <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={styles.quickLinkWrapper}>
-    <View style={styles.quickLinkRing}>
-      <View style={styles.quickLinkInner}>{children}</View>
-    </View>
-  </TouchableOpacity>
-);
+const ICONS: Record<string, [string, string]> = {
+  Dashboard: ['grid', 'grid-outline'],
+  Students: ['people', 'people-outline'],
+  Teachers: ['person', 'person-outline'],
+  Attendance: ['clipboard', 'clipboard-outline'],
+  Fees: ['card', 'card-outline'],
+};
 
+// The web route that grants each tab (a sub-admin sees only theirs).
+const TAB_PERMS: Record<string, string> = {
+  Students: 'admin.student',
+  Teachers: 'admin.teacher',
+  Attendance: 'admin.attendance',
+  Fees: 'admin.fee',
+};
+
+/**
+ * The admin's bottom bar, drawn like the student and teacher one: Dashboard,
+ * Students, Teachers, Attendance and Fees.
+ */
 const AdminTabNavigator = () => {
+  const [permissions, setPermissions] = useState<string[] | undefined>(undefined);
+
+  useEffect(() => {
+    getStoredUser()
+      .then(u => setPermissions((u as AdminUser | null)?.permissions))
+      .catch(() => setPermissions(undefined));
+  }, []);
+
+  const allowed = (name: string) =>
+    canAccessAdminModule({ perm: TAB_PERMS[name] }, permissions);
+
   return (
     <Tab.Navigator
+      // The root SafeAreaView already pads the bottom inset; without this the
+      // tab bar adds it again and doubles the gap.
       safeAreaInsets={{ bottom: 0 }}
       screenOptions={({ route }) => ({
         headerShown: false,
@@ -35,100 +62,29 @@ const AdminTabNavigator = () => {
         tabBarItemStyle: { alignItems: 'center', justifyContent: 'center' },
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.textSecondary,
-        tabBarButton: props =>
-          route.name === 'QuickLinks' ? (
-            <QuickLinkButton {...props} />
-          ) : (
-            <NoRippleButton {...props} />
-          ),
+        tabBarButton: props => <NoRippleButton {...props} />,
         tabBarIcon: ({ color, focused }) => {
-          let iconName;
-          switch (route.name) {
-            case 'Dashboard':
-              iconName = focused ? 'grid' : 'grid-outline';
-              break;
-            case 'Chats':
-              iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
-              break;
-            case 'QuickLinks':
-              iconName = focused ? 'flash' : 'flash-outline';
-              break;
-            case 'Attendance':
-              iconName = focused ? 'checkbox' : 'checkbox-outline';
-              break;
-            case 'Fees':
-              iconName = focused ? 'card' : 'card-outline';
-              break;
-            default:
-              iconName = 'ellipse';
-          }
-          const iconColor = route.name === 'QuickLinks' ? theme.colors.surface : color;
-          const iconSize = route.name === 'QuickLinks' ? 26 : 22;
+          const [active, idle] = ICONS[route.name] ?? ['ellipse', 'ellipse'];
           return (
-            <VectorIcon
-              iconSet="Ionicons"
-              iconName={iconName}
-              size={iconSize}
-              color={iconColor}
-              style={route.name === 'QuickLinks' ? { marginTop: 1 } : undefined}
-            />
+            <VectorIcon iconSet="Ionicons" iconName={focused ? active : idle} size={22} color={color} />
           );
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
       })}
     >
       <Tab.Screen name="Dashboard" component={AdminDashboardScreen} />
-      <Tab.Screen
-        name="Chats"
-        component={AdminComingSoonScreen}
-        initialParams={{ title: 'Chats', icon: 'chatbubbles-outline' }}
-      />
-      <Tab.Screen
-        name="QuickLinks"
-        component={AdminQuickLinksScreen}
-        options={{ tabBarLabel: '' }}
-      />
-      <Tab.Screen
-        name="Attendance"
-        component={AdminComingSoonScreen}
-        initialParams={{ title: 'Attendance', icon: 'checkbox-outline' }}
-      />
-      <Tab.Screen
-        name="Fees"
-        component={AdminComingSoonScreen}
-        initialParams={{ title: 'Fees', icon: 'card-outline' }}
-      />
+      {allowed('Students') && <Tab.Screen name="Students" component={AdminStudentsStack} />}
+      {allowed('Teachers') && <Tab.Screen name="Teachers" component={AdminTeachersStack} />}
+      {allowed('Attendance') && <Tab.Screen name="Attendance" component={AdminAttendanceScreen} />}
+      {allowed('Fees') && (
+        <Tab.Screen
+          name="Fees"
+          component={AdminComingSoonScreen}
+          initialParams={{ title: 'Fees', icon: 'card-outline' }}
+        />
+      )}
     </Tab.Navigator>
   );
 };
 
 export default AdminTabNavigator;
-
-const __mk_styles = () =>
-  StyleSheet.create({
-    quickLinkWrapper: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    quickLinkRing: {
-      width: 76,
-      height: 76,
-      borderRadius: 38,
-      backgroundColor: theme.colors.primaryLight,
-      alignItems: 'center',
-      justifyContent: 'center',
-      bottom: 26,
-    },
-    quickLinkInner: {
-      width: 62,
-      height: 62,
-      borderRadius: 31,
-      paddingVertical: 16,
-      alignItems: 'center',
-      backgroundColor: theme.colors.primary,
-      borderColor: theme.colors.surface,
-    },
-  });
-
-// Themed stylesheets — rebuilt on light/dark toggle.
-let styles = __mk_styles();
-onThemeChange(() => {
-  styles = __mk_styles();
-});

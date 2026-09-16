@@ -7,16 +7,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { DrawerActions } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
+import TopBar from '../../components/TopBar';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
 import { ChartCard, Donut, MiniBars, StackedBar, HBar } from '../../components/Charts';
 import ListRow from '../../components/ListRow';
 import { AdminAnalytics, getAdminAnalytics } from '../../api/adminApi';
-import { AdminUser, getStoredUser } from '../../api/authApi';
-import { useUnreadCount } from '../../notifications';
+import { getAssistantStatus } from '../../api/assistantApi';
 
 const PRESENT = '#22C55E';
 const ABSENT = '#EF4444';
@@ -81,19 +80,15 @@ const AttendanceCard = ({
 };
 
 const AdminDashboardScreen = ({ navigation }: any) => {
-  const [user, setUser] = useState<AdminUser | null>(null);
   const [data, setData] = useState<AdminAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
+  // LMS Assist's button shows only where the assistant is switched on.
+  const [assistant, setAssistant] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [u, d] = await Promise.all([
-        getStoredUser() as Promise<AdminUser | null>,
-        getAdminAnalytics(30).catch(() => null),
-      ]);
-      setUser(u);
-      setData(d);
+      setData(await getAdminAnalytics(30).catch(() => null));
     } finally {
       setLoading(false);
     }
@@ -101,16 +96,22 @@ const AdminDashboardScreen = ({ navigation }: any) => {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    getAssistantStatus()
+      .then(st => setAssistant(!!st?.enabled))
+      .catch(() => setAssistant(false));
+  }, []);
+
   const { refreshing, onRefresh } = useRefresh(load);
-  const unreadCount = useUnreadCount();
+  // Students and Teachers are tabs beside this one.
   const go = (route: string) => navigation.navigate(route);
 
   const statCards = data ? [
-    { label: 'Students', value: String(data.stats.totalStudents), icon: 'people', color: '#6366F1', route: 'AdminStudents' },
+    { label: 'Students', value: String(data.stats.totalStudents), icon: 'people', color: '#6366F1', route: 'Students' },
     { label: 'Present Today', value: String(data.stats.presentToday), icon: 'checkmark-circle', color: PRESENT, route: 'AdminAnalytics' },
     { label: 'Absent Today', value: String(data.stats.absentToday), icon: 'close-circle', color: ABSENT, route: 'AdminAnalytics' },
-    { label: 'Teachers', value: String(data.stats.teachers), icon: 'school', color: '#8B5CF6', route: 'AdminTeachers' },
-    { label: 'New (30d)', value: String(data.stats.newAdmissions), icon: 'person-add', color: '#F59E0B', route: 'AdminStudents' },
+    { label: 'Teachers', value: String(data.stats.teachers), icon: 'school', color: '#8B5CF6', route: 'Teachers' },
+    { label: 'New (30d)', value: String(data.stats.newAdmissions), icon: 'person-add', color: '#F59E0B', route: 'Students' },
   ] : [];
 
   // ── derived metrics ──
@@ -129,22 +130,11 @@ const AdminDashboardScreen = ({ navigation }: any) => {
 
   return (
     <View style={s.root}>
-      {/* Top bar */}
-      <View style={s.topbar}>
-        <TouchableOpacity style={s.menuBtn} onPress={() => navigation.dispatch(DrawerActions.openDrawer())} activeOpacity={0.8}>
-          <VectorIcon iconSet="Feather" iconName="menu" size={20} color={theme.colors.primary} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={s.hello}>Welcome back 👋</Text>
-          <Text style={s.name} numberOfLines={2}>{user?.name ?? 'Admin'}</Text>
-        </View>
-        <TouchableOpacity style={s.iconBtn} onPress={() => navigation.navigate('Notifications')} activeOpacity={0.8}>
-          <VectorIcon iconSet="Ionicons" iconName="notifications-outline" size={19} color={theme.colors.primary} />
-          {unreadCount > 0 && (
-            <View style={s.bellBadge}><Text style={s.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text></View>
-          )}
-        </TouchableOpacity>
-      </View>
+      {/* The student and teacher top bar: account switch, notifications, messages */}
+      <TopBar
+        onBellPress={() => navigation.navigate('Notifications')}
+        onMessagePress={() => navigation.navigate('AdminMessages')}
+      />
 
       {loading && !refreshing ? (
         <View style={s.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>
@@ -320,7 +310,7 @@ const AdminDashboardScreen = ({ navigation }: any) => {
               {/* Top students */}
               {data.top_students.length > 0 && (
                 <ChartCard icon="trophy" iconBg="#F59E0B18" iconColor="#F59E0B" title="Top Students"
-                  subtitle="By attendance" onPress={() => go('AdminStudents')}>
+                  subtitle="By attendance" onPress={() => go('Students')}>
                   {data.top_students.map(t => (
                     <ListRow
                       key={t.rank}
@@ -356,6 +346,13 @@ const AdminDashboardScreen = ({ navigation }: any) => {
           <View style={{ height: 30 }} />
         </ScrollView>
       )}
+
+      {assistant && (
+        <TouchableOpacity style={s.assist} activeOpacity={0.85} onPress={() => navigation.navigate('AdminAssistant')}>
+          <VectorIcon iconSet="Ionicons" iconName="sparkles" size={18} color={theme.colors.white} />
+          <Text style={s.assistText}>LMS Assist</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -390,23 +387,27 @@ export default AdminDashboardScreen;
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  topbar: {
+  scroll: { padding: 16, gap: 14, paddingBottom: 96 },
+
+  // LMS Assist, at the bottom right
+  assist: {
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 14,
-    backgroundColor: theme.colors.card,
+    height: 48,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    backgroundColor: theme.colors.primary,
+    shadowColor: theme.colors.shadow,
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
   },
-  menuBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  hello: { fontSize: 12, color: theme.colors.textMuted, fontWeight: '600' },
-  name: { fontSize: 15, fontWeight: '900', color: theme.colors.textPrimary, marginTop: 1, lineHeight: 19 },
-  iconBtn: { width: 38, height: 38, borderRadius: theme.radius.full, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  bellBadge: { position: 'absolute', top: 3, right: 3, minWidth: 16, height: 16, paddingHorizontal: 3, borderRadius: 8, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: theme.colors.card, alignItems: 'center', justifyContent: 'center' },
-  bellBadgeText: { color: '#fff', fontSize: 9, fontWeight: '800', lineHeight: 11 },
-
-  scroll: { padding: 16, gap: 14, paddingBottom: 40 },
+  assistText: { color: theme.colors.white, fontSize: 14, fontWeight: '600' },
 
   statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   statCard: { width: '31%', flexGrow: 1, borderRadius: 16, padding: 12, gap: 6 },

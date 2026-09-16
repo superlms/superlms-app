@@ -12,7 +12,7 @@ import VectorIcon from '../../components/VectorIcon';
 import { theme } from '../../utils/theme';
 import { visibleAdminModules } from './adminModules';
 import { AdminUser, getStoredUser } from '../../api/authApi';
-import { AppAlert } from '../../components/AppDialog';
+import { openAdminModule } from '../../navigation/adminRoutes';
 
 type OrderKey = 'sidebar' | 'ascending';
 
@@ -52,43 +52,7 @@ const AdminQuickLinksScreen = () => {
 
   const activeOrder = ORDER_OPTIONS.find(o => o.key === order)!;
 
-  const moduleRoutes: Record<string, string> = {
-    analytics: 'AdminAnalytics',
-    announcement: 'AdminAnnouncement',
-    calender: 'AdminCalendar',
-    enquiries: 'AdminEnquiries',
-    standard: 'AdminStandard',
-    students: 'AdminStudents',
-    teachers: 'AdminTeachers',
-    'id-card': 'AdminIdCard',
-    exam: 'AdminExam',
-    syllabus: 'AdminSyllabus',
-    content: 'AdminContent',
-    quiz: 'AdminQuiz',
-    book: 'AdminBook',
-    timetable: 'AdminTimetable',
-    arrangement: 'AdminArrangement',
-    homework: 'AdminHomework',
-    attendance: 'AdminAttendance',
-    transport: 'AdminTransport',
-    credit: 'AdminCredit',
-    'admit-card': 'AdminAdmitCard',
-    'report-card': 'AdminReportCard',
-    'tc-certificate': 'AdminTcCertificate',
-  };
-
-  const openModule = (m: { key: string; label: string }) => {
-    if (m.key === 'dashboard') {
-      navigation.navigate('Dashboard');
-      return;
-    }
-    const route = moduleRoutes[m.key];
-    if (route) {
-      navigation.navigate(route);
-      return;
-    }
-    AppAlert.alert(m.label, 'This module is coming soon to the admin app.');
-  };
+  const openModule = (m: { key: string; label: string }) => openAdminModule(navigation, m);
 
   return (
     <View style={s.root}>

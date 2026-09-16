@@ -17,13 +17,7 @@ import { CommonActions, useNavigation, useRoute } from '@react-navigation/native
 import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
 import Header from '../../components/Header';
-import {
-  verifyOtp,
-  resendOtp,
-  completeLogin,
-  type AuthUser,
-  type UserRole,
-} from '../../api/authApi';
+import { verifyLoginOtp, resendLoginOtp } from '../../api/authApi';
 
 // Six independent boxes so the user can tap any box and retype just that digit.
 // Typing auto-advances, backspace on an empty box steps back, and pasting a
@@ -119,21 +113,19 @@ const OtpBoxes = ({
 
 type Params = {
   email: string;
-  userId: string | number;
-  otpToken?: string;
-  pendingToken: string;
-  pendingUser: AuthUser;
-  pendingRole: UserRole;
+  userId: number;
+  // This sign-in's code request — only its own code is accepted.
+  otpToken: string;
+  resendIn?: number;
 };
 
-// School-admin OTP gate. The credentials are already verified and the session
-// token is held in the nav params; we only store it (completeLogin) once the
-// emailed OTP is confirmed — mirroring the web admin login flow.
+// School-admin sign-in code, as on the web admin login: the password has
+// cleared and a code has been mailed, but there is no session until the code
+// is right — the server issues it then.
 const LoginOtpScreen = () => {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { email, userId, pendingToken, pendingUser, pendingRole } =
-    route.params as Params;
+  const { email, userId, otpToken, resendIn } = route.params as Params;
 
   const scrollRef = useRef<ScrollView>(null);
   const { width: windowWidth } = useWindowDimensions();
@@ -147,11 +139,7 @@ const LoginOtpScreen = () => {
   const otpRowWidth = otpBoxWidth * 6 + otpGap * 5;
 
   const [otp, setOtp] = useState('');
-  // This sign-in's OTP request — only its own code is accepted.
-  const [otpToken, setOtpToken] = useState<string | undefined>(
-    route.params?.otpToken,
-  );
-  const [timer, setTimer] = useState(120);
+  const [timer, setTimer] = useState(resendIn ?? 120);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -206,9 +194,8 @@ const LoginOtpScreen = () => {
     setLoading(true);
     setError('');
     try {
-      await verifyOtp(otp, userId, otpToken);
-      // OTP good — now store the session and enter the admin dashboard.
-      await completeLogin(pendingToken, pendingUser, pendingRole);
+      // Right code: the session is saved and the admin dashboard opens.
+      await verifyLoginOtp(userId, otpToken, otp);
       navigation.dispatch(
         CommonActions.reset({
           index: 0,
@@ -226,12 +213,8 @@ const LoginOtpScreen = () => {
 
   const handleResend = async () => {
     try {
-      const res = await resendOtp(email, userId, otpToken);
-      if (!res.success) {
-        throw new Error(res.message);
-      }
-      setOtpToken(res.otp_token);
-      setTimer(120);
+      const res = await resendLoginOtp(userId, otpToken);
+      setTimer(res.resendIn);
       setError('');
     } catch (e: any) {
       const msg =

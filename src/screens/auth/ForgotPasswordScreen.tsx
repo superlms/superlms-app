@@ -217,7 +217,12 @@ const ForgotPasswordScreen = () => {
   // the one in use.
   const addResetAccount = async (identifier: string, newPassword: string) => {
     try {
-      const { account, token } = await addAccount({ identifier, password: newPassword });
+      const added = await addAccount({ identifier, password: newPassword });
+      // A school admin needs the emailed code, which this screen doesn't ask for.
+      if ('otpRequired' in added) {
+        throw new Error('A school admin account needs the code sent to its email.');
+      }
+      const { account, token } = added;
       await upsertAccount({
         user_id: account.user_id,
         user_type: account.user_type,

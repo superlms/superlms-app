@@ -35,6 +35,9 @@ export interface AddAccountInput {
   identifier: string;          // admission number (student) OR email (any other role)
   password:   string;
   login_type?: AccountType;    // optional — backend auto-detects from the identifier
+  // This screen can show a school admin's emailed code step. Without it the
+  // server asks an admin to update the app instead.
+  otpSupported?: boolean;
 }
 
 export interface AddAccountResult {
@@ -43,21 +46,17 @@ export interface AddAccountResult {
   token_type: string;
 }
 
-export const addAccount = async (input: AddAccountInput): Promise<AddAccountResult> => {
-  const { data } = await axios.post(
-    `${constant.API_BASE_URL}/switch-account/add`,
-    {
-      identifier: input.identifier.trim(),
-      password:   input.password,
-      // login_type omitted on purpose — the backend auto-detects the role.
-      ...(input.login_type ? { login_type: input.login_type } : {}),
-    },
-    {
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      timeout: 15000,
-    },
-  );
+// A school admin is added only once the code mailed to them is entered —
+// finish with verifyAddAccountOtp().
+export interface AddAccountOtp {
+  otpRequired: true;
+  userId:      number;
+  email:       string;
+  otpToken:    string;
+  resendIn:    number;
+}
 
+const toAddResult = (data: any): AddAccountResult => {
   const payload = data?.data ?? data;
   const account = payload?.account as AccountSnapshot | undefined;
   const token   = payload?.token   as string | undefined;
@@ -67,6 +66,56 @@ export const addAccount = async (input: AddAccountInput): Promise<AddAccountResu
     throw new Error('Malformed response from /switch-account/add');
   }
   return { account, token, token_type: ttype ?? 'Bearer' };
+};
+
+export const addAccount = async (
+  input: AddAccountInput,
+): Promise<AddAccountResult | AddAccountOtp> => {
+  const { data } = await axios.post(
+    `${constant.API_BASE_URL}/switch-account/add`,
+    {
+      identifier: input.identifier.trim(),
+      password:   input.password,
+      // login_type omitted on purpose — the backend auto-detects the role.
+      ...(input.login_type ? { login_type: input.login_type } : {}),
+      ...(input.otpSupported ? { otp_supported: true } : {}),
+    },
+    {
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      timeout: 15000,
+    },
+  );
+
+  const payload = data?.data ?? data;
+  if (payload?.otp_required) {
+    return {
+      otpRequired: true,
+      userId:      Number(payload.user_id),
+      email:       payload.email ?? input.identifier.trim(),
+      otpToken:    String(payload.otp_token),
+      resendIn:    Number(payload.resend_in) || 120,
+    };
+  }
+  return toAddResult(data);
+};
+
+// ─── /switch-account/add/verify-otp ──────────────────────────────────────────
+// The admin's account, once the mailed code is right. Bare axios for the same
+// reason as addAccount — and a wrong code (401) must not touch the session in use.
+export const verifyAddAccountOtp = async (
+  userId: number,
+  otpToken: string,
+  otp: string,
+): Promise<AddAccountResult> => {
+  const { data } = await axios.post(
+    `${constant.API_BASE_URL}/switch-account/add/verify-otp`,
+    { user_id: userId, otp_token: otpToken, otp },
+    {
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      timeout: 20000,
+    },
+  );
+  return toAddResult(data);
 };
 
 // ─── /switch-account/remove ──────────────────────────────────────────────────

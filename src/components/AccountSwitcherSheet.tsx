@@ -32,7 +32,11 @@ import {
   addAccount,
   fetchCurrentSnapshot,
   revokeAccountToken,
+  verifyAddAccountOtp,
+  type AddAccountOtp,
+  type AddAccountResult,
 } from '../api/switchAccountApi';
+import { resendLoginOtp } from '../api/authApi';
 
 type Mode = 'list' | 'add';
 
@@ -125,6 +129,16 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
   const [addError, setAddError] = useState('');
   // The last try failed on the password itself — offer to reset it.
   const [wrongPassword, setWrongPassword] = useState(false);
+  // A school admin's account waits on the code mailed to them.
+  const [otpStep, setOtpStep] = useState<AddAccountOtp | null>(null);
+  const [otp, setOtp] = useState('');
+  const [resendIn, setResendIn] = useState(0);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn(v => v - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
 
   const refresh = useCallback(async () => {
     const [list, id] = await Promise.all([listAccounts(), getActiveAccountId()]);
@@ -246,7 +260,33 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
     setShowPass(false);
     setAddError('');
     setWrongPassword(false);
+    setOtpStep(null);
+    setOtp('');
+    setResendIn(0);
   };
+
+  // Saves an added account and goes back to the list.
+  const saveAdded = async ({ account, token }: AddAccountResult) => {
+    // Don't allow adding the same account twice — just refresh its token.
+    await upsertAccount({
+      user_id: account.user_id,
+      user_type: account.user_type,
+      name: account.name,
+      email: account.email,
+      image: account.image,
+      organization: account.organization,
+      class_info: account.class_info,
+      token,
+      added_at: Date.now(),
+    });
+
+    resetAddForm();
+    setMode('list');
+    await refresh();
+  };
+
+  const messageOf = (err: any, fallback: string) =>
+    err?.response?.data?.message ?? err?.response?.data?.error ?? err?.message ?? fallback;
 
   const onSubmitAdd = async () => {
     const id = identifier.trim();
@@ -263,36 +303,55 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
     setAdding(true);
     try {
       // No login_type — the backend auto-detects the role from the identifier.
-      const { account, token } = await addAccount({ identifier: id, password });
-
-      // Don't allow adding the same account twice — just refresh its token.
-      await upsertAccount({
-        user_id: account.user_id,
-        user_type: account.user_type,
-        name: account.name,
-        email: account.email,
-        image: account.image,
-        organization: account.organization,
-        class_info: account.class_info,
-        token,
-        added_at: Date.now(),
-      });
-
-      resetAddForm();
-      setMode('list');
-      await refresh();
+      const res = await addAccount({ identifier: id, password, otpSupported: true });
+      if ('otpRequired' in res) {
+        // A school admin: the code the server has just mailed comes next.
+        setOtpStep(res);
+        setOtp('');
+        setResendIn(res.resendIn);
+        return;
+      }
+      await saveAdded(res);
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.message ??
-        err?.response?.data?.error ??
-        err?.message ??
-        'Could not add the account. Please check your credentials.';
+      const msg = messageOf(err, 'Could not add the account. Please check your credentials.');
       setAddError(msg);
       // A wrong email or admission number gets no reset offer — only a wrong
       // password ("The provided password is incorrect."), whatever the status.
       setWrongPassword(/password/i.test(String(msg)) && /incorrect|invalid|wrong/i.test(String(msg)));
     } finally {
       setAdding(false);
+    }
+  };
+
+  const onSubmitOtp = async () => {
+    if (!otpStep) return;
+    if (!/^\d{6}$/.test(otp)) {
+      setAddError('Please enter the 6-digit code.');
+      return;
+    }
+    setAddError('');
+    setAdding(true);
+    try {
+      await saveAdded(await verifyAddAccountOtp(otpStep.userId, otpStep.otpToken, otp));
+    } catch (err: any) {
+      setOtp('');
+      setAddError(messageOf(err, 'Could not verify the code. Please try again.'));
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const onResendOtp = async () => {
+    if (!otpStep || resendIn > 0) return;
+    setAddError('');
+    try {
+      const { resendIn: wait } = await resendLoginOtp(otpStep.userId, otpStep.otpToken, 'switch');
+      setResendIn(wait);
+    } catch (err: any) {
+      const msg = messageOf(err, 'Could not send a new code.');
+      const waitMatch = String(msg).match(/(\d+)\s*second/i);
+      if (waitMatch) setResendIn(parseInt(waitMatch[1], 10));
+      setAddError(msg);
     }
   };
 
@@ -366,6 +425,21 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
                 }}
               />
             ) : (
+              otpStep ? (
+                <OtpBody
+                  email={otpStep.email}
+                  otp={otp}
+                  setOtp={t => {
+                    setOtp(t.replace(/\D/g, '').slice(0, 6));
+                    setAddError('');
+                  }}
+                  error={addError}
+                  resendIn={resendIn}
+                  onResend={onResendOtp}
+                  loading={adding}
+                  onSubmit={onSubmitOtp}
+                />
+              ) : (
               <AddBody
                 identifier={identifier}
                 setIdentifier={t => {
@@ -386,6 +460,7 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
                 loading={adding}
                 onSubmit={onSubmitAdd}
               />
+              )
             )}
           </View>
         </Animated.View>
@@ -596,6 +671,69 @@ const AddBody = (p: AddBodyProps) => {
   );
 };
 
+// ─── Code body (a school admin's account) ─────────────────────────────────────
+interface OtpBodyProps {
+  email: string;
+  otp: string;
+  setOtp: (t: string) => void;
+  error: string;
+  resendIn: number;
+  onResend: () => void;
+  loading: boolean;
+  onSubmit: () => void;
+}
+
+const OtpBody = (p: OtpBodyProps) => {
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.addContent} showsVerticalScrollIndicator={false}>
+      <Text style={s.label}>Enter the 6-digit code sent to {p.email}</Text>
+      <TextInput
+        placeholder="6-digit code"
+        placeholderTextColor={theme.colors.textMuted}
+        value={p.otp}
+        onChangeText={p.setOtp}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        keyboardType="number-pad"
+        autoComplete="one-time-code"
+        textContentType="oneTimeCode"
+        maxLength={6}
+        autoFocus
+        style={[s.field, s.otpField, focused && s.fieldFocused]}
+      />
+
+      {!!p.error && <Text style={s.errorText}>{p.error}</Text>}
+
+      {p.resendIn > 0 ? (
+        <Text style={s.resendWait}>
+          Resend code in {Math.floor(p.resendIn / 60)}:{String(p.resendIn % 60).padStart(2, '0')}
+        </Text>
+      ) : (
+        <TouchableOpacity onPress={p.onResend} hitSlop={8} activeOpacity={0.6} style={s.forgotBtn}>
+          <Text style={s.forgotText}>Resend code</Text>
+        </TouchableOpacity>
+      )}
+
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={p.onSubmit}
+        disabled={p.loading}
+        style={[s.saveBtn, p.loading && s.saveBtnBusy]}
+      >
+        {p.loading ? (
+          <ActivityIndicator color={theme.colors.white} />
+        ) : (
+          <Text style={s.saveBtnText}>Verify & add</Text>
+        )}
+      </TouchableOpacity>
+
+      <Text style={s.hint}>School admin accounts are added once the emailed code is confirmed.</Text>
+    </ScrollView>
+  );
+};
+
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const __mk_s = () => StyleSheet.create({
   backdrop: {
@@ -716,6 +854,8 @@ const __mk_s = () => StyleSheet.create({
   passField: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 0 },
   passInput: { flex: 1, paddingVertical: 12, fontSize: 15, color: theme.colors.textPrimary },
   fieldFocused: { borderColor: theme.colors.primary },
+  otpField: { marginTop: 10, letterSpacing: 6, fontSize: 18 },
+  resendWait: { fontSize: 13, color: theme.colors.textMuted, marginTop: 8 },
 
   errorText: { fontSize: 13, color: theme.colors.danger, lineHeight: 19, marginTop: 12 },
   forgotBtn: { alignSelf: 'flex-start', marginTop: 8 },

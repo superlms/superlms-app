@@ -15,7 +15,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { theme, onThemeChange } from '../../utils/theme';
 import VectorIcon from '../../components/VectorIcon';
-import { login, forgotPassword, type UserRole } from '../../api/authApi';
+import { login, type UserRole } from '../../api/authApi';
 
 // Where each role lands after a successful login.
 const destinationFor = (role: UserRole) => {
@@ -94,24 +94,19 @@ const LoginScreen = () => {
     setLoading(true);
     try {
       const res = await login(identifier.trim(), password);
-      console.log('[Login] Success:', JSON.stringify({ role: res.role }, null, 2));
 
-      // School admins get an extra OTP step (mirrors the web admin login). The
-      // session isn't stored yet — send the code and hand off to the OTP screen,
-      // which finishes the login on success.
-      if (res.requiresOtp) {
-        const email = (res.user as any)?.email ?? identifier.trim();
-        const otpRes = await forgotPassword(email);
+      // A school admin is signed in only after the code the server has just
+      // mailed them (the web admin login's rule); the OTP screen finishes it.
+      if ('otpRequired' in res) {
         navigation.navigate('LoginOtp', {
-          email,
-          userId: otpRes.user_id,
-          otpToken: otpRes.otp_token,
-          pendingToken: res.token,
-          pendingUser: res.user,
-          pendingRole: res.role,
+          email: res.email,
+          userId: res.userId,
+          otpToken: res.otpToken,
+          resendIn: res.resendIn,
         });
         return;
       }
+      console.log('[Login] Success:', JSON.stringify({ role: res.role }, null, 2));
 
       const dest = destinationFor(res.role);
       navigation.dispatch(

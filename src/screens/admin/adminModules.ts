@@ -1,5 +1,5 @@
 // Admin modules — mirror the web admin sidebar order (config/menu.php → 'admin').
-// Shared by the dashboard grid and the Quick Links screen so both stay in sync.
+// Shared by the sidebar and the Quick Links screen so both stay in sync.
 //
 // `perm` is the web admin route name that grants this module (config/menu.php
 // → 'admin' → 'link'). It's how a sub-admin's granted functionalities — sent by
@@ -11,11 +11,13 @@ export interface AdminModule {
   icon: string;
   color: string;
   perm?: string;
+  /** Older route names that grant the same module (a renamed web screen). */
+  alsoPerms?: string[];
 }
 
 export const ADMIN_MODULES: AdminModule[] = [
   { key: 'quick-links', label: 'Quick Links', icon: 'link', color: '#6366F1', perm: 'admin.quick-links' },
-  { key: 'dashboard', label: 'Dashboard', icon: 'home', color: '#22C55E', perm: 'admin.home' },
+  { key: 'dashboard', label: 'Home', icon: 'home', color: '#22C55E', perm: 'admin.home' },
   { key: 'analytics', label: 'Analytics', icon: 'bar-chart', color: '#0EA5E9', perm: 'admin.analytics' },
   { key: 'standard', label: 'Standard', icon: 'book', color: '#F59E0B', perm: 'admin.standard' },
   { key: 'students', label: 'Students', icon: 'people', color: '#EC4899', perm: 'admin.student' },
@@ -23,7 +25,6 @@ export const ADMIN_MODULES: AdminModule[] = [
   { key: 'fees', label: 'Fees', icon: 'cash', color: '#14B8A6', perm: 'admin.fee' },
   { key: 'ledger', label: 'Ledger', icon: 'calculator', color: '#EF4444', perm: 'admin.ledger' },
   { key: 'payroll', label: 'Payroll', icon: 'wallet', color: '#3B82F6', perm: 'admin.payroll' },
-  { key: 'credit', label: 'Credit', icon: 'card', color: '#10B981', perm: 'admin.credit' },
   { key: 'attendance', label: 'Attendance', icon: 'checkbox', color: '#F97316', perm: 'admin.attendance' },
   { key: 'transport', label: 'Transportation', icon: 'bus', color: '#6366F1', perm: 'admin.transport' },
   { key: 'homework', label: 'Homework', icon: 'create', color: '#22C55E', perm: 'admin.homework' },
@@ -33,10 +34,11 @@ export const ADMIN_MODULES: AdminModule[] = [
   { key: 'calender', label: 'Calender', icon: 'calendar-outline', color: '#8B5CF6', perm: 'admin.calender' },
   { key: 'syllabus', label: 'Syllabus', icon: 'library', color: '#14B8A6', perm: 'admin.syllabus' },
   { key: 'content', label: 'Content', icon: 'document', color: '#EF4444', perm: 'admin.content' },
-  { key: 'quiz', label: 'Quiz', icon: 'help-circle', color: '#3B82F6', perm: 'admin.quiz' },
+  { key: 'quiz', label: 'Assignments', icon: 'help-circle', color: '#3B82F6', perm: 'admin.assignments', alsoPerms: ['admin.quiz'] },
   { key: 'book', label: 'Book', icon: 'book', color: '#10B981', perm: 'admin.book' },
   { key: 'enquiries', label: 'Enquiries', icon: 'chatbubble-ellipses', color: '#F97316', perm: 'admin.enqueries' },
   { key: 'id-card', label: 'ID Card', icon: 'card', color: '#6366F1', perm: 'admin.id-card' },
+  { key: 'lists', label: 'Lists', icon: 'list', color: '#0EA5E9', perm: 'admin.lists' },
   { key: 'exam', label: 'Exam', icon: 'document-text', color: '#22C55E', perm: 'admin.add-exam' },
   { key: 'admit-card', label: 'Admit Card', icon: 'ticket', color: '#0EA5E9', perm: 'admin.admit-card' },
   { key: 'seating-plan', label: 'Seating Plan', icon: 'apps', color: '#F59E0B', perm: 'admin.seating-plan' },
@@ -56,10 +58,11 @@ export const hasAllAccess = (perms?: string[] | null): boolean =>
 
 // True if the given module should be visible for the supplied permissions.
 export const canAccessAdminModule = (
-  m: Pick<AdminModule, 'perm'>,
+  m: Pick<AdminModule, 'perm' | 'alsoPerms'>,
   perms?: string[] | null,
 ): boolean =>
-  hasAllAccess(perms) || (!!m.perm && perms!.includes(m.perm));
+  hasAllAccess(perms) ||
+  [m.perm, ...(m.alsoPerms ?? [])].some(p => !!p && perms!.includes(p));
 
 // The admin modules a user with these permissions may see, in sidebar order.
 export const visibleAdminModules = (perms?: string[] | null): AdminModule[] =>

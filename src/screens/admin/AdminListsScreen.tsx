@@ -7,10 +7,12 @@ import { theme } from '../../utils/theme';
 // Lists — quick access to the exportable rosters. The web "Lists" builder makes
 // filtered PDFs; on mobile we route to the Students / Teachers screens which
 // already support filtering and CSV export.
+// Students and Teachers are bottom tabs; Admissions sits under More. Named from
+// the drawer so they open from the sidebar's Lists and from More's alike.
 const OPTIONS = [
-  { title: 'Students List', subtitle: 'Filter by class/section & export CSV', icon: 'people', accent: '#6366F1', route: 'AdminStudents' },
-  { title: 'Teachers List', subtitle: 'Filter staff & export CSV', icon: 'person', accent: '#8B5CF6', route: 'AdminTeachers' },
-  { title: 'Admissions List', subtitle: 'Admission enquiries pipeline', icon: 'person-add', accent: '#22C55E', route: 'AdminAdmissions' },
+  { title: 'Students List', subtitle: 'Filter by class/section & export CSV', icon: 'people', accent: '#6366F1', route: 'PanelHome', params: { screen: 'Students' } },
+  { title: 'Teachers List', subtitle: 'Filter staff & export CSV', icon: 'person', accent: '#8B5CF6', route: 'PanelHome', params: { screen: 'Teachers' } },
+  { title: 'Admissions List', subtitle: 'Admission enquiries pipeline', icon: 'person-add', accent: '#22C55E', route: 'AdminMore', params: { screen: 'AdminAdmissions', initial: false } },
 ];
 
 const AdminListsScreen = ({ navigation }: any) => (
@@ -20,7 +22,7 @@ const AdminListsScreen = ({ navigation }: any) => (
       <Text style={s.sectionTitle}>Rosters & exports</Text>
       <Text style={s.sectionDesc}>Open a roster to filter and export it.</Text>
       {OPTIONS.map(o => (
-        <TouchableOpacity key={o.route} style={s.card} activeOpacity={0.85} onPress={() => navigation.navigate(o.route)}>
+        <TouchableOpacity key={o.title} style={s.card} activeOpacity={0.85} onPress={() => navigation.navigate(o.route, o.params)}>
           <View style={[s.accentStrip, { backgroundColor: o.accent }]} />
           <View style={s.cardInner}>
             <View style={[s.iconWrap, { backgroundColor: o.accent + '18' }]}>

@@ -25,6 +25,11 @@ interface TopBarProps {
   userName?: string;
   onBellPress?: () => void;
   onAvatarPress?: () => void;
+  /**
+   * Given, a messages icon takes the profile photo's place (the admin's bar:
+   * notifications and messages only).
+   */
+  onMessagePress?: () => void;
 }
 
 const getGreeting = () => {
@@ -38,9 +43,10 @@ const getGreeting = () => {
  * The dashboard's header: the menu, who is signed in (tap to switch account),
  * notifications and the profile photo — plain icons on white, with a thin line
  * under it like every other header. Without a photo, the profile is a plain
- * outline icon like the bell beside it.
+ * outline icon like the bell beside it. The admin's bar shows messages there
+ * instead.
  */
-const TopBar = ({ userName, onBellPress, onAvatarPress }: TopBarProps) => {
+const TopBar = ({ userName, onBellPress, onAvatarPress, onMessagePress }: TopBarProps) => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const unreadCount = useUnreadCount();
@@ -141,7 +147,11 @@ const TopBar = ({ userName, onBellPress, onAvatarPress }: TopBarProps) => {
           )}
         </TouchableOpacity>
 
-        {avatarUri && !avatarBroken ? (
+        {onMessagePress ? (
+          <TouchableOpacity onPress={onMessagePress} activeOpacity={0.6} hitSlop={8} style={styles.iconBtn}>
+            <VectorIcon iconSet="Ionicons" iconName="chatbubble-ellipses-outline" size={21} color={theme.colors.textPrimary} />
+          </TouchableOpacity>
+        ) : avatarUri && !avatarBroken ? (
           <TouchableOpacity onPress={onAvatarPress} activeOpacity={0.7} style={styles.avatar}>
             <Image source={{ uri: avatarUri }} onError={() => setAvatarBroken(true)} style={styles.avatarImg} />
           </TouchableOpacity>

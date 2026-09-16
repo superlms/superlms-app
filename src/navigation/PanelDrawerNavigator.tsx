@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   StyleSheet,
@@ -15,82 +15,14 @@ import { theme, onThemeChange } from '../utils/theme';
 import VectorIcon from '../components/VectorIcon';
 import { DrawerShadeBridge } from './drawerShade';
 import { AppDialog, AppAlert } from '../components/AppDialog';
-import AdminTabNavigator from './AdminTabNavigator';
-import AdminAnalyticsScreen from '../screens/admin/AdminAnalyticsScreen';
-import AdminTimetableScreen from '../screens/admin/AdminTimetableScreen';
-import AdminArrangementScreen from '../screens/admin/AdminArrangementScreen';
-import AdminHomeworkScreen from '../screens/admin/AdminHomeworkScreen';
-import AdminAttendanceScreen from '../screens/admin/AdminAttendanceScreen';
-import AdminTransportScreen from '../screens/admin/AdminTransportScreen';
-import AdminCreditScreen from '../screens/admin/AdminCreditScreen';
-import AdminAdmitCardScreen from '../screens/admin/AdminAdmitCardScreen';
-import AdminReportCardScreen from '../screens/admin/AdminReportCardScreen';
-import AdminTcCertificateScreen from '../screens/admin/AdminTcCertificateScreen';
-import {
-  AdminStudentsStack,
-  AdminTeachersStack,
-  AdminStandardStack,
-  AdminAnnouncementStack,
-  AdminCalendarStack,
-  AdminEnquiriesStack,
-  AdminSyllabusStack,
-  AdminContentStack,
-  AdminQuizStack,
-  AdminBookStack,
-  AdminMoreStack,
-  AdminExamStack,
-  AdminIdCardStack,
-  AdminPerformanceStack,
-  AdminExamCopyStack,
-} from './adminStacks';
 import AccountsDashboardScreen from '../screens/accounts/AccountsDashboardScreen';
-import { AdminUser, AccountsUser, getStoredUser, logout } from '../api/authApi';
-import { hasAllAccess } from '../screens/admin/adminModules';
+import { AccountsUser, getStoredUser, logout } from '../api/authApi';
 
 const Drawer = createDrawerNavigator();
 
-type Panel = 'admin' | 'accounts';
-
 // `route` set → the menu item opens a real screen. Otherwise it's a shell entry
 // that shows a "coming soon" notice (those modules arrive in later phases).
-// `perm` is the web admin route name that grants the module (config/menu.php);
-// items without one (Dashboard, Profile) are structural and always shown.
-type MenuItem = { label: string; icon: string; route?: string; perm?: string };
-
-// Mirrors the web admin sidebar order (config/menu.php → 'admin').
-const ADMIN_MENU: MenuItem[] = [
-  { label: 'Dashboard', icon: 'grid-outline', route: 'PanelHome' },
-  { label: 'Analytics', icon: 'analytics-outline', route: 'AdminAnalytics', perm: 'admin.analytics' },
-  { label: 'Standard', icon: 'book-outline', route: 'AdminStandard', perm: 'admin.standard' },
-  { label: 'Students', icon: 'people-outline', route: 'AdminStudents', perm: 'admin.student' },
-  { label: 'Teachers', icon: 'person-outline', route: 'AdminTeachers', perm: 'admin.teacher' },
-  { label: 'Fees', icon: 'cash-outline', perm: 'admin.fee' },
-  { label: 'Ledger', icon: 'calculator-outline', perm: 'admin.ledger' },
-  { label: 'Payroll', icon: 'wallet-outline', perm: 'admin.payroll' },
-  { label: 'Credit', icon: 'card-outline', route: 'AdminCredit', perm: 'admin.credit' },
-  { label: 'Attendance', icon: 'clipboard-outline', route: 'AdminAttendance', perm: 'admin.attendance' },
-  { label: 'Transportation', icon: 'bus-outline', route: 'AdminTransport', perm: 'admin.transport' },
-  { label: 'Homework', icon: 'create-outline', route: 'AdminHomework', perm: 'admin.homework' },
-  { label: 'Time Table', icon: 'time-outline', route: 'AdminTimetable', perm: 'admin.timetable' },
-  { label: 'Arrangement', icon: 'grid-outline', route: 'AdminArrangement', perm: 'admin.arrangement' },
-  { label: 'Announcement', icon: 'megaphone-outline', route: 'AdminAnnouncement', perm: 'admin.announcement' },
-  { label: 'Calender', icon: 'calendar-outline', route: 'AdminCalendar', perm: 'admin.calender' },
-  { label: 'Syllabus', icon: 'document-text-outline', route: 'AdminSyllabus', perm: 'admin.syllabus' },
-  { label: 'Content', icon: 'folder-outline', route: 'AdminContent', perm: 'admin.content' },
-  { label: 'Quiz', icon: 'help-circle-outline', route: 'AdminQuiz', perm: 'admin.quiz' },
-  { label: 'Book', icon: 'book-outline', route: 'AdminBook', perm: 'admin.book' },
-  { label: 'Enquiries', icon: 'chatbubbles-outline', route: 'AdminEnquiries', perm: 'admin.enqueries' },
-  { label: 'ID Card', icon: 'id-card-outline', route: 'AdminIdCard', perm: 'admin.id-card' },
-  { label: 'Exam', icon: 'school-outline', route: 'AdminExam', perm: 'admin.add-exam' },
-  { label: 'Admit Card', icon: 'ticket-outline', route: 'AdminAdmitCard', perm: 'admin.admit-card' },
-  { label: 'Seating Plan', icon: 'apps-outline', perm: 'admin.seating-plan' },
-  { label: 'Performance', icon: 'speedometer-outline', route: 'AdminPerformance', perm: 'admin.performance' },
-  { label: 'Exam Copy', icon: 'document-attach-outline', route: 'AdminExamCopy', perm: 'admin.exam-copy' },
-  { label: 'Report Card', icon: 'documents-outline', route: 'AdminReportCard', perm: 'admin.report-card' },
-  { label: 'TC & Certificate', icon: 'ribbon-outline', route: 'AdminTcCertificate', perm: 'admin.tc-certificate' },
-  { label: 'Profile', icon: 'person-circle-outline', route: 'AdminProfile' },
-  { label: 'More', icon: 'ellipsis-horizontal-outline', route: 'AdminMore', perm: 'admin.more' },
-];
+type MenuItem = { label: string; icon: string; route?: string };
 
 // Mirrors the web accounts sidebar order (config/menu.php → 'accounts').
 const ACCOUNTS_MENU: MenuItem[] = [
@@ -113,12 +45,13 @@ const ACCOUNTS_MENU: MenuItem[] = [
   { label: 'TC & Certificates', icon: 'ribbon-outline' },
 ];
 
-const PanelDrawerNavigator = ({ route }: any) => {
-  const panel: Panel = route?.params?.panel === 'accounts' ? 'accounts' : 'admin';
-  const menuItems = useMemo(
-    () => (panel === 'accounts' ? ACCOUNTS_MENU : ADMIN_MENU),
-    [panel],
-  );
+/**
+ * The accounts panel's dashboard and sidebar. (The school admin panel has its
+ * own, AdminDrawerNavigator.)
+ */
+const PanelDrawerNavigator = () => {
+  const panel = 'accounts';
+  const menuItems = ACCOUNTS_MENU;
 
   const CustomDrawer = (props: any) => {
     const { navigation, state } = props;
@@ -126,32 +59,14 @@ const PanelDrawerNavigator = ({ route }: any) => {
     const [org, setOrg] = useState<{ name?: string; logo?: string | null } | null>(
       null,
     );
-    const [permissions, setPermissions] = useState<string[] | undefined>(undefined);
 
     useEffect(() => {
       getStoredUser()
-        .then(u => {
-          const admin = u as AdminUser | AccountsUser | null;
-          setOrg(admin?.organization ?? null);
-          setPermissions((admin as AdminUser | null)?.permissions);
-        })
-        .catch(() => {
-          setOrg(null);
-          setPermissions(undefined);
-        });
+        .then(u => setOrg((u as AccountsUser | null)?.organization ?? null))
+        .catch(() => setOrg(null));
     }, []);
 
-    // On the admin panel a sub-admin sees only the functionalities the school
-    // granted them on the web (structural items without a `perm` always show);
-    // a full admin (['*']) and the accounts panel keep the full menu.
-    const visibleItems = useMemo(() => {
-      if (panel !== 'admin' || hasAllAccess(permissions)) {
-        return menuItems;
-      }
-      return menuItems.filter(
-        item => !item.perm || permissions!.includes(item.perm),
-      );
-    }, [permissions]);
+    const visibleItems = menuItems;
 
     const onItemPress = (item: MenuItem) => {
       if (item.route) {
@@ -202,9 +117,7 @@ const PanelDrawerNavigator = ({ route }: any) => {
                 {org.name}
               </Text>
             )}
-            <Text style={styles.panelTag}>
-              {panel === 'accounts' ? 'Accounts Panel' : 'School Panel'}
-            </Text>
+            <Text style={styles.panelTag}>Accounts Panel</Text>
           </View>
           <View style={styles.headerDivider} />
 
@@ -301,35 +214,7 @@ const PanelDrawerNavigator = ({ route }: any) => {
         drawerType: 'front',
       }}
     >
-      <Drawer.Screen
-        name="PanelHome"
-        component={panel === 'accounts' ? AccountsDashboardScreen : AdminTabNavigator}
-      />
-      {panel === 'admin' && <Drawer.Screen name="AdminAnalytics" component={AdminAnalyticsScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminAnnouncement" component={AdminAnnouncementStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminCalendar" component={AdminCalendarStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminEnquiries" component={AdminEnquiriesStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminStandard" component={AdminStandardStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminStudents" component={AdminStudentsStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminTeachers" component={AdminTeachersStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminIdCard" component={AdminIdCardStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminExam" component={AdminExamStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminPerformance" component={AdminPerformanceStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminExamCopy" component={AdminExamCopyStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminSyllabus" component={AdminSyllabusStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminContent" component={AdminContentStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminQuiz" component={AdminQuizStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminBook" component={AdminBookStack} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminTimetable" component={AdminTimetableScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminArrangement" component={AdminArrangementScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminHomework" component={AdminHomeworkScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminAttendance" component={AdminAttendanceScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminTransport" component={AdminTransportScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminCredit" component={AdminCreditScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminAdmitCard" component={AdminAdmitCardScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminReportCard" component={AdminReportCardScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminTcCertificate" component={AdminTcCertificateScreen} />}
-      {panel === 'admin' && <Drawer.Screen name="AdminMore" component={AdminMoreStack} />}
+      <Drawer.Screen name="PanelHome" component={AccountsDashboardScreen} />
     </Drawer.Navigator>
   );
 };
