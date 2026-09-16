@@ -31,10 +31,10 @@ interface TopBarProps {
    */
   onMessagePress?: () => void;
   /**
-   * Given (the admin's bar), the school is shown instead of the person: its
-   * logo beside the menu, and its name in the greeting's size.
+   * Given (the admin's bar), the school's name is shown instead of the
+   * person's, in the greeting's size.
    */
-  school?: { name?: string; logo?: string | null } | null;
+  school?: { name?: string } | null;
 }
 
 const getGreeting = () => {
@@ -59,7 +59,6 @@ const TopBar = ({ userName, onBellPress, onAvatarPress, onMessagePress, school }
   const [displayName, setDisplayName] = useState<string>(userName ?? '');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [avatarBroken, setAvatarBroken] = useState(false);
-  const [logoBroken, setLogoBroken] = useState(false);
   const schoolMode = school !== undefined;
 
   const refreshAccount = useCallback(async () => {
@@ -134,19 +133,6 @@ const TopBar = ({ userName, onBellPress, onAvatarPress, onMessagePress, school }
         <TouchableOpacity onPress={openDrawer} activeOpacity={0.6} hitSlop={8} style={styles.iconBtn}>
           <VectorIcon iconSet="Feather" iconName="menu" size={21} color={theme.colors.textPrimary} />
         </TouchableOpacity>
-
-        {schoolMode &&
-          (school?.logo && !logoBroken ? (
-            <Image
-              source={{ uri: school.logo }}
-              onError={() => setLogoBroken(true)}
-              style={styles.schoolLogo}
-            />
-          ) : (
-            <View style={styles.iconBtn}>
-              <VectorIcon iconSet="Ionicons" iconName="school-outline" size={22} color={theme.colors.primary} />
-            </View>
-          ))}
 
         <TouchableOpacity style={styles.userInfo} activeOpacity={0.6} onPress={() => setSwitcherOpen(true)}>
           <Text style={styles.greeting}>{getGreeting()}</Text>
@@ -235,11 +221,6 @@ const __mk_styles = () => StyleSheet.create({
     fontWeight: '600',
     color: theme.colors.textPrimary,
     flexShrink: 1,
-  },
-  schoolLogo: {
-    width: 36,
-    height: 36,
-    resizeMode: 'contain',
   },
   schoolName: {
     fontSize: 12,
