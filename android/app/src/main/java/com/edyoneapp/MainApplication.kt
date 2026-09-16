@@ -16,6 +16,8 @@ class MainApplication : Application(), ReactApplication {
         PackageList(this).packages.apply {
           // Packages that cannot be autolinked yet can be added manually here, for example:
           // add(MyReactNativePackage())
+          // Play Store updates run from inside the app.
+          add(PlayUpdatePackage())
         },
       // OTA: load the downloaded JS bundle if one is installed & compatible;
       // otherwise falls back to the bundle shipped inside the APK/AAB.

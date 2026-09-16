@@ -17,6 +17,8 @@ import AppLock from './src/components/AppLock';
 import { ThemeProvider, theme } from './src/utils/theme';
 import { initNotifications } from './src/notifications';
 import { checkForOTAUpdate } from './src/utils/otaUpdate';
+import { startPlayUpdateChecks } from './src/utils/playUpdate';
+import PlayUpdateGate from './src/components/PlayUpdateGate';
 import { AppAlertHost } from './src/components/AppDialog';
 import { SystemBarShade } from './src/navigation/drawerShade';
 
@@ -97,6 +99,9 @@ const App = () => {
     // Check for an over-the-air JS update in the background (release builds
     // only). New bundles are applied on the next cold start — no Play Store.
     checkForOTAUpdate();
+    // A newer build on the Play Store is installed before the app is used
+    // (the splash waits for this check).
+    startPlayUpdateChecks();
   }, []);
 
   return (
@@ -106,6 +111,8 @@ const App = () => {
           <AppInner />
           {/* Draws every AppAlert.alert() popup */}
           <AppAlertHost />
+          {/* Holds the app until a newer Play Store build is installed */}
+          <PlayUpdateGate />
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
