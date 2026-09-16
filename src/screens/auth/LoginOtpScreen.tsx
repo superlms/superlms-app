@@ -120,6 +120,7 @@ const OtpBoxes = ({
 type Params = {
   email: string;
   userId: string | number;
+  otpToken?: string;
   pendingToken: string;
   pendingUser: AuthUser;
   pendingRole: UserRole;
@@ -146,6 +147,10 @@ const LoginOtpScreen = () => {
   const otpRowWidth = otpBoxWidth * 6 + otpGap * 5;
 
   const [otp, setOtp] = useState('');
+  // This sign-in's OTP request — only its own code is accepted.
+  const [otpToken, setOtpToken] = useState<string | undefined>(
+    route.params?.otpToken,
+  );
   const [timer, setTimer] = useState(120);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -201,7 +206,7 @@ const LoginOtpScreen = () => {
     setLoading(true);
     setError('');
     try {
-      await verifyOtp(otp, userId);
+      await verifyOtp(otp, userId, otpToken);
       // OTP good — now store the session and enter the admin dashboard.
       await completeLogin(pendingToken, pendingUser, pendingRole);
       navigation.dispatch(
@@ -221,10 +226,11 @@ const LoginOtpScreen = () => {
 
   const handleResend = async () => {
     try {
-      const res = await resendOtp(email, userId);
+      const res = await resendOtp(email, userId, otpToken);
       if (!res.success) {
         throw new Error(res.message);
       }
+      setOtpToken(res.otp_token);
       setTimer(120);
       setError('');
     } catch (e: any) {

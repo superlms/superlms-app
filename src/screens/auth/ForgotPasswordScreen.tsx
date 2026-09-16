@@ -176,6 +176,8 @@ const ForgotPasswordScreen = () => {
   const [email, setEmail] = useState<string>(route.params?.email ?? '');
   const [otp, setOtp] = useState('');
   const [userId, setUserId] = useState<string | number>('');
+  // This reset's OTP request — only its own code is accepted.
+  const [otpToken, setOtpToken] = useState<string | undefined>();
   const [timer, setTimer] = useState(120);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -321,6 +323,7 @@ const ForgotPasswordScreen = () => {
                     JSON.stringify(res, null, 2),
                   );
                   setUserId(res.user_id);
+                  setOtpToken(res.otp_token);
                   setTimer(120);
                   setStep(2);
                 } catch (e: any) {
@@ -387,11 +390,17 @@ const ForgotPasswordScreen = () => {
                     if (!userId) {
                       const res = await forgotPassword(email.trim());
                       setUserId(res.user_id);
+                      setOtpToken(res.otp_token);
                     } else {
-                      const res = await resendOtp(email.trim(), userId);
+                      const res = await resendOtp(
+                        email.trim(),
+                        userId,
+                        otpToken,
+                      );
                       if (!res.success) {
                         throw new Error(res.message);
                       }
+                      setOtpToken(res.otp_token);
                     }
                     console.log('[ResendOTP] ✅ OTP resent');
                     setTimer(120);
@@ -433,7 +442,7 @@ const ForgotPasswordScreen = () => {
                 setLoading(true);
                 setError('');
                 try {
-                  await verifyOtp(otp, userId);
+                  await verifyOtp(otp, userId, otpToken);
                   setStep(3);
                 } catch (e: any) {
                   setError(
@@ -616,6 +625,7 @@ const ForgotPasswordScreen = () => {
                     password,
                     confirmPassword,
                     userId,
+                    otpToken,
                   );
                   console.log(
                     '[ChangePassword] ✅ Response:',

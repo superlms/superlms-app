@@ -236,9 +236,16 @@ export const accountsLogin = async (
 };
 
 // ─── Forgot Password ──────────────────────────────────────────────────────────
+// Every OTP request gets its own otp_token; pass it back to verifyOtp,
+// resendOtp and changePassword — only this request's code is accepted there, so
+// the same account asking for codes on another phone doesn't get in the way.
 export const forgotPassword = async (
   email: string,
-): Promise<{ user_id: number | string; message: string }> => {
+): Promise<{
+  user_id: number | string;
+  otp_token?: string;
+  message: string;
+}> => {
   const form = new FormData();
   form.append('email', email);
 
@@ -248,25 +255,30 @@ export const forgotPassword = async (
 
   console.log('[forgotPassword] Raw response:', JSON.stringify(data, null, 2));
 
-  // Response shape: { success, status_code, message, data: { user_id } }
+  // Response shape: { success, status_code, message, data: { user_id, otp_token } }
   const user_id = data?.data?.user_id ?? data?.user_id;
+  const otp_token = data?.data?.otp_token ?? data?.otp_token;
   const message = data?.message ?? 'OTP sent successfully.';
 
   if (!user_id) {
     throw new Error('No user_id in response: ' + JSON.stringify(data));
   }
 
-  return { user_id, message };
+  return { user_id, otp_token, message };
 };
 
 // ─── Verify OTP ───────────────────────────────────────────────────────────────
 export const verifyOtp = async (
   otp: string,
   user_id: string | number,
+  otp_token?: string,
 ): Promise<{ success: boolean; message: string }> => {
   const form = new FormData();
   form.append('otp', otp);
   form.append('user_id', String(user_id));
+  if (otp_token) {
+    form.append('otp_token', otp_token);
+  }
 
   const { data } = await apiClient.post('/verify-otp', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -288,10 +300,14 @@ export const verifyOtp = async (
 export const resendOtp = async (
   email: string,
   user_id: string | number,
-): Promise<{ success: boolean; message: string }> => {
+  otp_token?: string,
+): Promise<{ success: boolean; otp_token?: string; message: string }> => {
   const form = new FormData();
   form.append('email', email);
   form.append('user_id', String(user_id));
+  if (otp_token) {
+    form.append('otp_token', otp_token);
+  }
 
   const { data } = await apiClient.post('/resend-otp', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -301,6 +317,7 @@ export const resendOtp = async (
 
   return {
     success: data?.success ?? data?.status ?? false,
+    otp_token: data?.data?.otp_token ?? otp_token,
     message: data?.message ?? 'OTP resent successfully.',
   };
 };
@@ -310,11 +327,15 @@ export const changePassword = async (
   password: string,
   password_confirmation: string,
   user_id: string | number,
+  otp_token?: string,
 ): Promise<{ success: boolean; message: string }> => {
   const form = new FormData();
   form.append('password', password);
   form.append('password_confirmation', password_confirmation);
   form.append('user_id', String(user_id));
+  if (otp_token) {
+    form.append('otp_token', otp_token);
+  }
 
   const { data } = await apiClient.post('/change-password', form, {
     headers: { 'Content-Type': 'multipart/form-data' },

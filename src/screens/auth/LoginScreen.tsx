@@ -105,6 +105,7 @@ const LoginScreen = () => {
         navigation.navigate('LoginOtp', {
           email,
           userId: otpRes.user_id,
+          otpToken: otpRes.otp_token,
           pendingToken: res.token,
           pendingUser: res.user,
           pendingRole: res.role,
