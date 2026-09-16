@@ -10,11 +10,11 @@ import { startPlayUpdate, usePlayUpdateStatus } from '../utils/playUpdate';
 import { theme } from '../utils/theme';
 
 /**
- * Keeps the app behind an "Update required" card while a newer build is on the
- * Play Store and hasn't been installed (see utils/playUpdate). Play's own
- * update screen opens by itself; this card is what's left if it is closed, and
- * "Update now" opens it again. It takes every touch, and Back does nothing, so
- * neither login nor any screen behind can be used until the app is updated.
+ * Keeps the app behind an "Update required" card when a newer Play Store build
+ * was turned down — "No thanks" in Play's prompt, or Play's full-screen update
+ * closed (see utils/playUpdate). "Update now" runs Play's full-screen update.
+ * It takes every touch, and Back does nothing, so neither login nor any screen
+ * behind can be used until the app is updated.
  */
 const PlayUpdateGate = () => {
   const status = usePlayUpdateStatus();

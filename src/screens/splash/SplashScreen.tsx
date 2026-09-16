@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { Storage } from '../../utils/storage';
-import { startPlayUpdateChecks } from '../../utils/playUpdate';
+import { playUpdateAppReady } from '../../utils/playUpdate';
 
 /**
  * The logo on a white page, "Made with ❤️ in India" at the foot.
@@ -62,38 +62,33 @@ const SplashScreen = ({ navigation }: any) => {
   const play = () => {
     if (animation.current) return;
 
-    animation.current = Animated.parallel([
-      timing(paper, 1, 500),
-      timing(glow, 1, 1000, GLIDE),
-      timing(enter, 1, 1000, GLIDE),
-      timing(footer, 1, 600, SMOOTH, 350),
-      timing(ring, 1, 1200, Easing.out(Easing.cubic), 550),
-      Animated.sequence([
-        Animated.delay(700),
-        timing(breath, 1, 450, Easing.inOut(Easing.sin)),
-        timing(breath, 0, 550, Easing.inOut(Easing.sin)),
+    animation.current = Animated.sequence([
+      Animated.parallel([
+        timing(paper, 1, 500),
+        timing(glow, 1, 1000, GLIDE),
+        timing(enter, 1, 1000, GLIDE),
+        timing(footer, 1, 600, SMOOTH, 350),
+        timing(ring, 1, 1200, Easing.out(Easing.cubic), 550),
+        Animated.sequence([
+          Animated.delay(700),
+          timing(breath, 1, 450, Easing.inOut(Easing.sin)),
+          timing(breath, 0, 550, Easing.inOut(Easing.sin)),
+        ]),
       ]),
+      timing(exit, 1, 450, SMOOTH),
     ]);
 
     animation.current.start(async ({ finished }) => {
       if (!finished) return;
-      // The logo stays until the next screen is known — and any Play Store
-      // update has been looked for — then lifts away.
       const [name, params] = await (route.current ?? nextRoute());
-      animation.current = timing(exit, 1, 450, SMOOTH);
-      animation.current.start(({ finished: exited }) => {
-        if (exited) navigation.replace(name, params);
-      });
+      navigation.replace(name, params);
+      // A Play Store update found meanwhile is offered now, over this screen.
+      playUpdateAppReady();
     });
   };
 
   useEffect(() => {
-    // A newer Play Store build is looked for before the app opens past here;
-    // if there is one, Play's update screen opens over the splash.
-    route.current = Promise.all([
-      nextRoute().catch((): Route => ['Login']),
-      startPlayUpdateChecks(),
-    ]).then(([next]) => next);
+    route.current = nextRoute().catch((): Route => ['Login']);
     // The logo normally reports it has loaded at once; this only covers a
     // phone where that report never comes.
     const fallback = setTimeout(play, 400);

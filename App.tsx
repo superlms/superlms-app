@@ -99,8 +99,8 @@ const App = () => {
     // Check for an over-the-air JS update in the background (release builds
     // only). New bundles are applied on the next cold start — no Play Store.
     checkForOTAUpdate();
-    // A newer build on the Play Store is installed before the app is used
-    // (the splash waits for this check).
+    // Look for a newer Play Store build in the background while the splash
+    // plays; it is offered once the next screen is up.
     startPlayUpdateChecks();
   }, []);
 
