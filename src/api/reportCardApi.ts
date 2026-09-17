@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import constant from '../utils/constant';
 import { authHeader, downloadPdf } from './pdfDownload';
 
 // Re-exported so screens can keep importing it from this module.
@@ -85,6 +86,17 @@ export const getReportCard = async (id: number | string): Promise<ReportCardDeta
 };
 
 export const isReportCardMissing = (e: any): boolean => e?.response?.status === 404;
+
+/** The report card the student sees: the latest one the school has issued (and not revoked). */
+export const latestIssued = (cards: ReportCardListItem[]): ReportCardListItem | null =>
+  cards.find(c => (c.status ?? '').toLowerCase() === 'issued') ?? null;
+
+/**
+ * The issued card as the school's own document — the PDF the admin panel
+ * downloads, from the same template. Token-protected: pass `authHeader()`.
+ */
+export const reportCardPdfUrl = (id: number | string): string =>
+  `${constant.API_BASE_URL}/report-card/${id}/pdf`;
 
 /** Download the report-card PDF to the device (Android Downloads / iOS share). */
 export const downloadReportCardPdf = (pdfUrl: string, fileName: string): Promise<string> =>
