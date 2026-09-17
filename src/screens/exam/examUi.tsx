@@ -1,15 +1,17 @@
 import React, { useMemo, useState } from 'react';
 import {
   ScrollView,
+  StyleProp,
   StyleSheet,
   Text,
   TextInput,
+  TextStyle,
   TouchableOpacity,
   View,
 } from 'react-native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
-import { Skeleton } from '../../components/Skeleton';
+import { Skeleton, SkeletonIcon, SkeletonText } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { theme, onThemeChange } from '../../utils/theme';
 import { DocNoData } from '../more/docUi';
@@ -97,10 +99,33 @@ export const sortExams = (list: Exam[]): Exam[] =>
     return a.status === 'Completed' ? -asc : asc;
   });
 
+// Words as they read, or — in a skeleton — bars as long as their own lines.
+export const Words = ({
+  skeleton,
+  style,
+  numberOfLines,
+  children,
+}: {
+  skeleton?: boolean;
+  style?: StyleProp<TextStyle>;
+  numberOfLines?: number;
+  children: React.ReactNode;
+}) =>
+  skeleton ? (
+    <SkeletonText style={style} numberOfLines={numberOfLines}>
+      {children}
+    </SkeletonText>
+  ) : (
+    <Text style={style} numberOfLines={numberOfLines}>
+      {children}
+    </Text>
+  );
+
 // ── One exam ─────────────────────────────────────────────────────────────────
 //   FEB   Mid Term                                ONGOING
 //    10   Term 1 · Unit Test
 //         10 – 20 Feb 2026  ·  Ends in 4 days
+// As a skeleton, every piece of it is a bar the size of its own words.
 export const ExamRow = ({
   exam,
   showYear,
@@ -109,6 +134,7 @@ export const ExamRow = ({
   cue,
   expanded,
   children,
+  skeleton,
 }: {
   exam: Exam;
   /** Add the academic year to the meta line, for lists that span several. */
@@ -120,6 +146,7 @@ export const ExamRow = ({
   expanded?: boolean;
   /** What the row opens onto, set in under the text column. */
   children?: React.ReactNode;
+  skeleton?: boolean;
 }) => {
   const from = dayOf(exam.startIso);
   const live = exam.status === 'Ongoing';
@@ -139,49 +166,59 @@ export const ExamRow = ({
 
   return (
     <View style={[!isLast && s.rowDivider]}>
-      <TouchableOpacity style={s.row} activeOpacity={0.6} onPress={onPress}>
+      <TouchableOpacity style={s.row} activeOpacity={0.6} onPress={onPress} disabled={skeleton}>
         <View style={s.dateCol}>
           {from ? (
             <>
-              <Text style={[s.dateMonth, live && s.accent]}>
+              <Words skeleton={skeleton} style={[s.dateMonth, live && s.accent]}>
                 {from.format('MMM').toUpperCase()}
-              </Text>
-              <Text style={[s.dateDay, live && s.accent, done && s.dateDayDone]}>
+              </Words>
+              <Words skeleton={skeleton} style={[s.dateDay, live && s.accent, done && s.dateDayDone]}>
                 {from.format('D')}
-              </Text>
+              </Words>
             </>
           ) : (
-            <Text style={[s.dateDay, s.dateDayDone]}>—</Text>
+            <Words skeleton={skeleton} style={[s.dateDay, s.dateDayDone]}>
+              —
+            </Words>
           )}
         </View>
 
         <View style={s.body}>
           <View style={s.line}>
-            <Text style={s.name} numberOfLines={1}>
-              {exam.name}
-            </Text>
-            <Text style={[s.status, live && s.accent, done && s.statusDone]}>
+            <View style={s.fill}>
+              <Words skeleton={skeleton} style={s.name} numberOfLines={1}>
+                {exam.name}
+              </Words>
+            </View>
+            <Words skeleton={skeleton} style={[s.status, live && s.accent, done && s.statusDone]}>
               {exam.status.toUpperCase()}
-            </Text>
+            </Words>
           </View>
           {!!meta && (
-            <Text style={s.meta} numberOfLines={1}>
+            <Words skeleton={skeleton} style={s.meta} numberOfLines={1}>
               {meta}
-            </Text>
+            </Words>
           )}
-          <Text style={s.when} numberOfLines={1}>
+          <Words skeleton={skeleton} style={s.when} numberOfLines={1}>
             {shortRange(exam)}
             {!!when && <Text style={live ? s.accent : undefined}>{`  ·  ${when}`}</Text>}
-          </Text>
+          </Words>
           {!!cue && (
             <View style={s.cue}>
-              <Text style={s.cueText}>{cue}</Text>
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName={expanded ? 'chevron-up' : 'chevron-down'}
-                size={13}
-                color={theme.colors.primary}
-              />
+              <Words skeleton={skeleton} style={s.cueText}>
+                {cue}
+              </Words>
+              {skeleton ? (
+                <SkeletonIcon iconName={expanded ? 'chevron-up' : 'chevron-down'} size={13} />
+              ) : (
+                <VectorIcon
+                  iconSet="Ionicons"
+                  iconName={expanded ? 'chevron-up' : 'chevron-down'}
+                  size={13}
+                  color={theme.colors.primary}
+                />
+              )}
             </View>
           )}
         </View>
@@ -218,6 +255,56 @@ export const SyllabusList = ({ items }: { items: SyllabusItem[] }) => (
   </View>
 );
 
+// ── What a list draws while it loads ─────────────────────────────────────────
+// Kept for the next first load: just what a row shows.
+export const examsToKeep = (list: Exam[]): Exam[] =>
+  list.map(e => ({ ...e, instructions: [], syllabus: [], description: '' }));
+
+const sampleExam = (
+  id: string,
+  name: string,
+  term: string,
+  type: string,
+  from: number,
+  to: number,
+  totalMarks: number,
+): Exam => {
+  const day = (n: number) => moment().startOf('day').add(n, 'days');
+  const status: ExamStatus = to < 0 ? 'Completed' : from > 0 ? 'Upcoming' : 'Ongoing';
+  return {
+    id,
+    name,
+    subtitle: term,
+    academicYear: '',
+    type,
+    dateRange: '',
+    startDate: day(from).format('DD MMM YYYY'),
+    endDate: day(to).format('DD MMM YYYY'),
+    status,
+    totalMarks,
+    passingMarks: Math.round(totalMarks * 0.33),
+    venue: '',
+    instructions: [],
+    syllabus: [],
+    term,
+    startIso: day(from).format('YYYY-MM-DD'),
+    endIso: day(to).format('YYYY-MM-DD'),
+    description: '',
+  };
+};
+
+// Ordinary exams, for a list never loaded on this phone.
+const SAMPLE_EXAMS: Exam[] = [
+  sampleExam('s1', 'Half Yearly Exam', 'Term 1', 'Half Yearly', -2, 6, 80),
+  sampleExam('s2', 'Unit Test 2', 'Term 1', 'Unit Test', 14, 18, 25),
+  sampleExam('s3', 'Unit Test 1', 'Term 1', 'Unit Test', -45, -41, 25),
+  sampleExam('s4', 'Periodic Test', 'Term 1', 'Periodic Test', -80, -77, 20),
+];
+
+/** The exams a loading list draws: those on screen, else those it held last time, else samples. */
+export const examsToDraw = (loaded: boolean, exams: Exam[], last: Exam[] | null | undefined): Exam[] =>
+  loaded ? exams : Array.isArray(last) ? last : SAMPLE_EXAMS;
+
 // ── The whole list ───────────────────────────────────────────────────────────
 type Tab = ExamStatus | 'All';
 
@@ -234,6 +321,7 @@ export const ExamList = ({
   onPressExam,
   rowExtras,
   emptySubtitle,
+  drawn,
 }: {
   exams: Exam[];
   loading: boolean;
@@ -245,19 +333,29 @@ export const ExamList = ({
   /** Per-row additions — the teacher's screen opens a syllabus in place. */
   rowExtras?: (exam: Exam) => { cue?: string; expanded?: boolean; below?: React.ReactNode };
   emptySubtitle: string;
+  /**
+   * The exams to draw while `loading` — what is on screen, or what the list
+   * held last time. With it, every load the screen marks (the first, a pull to
+   * refresh, Try again) shows the page itself as a skeleton: search, tabs and
+   * each row as bars the size of their words.
+   */
+  drawn?: Exam[];
 }) => {
   const [tab, setTab] = useState<Tab>('All');
   const [query, setQuery] = useState('');
 
-  const sorted = useMemo(() => sortExams(exams), [exams]);
+  const skeleton = !!drawn && loading;
+  const list = skeleton && drawn ? drawn : exams;
+
+  const sorted = useMemo(() => sortExams(list), [list]);
 
   const counts = useMemo(() => {
     const c: Record<ExamStatus, number> = { Ongoing: 0, Upcoming: 0, Completed: 0 };
-    exams.forEach(e => {
+    list.forEach(e => {
       c[e.status] += 1;
     });
     return c;
-  }, [exams]);
+  }, [list]);
 
   // All, then only the statuses that actually have exams — and no strip at all
   // when every exam shares one status.
@@ -270,11 +368,11 @@ export const ExamList = ({
   const activeTab: Tab = tabs.includes(tab) ? tab : 'All';
 
   const showYear = useMemo(
-    () => new Set(exams.map(e => e.academicYear).filter(Boolean).map(yearKey)).size > 1,
-    [exams],
+    () => new Set(list.map(e => e.academicYear).filter(Boolean).map(yearKey)).size > 1,
+    [list],
   );
 
-  const searching = exams.length >= SEARCH_FROM;
+  const searching = list.length >= SEARCH_FROM;
   const q = searching ? query.trim().toLowerCase() : '';
 
   const visible = sorted.filter(
@@ -286,9 +384,12 @@ export const ExamList = ({
         )),
   );
 
-  const refreshControl = <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />;
+  // With `drawn`, the skeleton stands in for the spinner.
+  const refreshControl = (
+    <AppRefreshControl refreshing={drawn ? false : refreshing} onRefresh={onRefresh} />
+  );
 
-  if (loading && !refreshing && exams.length === 0) {
+  if (!drawn && loading && !refreshing && exams.length === 0) {
     return (
       <View style={s.list}>
         {[0, 1, 2, 3, 4].map(i => (
@@ -308,7 +409,7 @@ export const ExamList = ({
     );
   }
 
-  if (error && exams.length === 0) {
+  if (!skeleton && error && exams.length === 0) {
     return (
       <ScrollView contentContainerStyle={s.grow} refreshControl={refreshControl}>
         <View style={s.centeredBox}>
@@ -329,7 +430,15 @@ export const ExamList = ({
 
   return (
     <>
-      {searching && (
+      {searching && skeleton && (
+        <View style={[s.search, tabs.length === 0 && s.searchAlone]}>
+          <SkeletonIcon iconName="search-outline" size={16} />
+          <View style={s.fill}>
+            <SkeletonText style={s.searchPlaceholder}>{query || 'Search exams'}</SkeletonText>
+          </View>
+        </View>
+      )}
+      {searching && !skeleton && (
         <View style={[s.search, tabs.length === 0 && s.searchAlone]}>
           <VectorIcon iconSet="Ionicons" iconName="search-outline" size={16} color={theme.colors.textMuted} />
           <TextInput
@@ -363,12 +472,13 @@ export const ExamList = ({
                   key={t}
                   activeOpacity={0.6}
                   onPress={() => setTab(t)}
-                  style={[s.tab, active && s.tabActive]}
+                  disabled={skeleton}
+                  style={[s.tab, active && !skeleton && s.tabActive]}
                 >
-                  <Text style={[s.tabText, active && s.tabTextActive]}>
+                  <Words skeleton={skeleton} style={[s.tabText, active && s.tabTextActive]}>
                     {t}
-                    <Text style={s.tabCount}>{`  ${t === 'All' ? exams.length : counts[t]}`}</Text>
-                  </Text>
+                    <Text style={s.tabCount}>{`  ${t === 'All' ? list.length : counts[t]}`}</Text>
+                  </Words>
                 </TouchableOpacity>
               );
             })}
@@ -390,9 +500,10 @@ export const ExamList = ({
               icon="search-outline"
               title="No matches"
               subtitle={`No exam matches “${query.trim()}”.`}
+              skeleton={skeleton}
             />
           ) : (
-            <DocNoData icon="school-outline" title="No exams" subtitle={emptySubtitle} />
+            <DocNoData icon="school-outline" title="No exams" subtitle={emptySubtitle} skeleton={skeleton} />
           )
         ) : (
           visible.map((exam, i) => {
@@ -406,6 +517,7 @@ export const ExamList = ({
                 onPress={() => onPressExam(exam)}
                 cue={extra?.cue}
                 expanded={extra?.expanded}
+                skeleton={skeleton}
               >
                 {extra?.below}
               </ExamRow>
@@ -440,6 +552,7 @@ const __mk_s = () => StyleSheet.create({
   },
   searchAlone: { marginBottom: 4 },
   searchInput: { flex: 1, fontSize: 14, color: theme.colors.textPrimary, paddingVertical: 0 },
+  searchPlaceholder: { fontSize: 14 },
 
   // Status tabs. A horizontal ScrollView grows to fill a column by default,
   // so the bar is held to its content.

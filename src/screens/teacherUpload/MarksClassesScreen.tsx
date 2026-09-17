@@ -1,20 +1,25 @@
 import React, { useCallback, useState } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
-import { Skeleton } from '../../components/Skeleton';
+import { Skeleton, SkeletonIcon } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
-import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
+import { useFocusLoad } from '../../hooks/useRefresh';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { theme, onThemeChange } from '../../utils/theme';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { SubjectIcon } from '../subjects/subjectIcon';
 import { plural } from '../subjects/subjectsUi';
 import { getMarksClasses, marksErrorMessage, type MarksClass } from '../../api/marksApi';
 import type { Exam } from '../exam/examData';
+import { Words } from '../exam/examUi';
 
 /**
  * Upload Marks, step two: the classes and sections the teacher teaches (one
  * row per subject taught there), each saying whether the exam's marks are in.
  * A row opens the class's students (MarksSheet).
+ *
+ * A load — the first, a pull to refresh, Try again — draws the page as a
+ * skeleton from the classes it shows, or those it held last time.
  */
 
 export const marksClassLabel = (c: MarksClass) =>
@@ -22,10 +27,40 @@ export const marksClassLabel = (c: MarksClass) =>
 
 const classKey = (c: MarksClass) => `${c.standard_id}-${c.section_id}-${c.subject_id}`;
 
+const sampleClass = (id: number, standard: string, section: string, subject: string, students: number): MarksClass => ({
+  standard_id: id,
+  standard_name: standard,
+  section_id: id,
+  section_name: section,
+  subject_id: id,
+  subject_name: subject,
+  subject_image: null,
+  students,
+  saved: 0,
+  absent: 0,
+});
+
+// Ordinary classes, for a list never loaded on this phone.
+const SAMPLE_CLASSES: MarksClass[] = [
+  sampleClass(1, 'Class 6', 'A', 'Mathematics', 32),
+  sampleClass(2, 'Class 7', 'A', 'Mathematics', 30),
+  sampleClass(3, 'Class 8', 'B', 'Science', 28),
+];
+
 //   (icon)  Class 5 - A                                  >
 //           Hindi · 32 students
 //           Marks added · 2 absent
-const ClassRow = ({ item, isLast, onPress }: { item: MarksClass; isLast: boolean; onPress: () => void }) => {
+const ClassRow = ({
+  item,
+  isLast,
+  onPress,
+  skeleton,
+}: {
+  item: MarksClass;
+  isLast: boolean;
+  onPress: () => void;
+  skeleton?: boolean;
+}) => {
   const added = item.saved > 0;
   const status = !added
     ? 'Marks not added'
@@ -34,124 +69,126 @@ const ClassRow = ({ item, isLast, onPress }: { item: MarksClass; isLast: boolean
     : ['Marks added', item.absent > 0 ? `${item.absent} absent` : null].filter(Boolean).join(' · ');
 
   return (
-    <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onPress}>
-      <SubjectIcon image={item.subject_image} size={30} />
+    <TouchableOpacity
+      style={[s.row, !isLast && s.rowDivider]}
+      activeOpacity={0.6}
+      onPress={onPress}
+      disabled={skeleton}
+    >
+      {skeleton ? (
+        <Skeleton width={30} height={30} radius={6} />
+      ) : (
+        <SubjectIcon image={item.subject_image} size={30} />
+      )}
       <View style={s.body}>
-        <Text style={s.name} numberOfLines={1}>
+        <Words skeleton={skeleton} style={s.name} numberOfLines={1}>
           {marksClassLabel(item)}
-        </Text>
-        <Text style={s.meta} numberOfLines={1}>
+        </Words>
+        <Words skeleton={skeleton} style={s.meta} numberOfLines={1}>
           {item.subject_name} · {plural(item.students, 'student')}
-        </Text>
-        <Text style={[s.status, added && s.statusAdded]} numberOfLines={1}>
+        </Words>
+        <Words skeleton={skeleton} style={[s.status, added && s.statusAdded]} numberOfLines={1}>
           {status}
-        </Text>
+        </Words>
       </View>
-      <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />
+      {skeleton ? (
+        <SkeletonIcon iconName="chevron-forward" size={13} />
+      ) : (
+        <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />
+      )}
     </TouchableOpacity>
-  );
-};
-
-const ListSkeleton = ({ rows }: { rows: number }) => {
-  const n = rows > 0 ? Math.min(rows, 10) : 4;
-  return (
-    <View style={s.list}>
-      <View style={s.skeletonCount}>
-        <Skeleton width={70} height={12} />
-      </View>
-      {Array.from({ length: n }, (_, i) => (
-        <View key={i} style={[s.row, i < n - 1 && s.rowDivider]}>
-          <Skeleton width={30} height={30} radius={6} />
-          <View style={s.skeletonBody}>
-            <Skeleton width="40%" height={14} />
-            <Skeleton width="50%" height={12} />
-            <Skeleton width="30%" height={12} />
-          </View>
-          <Skeleton width={8} height={13} />
-        </View>
-      ))}
-    </View>
   );
 };
 
 const MarksClassesScreen = ({ navigation, route }: any) => {
   const exam: Exam = route.params.exam;
   const [classes, setClasses] = useState<MarksClass[]>([]);
+  // The skeleton shows on the first load, on a pull to refresh and on "Try
+  // again"; coming back from a saved class updates the list in place.
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The classes are the teacher's whatever the exam: this exam's last list,
+  // else the last one of any exam.
+  const [lastHere, rememberHere] = useLastLoaded<MarksClass[]>(`marks-classes:${exam.id}`);
+  const [lastAny, rememberAny] = useLastLoaded<MarksClass[]>('marks-classes');
+  const last = Array.isArray(lastHere) ? lastHere : lastAny;
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setClasses(await getMarksClasses(exam.id));
-    } catch (e: any) {
-      console.log('[getMarksClasses] Error:', e?.response?.status, e?.message);
-      setError(marksErrorMessage(e));
-      setClasses([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [exam.id]);
+  const load = useCallback(
+    async (showSkeleton = false) => {
+      if (showSkeleton) setLoading(true);
+      setError(null);
+      try {
+        const list = await getMarksClasses(exam.id);
+        setClasses(list);
+        setLoaded(true);
+        rememberHere(list);
+        rememberAny(list);
+      } catch (e: any) {
+        console.log('[getMarksClasses] Error:', e?.response?.status, e?.message);
+        setError(marksErrorMessage(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [exam.id, rememberHere, rememberAny],
+  );
 
-  const { refreshing, onRefresh } = useRefresh(load);
+  const reload = useCallback(() => load(true), [load]);
 
-  // Coming back from a saved class refreshes its status quietly.
-  useFocusLoad(load);
+  useFocusLoad(() => load());
 
-  const renderBody = () => {
-    if (refreshing || (loading && classes.length === 0)) {
-      return <ListSkeleton rows={classes.length} />;
-    }
+  // While it loads, the page is drawn from the classes it shows.
+  const shown = !loading ? classes : loaded ? classes : Array.isArray(last) ? last : SAMPLE_CLASSES;
 
-    if (error && classes.length === 0) {
-      return (
-        <View style={s.centeredBox}>
-          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
-          <Text style={s.errorText}>{error}</Text>
-          <TouchableOpacity onPress={load} hitSlop={10}>
-            <Text style={s.linkText}>Try again</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
-    return (
-      <FlatList
-        data={classes}
-        keyExtractor={classKey}
-        contentContainerStyle={[s.list, classes.length === 0 && s.listEmpty]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListHeaderComponent={
-          classes.length > 0 ? (
-            <Text style={s.count}>
-              Choose a class · {classes.length} {classes.length === 1 ? 'class' : 'classes'}
-            </Text>
-          ) : null
-        }
-        ListEmptyComponent={
-          <DocNoData
-            icon="people-outline"
-            title="No classes assigned"
-            subtitle="Classes and subjects from your timetable will appear here."
-          />
-        }
-        renderItem={({ item, index }) => (
+  const page = (skeleton: boolean) =>
+    shown.length === 0 ? (
+      <DocNoData
+        icon="people-outline"
+        title="No classes assigned"
+        subtitle="Classes and subjects from your timetable will appear here."
+        skeleton={skeleton}
+      />
+    ) : (
+      <>
+        <Words skeleton={skeleton} style={s.count}>
+          Choose a class · {shown.length} {shown.length === 1 ? 'class' : 'classes'}
+        </Words>
+        {shown.map((item, i) => (
           <ClassRow
+            key={classKey(item)}
             item={item}
-            isLast={index === classes.length - 1}
+            isLast={i === shown.length - 1}
+            skeleton={skeleton}
             onPress={() => navigation.navigate('MarksSheet', { exam, cls: item })}
           />
-        )}
-      />
+        ))}
+      </>
     );
-  };
 
   return (
     <View style={s.root}>
       <DocHeader title={exam.name} onBackPress={() => navigation.goBack()} />
-      {renderBody()}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[s.list, (shown.length === 0 || (!loading && error && !loaded)) && s.listEmpty]}
+        // The skeleton stands in for the spinner.
+        refreshControl={<AppRefreshControl refreshing={false} onRefresh={reload} />}
+      >
+        {loading ? (
+          page(true)
+        ) : error && !loaded ? (
+          <View style={s.centeredBox}>
+            <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
+            <Text style={s.errorText}>{error}</Text>
+            <TouchableOpacity onPress={reload} hitSlop={10}>
+              <Text style={s.linkText}>Try again</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          page(false)
+        )}
+      </ScrollView>
     </View>
   );
 };
@@ -164,7 +201,7 @@ const __mk_s = () => StyleSheet.create({
   // List
   list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
   listEmpty: { flexGrow: 1 },
-  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
+  count: { fontSize: 12, color: theme.colors.textMuted, marginTop: 12, marginBottom: 2 },
 
   // Row — the subject's icon tile, then the class, subject and marks status
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13 },
@@ -174,10 +211,6 @@ const __mk_s = () => StyleSheet.create({
   meta: { fontSize: 13, color: theme.colors.textSecondary },
   status: { fontSize: 12, color: theme.colors.textMuted },
   statusAdded: { color: theme.colors.primary, fontWeight: '500' },
-
-  // Loading
-  skeletonBody: { flex: 1, gap: 8 },
-  skeletonCount: { paddingTop: 13, paddingBottom: 3 },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

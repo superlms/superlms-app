@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
+import { useFocusLoad } from '../../hooks/useRefresh';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { theme, onThemeChange } from '../../utils/theme';
 import { DocHeader } from '../more/docUi';
 import { getExams, examErrorMessage } from '../../api/examApi';
 import type { Exam } from '../exam/examData';
-import { ExamList } from '../exam/examUi';
+import { ExamList, examsToDraw, examsToKeep } from '../exam/examUi';
 
 /**
  * Upload Marks, step one: the exams, listed as on the Exams screen. An exam
@@ -17,26 +18,38 @@ const TITLE = 'Upload Marks';
 
 const UploadMarksScreen = ({ navigation }: any) => {
   const [exams, setExams] = useState<Exam[]>([]);
+  // The skeleton shows on the first load, on a pull to refresh and on "Try
+  // again"; coming back to the screen updates the list in place.
   const [loading, setLoading] = useState(true);
+  // The list on screen came from the school.
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [last, rememberLast] = useLastLoaded<Exam[]>('exams:upload-marks');
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setExams(await getExams());
-    } catch (e: any) {
-      console.log('[getExams] Error:', e?.response?.status, e?.message);
-      setError(examErrorMessage(e));
-      setExams([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (showSkeleton = false) => {
+      if (showSkeleton) setLoading(true);
+      setError(null);
+      try {
+        const list = await getExams();
+        setExams(list);
+        setLoaded(true);
+        rememberLast(examsToKeep(list));
+      } catch (e: any) {
+        console.log('[getExams] Error:', e?.response?.status, e?.message);
+        setError(examErrorMessage(e));
+        setExams([]);
+        setLoaded(false);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [rememberLast],
+  );
 
-  const { refreshing, onRefresh } = useRefresh(load);
+  const reload = useCallback(() => load(true), [load]);
 
-  useFocusLoad(load);
+  useFocusLoad(() => load());
 
   return (
     <View style={s.root}>
@@ -44,10 +57,11 @@ const UploadMarksScreen = ({ navigation }: any) => {
       <ExamList
         exams={exams}
         loading={loading}
-        refreshing={refreshing}
-        onRefresh={onRefresh}
+        refreshing={false}
+        onRefresh={reload}
         error={error}
-        onRetry={load}
+        onRetry={reload}
+        drawn={examsToDraw(loaded, exams, last)}
         onPressExam={exam => navigation.navigate('MarksClasses', { exam })}
         emptySubtitle="Exams set for the classes and subjects you teach will appear here."
       />

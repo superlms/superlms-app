@@ -15,7 +15,8 @@ import VectorIcon from '../../components/VectorIcon';
 import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { AppAlert } from '../../components/AppDialog';
-import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
+import { useFocusLoad } from '../../hooks/useRefresh';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { theme, onThemeChange } from '../../utils/theme';
 import { DocHeader, DocNoData } from '../more/docUi';
 import {
@@ -27,6 +28,7 @@ import {
   type SheetStudent,
 } from '../../api/marksApi';
 import type { Exam } from '../exam/examData';
+import { Words } from '../exam/examUi';
 import { marksClassLabel } from './MarksClassesScreen';
 
 /**
@@ -38,6 +40,11 @@ import { marksClassLabel } from './MarksClassesScreen';
  * same sheet again (pushed with `edit`), filled in.
  *
  * As on the web panel, saving marks every student left blank absent.
+ *
+ * A load — the first, a pull to refresh on the saved list, Try again — draws
+ * the page as a skeleton from the sheet it shows: the one on screen, the one
+ * this class had last time, or, before that, one as long as the class with
+ * as many marks and absences as the class list said.
  */
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -60,63 +67,111 @@ const parseMark = (v?: string): number | null => {
   return isNaN(n) ? null : n;
 };
 
-// ── Loading ──────────────────────────────────────────────────────────────────
-const SheetSkeleton = ({ rows }: { rows: number }) => {
-  const n = rows > 0 ? Math.min(rows, 12) : 8;
-  return (
-    <View style={s.list}>
-      <View style={s.intro}>
-        <Skeleton width="50%" height={15} />
-        <Skeleton width="30%" height={13} />
-        <View style={s.totals}>
-          <Skeleton width={90} height={13} />
-          <Skeleton width={80} height={13} />
-        </View>
-      </View>
-      {Array.from({ length: n }, (_, i) => (
-        <View key={i} style={[s.row, i < n - 1 && s.rowDivider]}>
-          <View style={s.roll}>
-            <Skeleton width={18} height={12} />
-          </View>
-          <View style={s.skBody}>
-            <Skeleton width="55%" height={14} />
-            <Skeleton width="30%" height={12} />
-          </View>
-          <Skeleton width={70} height={30} radius={8} />
-        </View>
-      ))}
-    </View>
-  );
+// The boxes as a saved sheet fills them: marks, and blank for the absent.
+const typedOf = (sheet: MarksSheet) => {
+  const typed: Record<number, string> = {};
+  sheet.students.forEach(st => {
+    if (st.saved && !st.is_absent && st.marks_obtained != null) {
+      typed[st.student_detail_id] = fmt(st.marks_obtained);
+    }
+  });
+  return typed;
+};
+
+// ── A sheet to draw before the class has ever loaded here ────────────────────
+const SAMPLE_NAMES = [
+  'Aarav Sharma',
+  'Ananya Verma',
+  'Arjun Singh',
+  'Diya Patel',
+  'Ishaan Gupta',
+  'Kavya Reddy',
+  'Krishna Yadav',
+  'Meera Joshi',
+  'Mohit Kumar',
+  'Neha Mishra',
+  'Pranav Nair',
+  'Riya Chauhan',
+  'Rohan Mehta',
+  'Saanvi Iyer',
+  'Shreya Pandey',
+  'Vihaan Rao',
+];
+
+const sampleSheet = (exam: Exam, cls: MarksClass): MarksSheet => {
+  const total = exam.totalMarks > 0 ? exam.totalMarks : 100;
+  const uploaded = cls.saved > 0;
+  return {
+    exam: { id: Number(exam.id), name: exam.name, total_marks: total, passing_marks: null },
+    uploaded,
+    students: Array.from({ length: cls.students }, (_, i): SheetStudent => {
+      const saved = uploaded && i < cls.saved;
+      const absent = saved && i >= cls.saved - cls.absent;
+      return {
+        student_detail_id: -(i + 1),
+        name: SAMPLE_NAMES[i % SAMPLE_NAMES.length],
+        roll_no: String(i + 1),
+        admission_no: `ADM${1001 + i}`,
+        mark_id: null,
+        saved,
+        is_absent: absent,
+        marks_obtained: saved && !absent ? Math.round(total * (0.45 + ((i * 37) % 50) / 100)) : null,
+        max_marks: saved ? total : null,
+        percentage: null,
+        grade: saved ? (absent ? 'AB' : 'A') : null,
+      };
+    }),
+  };
 };
 
 // ── A saved student ──────────────────────────────────────────────────────────
 //   001  Aarav Sharma                               45 / 50
 //        26TST510001                               Grade O
-const SavedRow = ({ st, total, isLast }: { st: SheetStudent; total: number; isLast: boolean }) => (
+const SavedRow = ({
+  st,
+  total,
+  isLast,
+  skeleton,
+}: {
+  st: SheetStudent;
+  total: number;
+  isLast: boolean;
+  skeleton: boolean;
+}) => (
   <View style={[s.row, !isLast && s.rowDivider]}>
-    <Text style={s.roll} numberOfLines={1}>
-      {st.roll_no || '—'}
-    </Text>
+    <View style={s.roll}>
+      <Words skeleton={skeleton} style={s.rollText} numberOfLines={1}>
+        {st.roll_no || '—'}
+      </Words>
+    </View>
     <View style={s.body}>
-      <Text style={s.name} numberOfLines={1}>
+      <Words skeleton={skeleton} style={s.name} numberOfLines={1}>
         {st.name}
-      </Text>
-      <Text style={s.meta} numberOfLines={1}>
+      </Words>
+      <Words skeleton={skeleton} style={s.meta} numberOfLines={1}>
         {st.admission_no || '—'}
-      </Text>
+      </Words>
     </View>
     <View style={s.result}>
       {!st.saved ? (
-        <Text style={s.notAdded}>Not added</Text>
+        <Words skeleton={skeleton} style={s.notAdded}>
+          Not added
+        </Words>
       ) : st.is_absent ? (
-        <Text style={s.absent}>Absent</Text>
+        <Words skeleton={skeleton} style={s.absent}>
+          Absent
+        </Words>
       ) : (
         <>
-          <Text style={s.score}>
+          <Words skeleton={skeleton} style={s.score}>
             {fmt(st.marks_obtained ?? 0)}
             <Text style={s.outOf}> / {fmt(st.max_marks ?? total)}</Text>
-          </Text>
-          {!!st.grade && <Text style={s.grade}>Grade {st.grade}</Text>}
+          </Words>
+          {!!st.grade && (
+            <Words skeleton={skeleton} style={s.grade}>
+              Grade {st.grade}
+            </Words>
+          )}
         </>
       )}
     </View>
@@ -136,51 +191,61 @@ const MarksSheetScreen = ({ navigation, route }: any) => {
   );
 
   const [sheet, setSheet] = useState<MarksSheet | null>(null);
+  // The skeleton shows on the first load, on a pull to refresh and on "Try
+  // again"; coming back from Edit updates the list in place.
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [marks, setMarks] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
+  const [last, rememberLast] = useLastLoaded<MarksSheet>(
+    `marks-sheet:${key.exam_id}:${key.standard_id}:${key.section_id}:${key.subject_id}`,
+  );
   // Typed marks survive a return to the screen; only a clean sheet reloads.
   const dirty = useRef(false);
   const inputs = useRef<Record<number, TextInput | null>>({});
 
   const fill = (next: MarksSheet) => {
-    const typed: Record<number, string> = {};
-    next.students.forEach(st => {
-      if (st.saved && !st.is_absent && st.marks_obtained != null) {
-        typed[st.student_detail_id] = fmt(st.marks_obtained);
-      }
-    });
     dirty.current = false;
-    setMarks(typed);
+    setMarks(typedOf(next));
     setSheet(next);
   };
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      fill(await getMarksSheet(key));
-    } catch (e: any) {
-      console.log('[getMarksSheet] Error:', e?.response?.status, e?.message);
-      setError(marksErrorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [key]);
+  const load = useCallback(
+    async (showSkeleton = false) => {
+      if (showSkeleton) setLoading(true);
+      setError(null);
+      try {
+        const next = await getMarksSheet(key);
+        fill(next);
+        rememberLast(next);
+      } catch (e: any) {
+        console.log('[getMarksSheet] Error:', e?.response?.status, e?.message);
+        setError(marksErrorMessage(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [key, rememberLast],
+  );
 
-  const { refreshing, onRefresh } = useRefresh(load);
+  const reload = useCallback(() => load(true), [load]);
 
   // The saved list reloads when Edit comes back to it.
   useFocusLoad(() => {
     if (!dirty.current) load();
   });
 
-  const editing = !!edit || (!!sheet && !sheet.uploaded);
-  const students = useMemo(() => sheet?.students ?? [], [sheet]);
-  const total = sheet?.exam.total_marks ?? exam.totalMarks ?? 100;
+  // The sheet the page is drawn from: while loading, what it last showed.
+  const view: MarksSheet | null = loading
+    ? sheet ?? (last && Array.isArray(last.students) ? last : null) ?? sampleSheet(exam, cls)
+    : sheet;
 
-  const entered = students.filter(st => parseMark(marks[st.student_detail_id]) !== null).length;
+  const editing = !!edit || (!!view && !view.uploaded);
+  const students = useMemo(() => view?.students ?? [], [view]);
+  const total = view?.exam.total_marks ?? (exam.totalMarks || 100);
+  const typed = view && view !== sheet ? typedOf(view) : marks;
+
+  const entered = students.filter(st => parseMark(typed[st.student_detail_id]) !== null).length;
   const blank = students.length - entered;
 
   const summary = useMemo(() => {
@@ -223,6 +288,7 @@ const MarksSheetScreen = ({ navigation, route }: any) => {
         })),
       );
       dirty.current = false;
+      rememberLast(next);
       if (edit) {
         // Back to the saved list, which reloads on focus.
         navigation.goBack();
@@ -258,78 +324,132 @@ const MarksSheetScreen = ({ navigation, route }: any) => {
   };
 
   // Exam, class and subject, then the totals.
-  const renderIntro = () => (
+  const renderIntro = (v: MarksSheet, skeleton: boolean) => (
     <View style={s.intro}>
-      <Text style={s.introTitle} numberOfLines={1}>
+      <Words skeleton={skeleton} style={s.introTitle} numberOfLines={1}>
         {cls.subject_name} · {marksClassLabel(cls)}
-      </Text>
-      <Text style={s.meta} numberOfLines={1}>
-        {sheet?.exam.name ?? exam.name}
-      </Text>
+      </Words>
+      <Words skeleton={skeleton} style={s.meta} numberOfLines={1}>
+        {v.exam.name}
+      </Words>
       <View style={s.totals}>
-        <Text style={s.total}>
+        <Words skeleton={skeleton} style={s.total}>
           Total marks <Text style={s.totalNum}>{fmt(total)}</Text>
-        </Text>
+        </Words>
         {editing ? (
-          <Text style={s.total}>
+          <Words skeleton={skeleton} style={s.total}>
             Entered{' '}
             <Text style={[s.totalNum, s.accent]}>
               {entered} of {students.length}
             </Text>
-          </Text>
+          </Words>
         ) : (
           <>
-            <Text style={s.total}>
+            <Words skeleton={skeleton} style={s.total}>
               Added <Text style={[s.totalNum, s.accent]}>{summary.added}</Text>
-            </Text>
+            </Words>
             {summary.absent > 0 && (
-              <Text style={s.total}>
+              <Words skeleton={skeleton} style={s.total}>
                 Absent <Text style={[s.totalNum, s.danger]}>{summary.absent}</Text>
-              </Text>
+              </Words>
             )}
             {summary.average !== null && (
-              <Text style={s.total}>
+              <Words skeleton={skeleton} style={s.total}>
                 Average <Text style={s.totalNum}>{summary.average}</Text>
-              </Text>
+              </Words>
             )}
           </>
         )}
       </View>
-      {editing && <Text style={s.hint}>Students left blank will be marked absent.</Text>}
+      {editing && (
+        <Words skeleton={skeleton} style={s.hint}>
+          Students left blank will be marked absent.
+        </Words>
+      )}
     </View>
   );
 
-  const renderColumns = () => (
+  const renderColumns = (skeleton: boolean) => (
     <View style={s.columns}>
-      <Text style={[s.column, s.roll]}>Roll</Text>
-      <Text style={[s.column, s.body]}>Student</Text>
-      <Text style={[s.column, editing ? s.markHead : s.resultCol]}>Marks</Text>
+      <View style={s.roll}>
+        <Words skeleton={skeleton} style={s.column}>
+          Roll
+        </Words>
+      </View>
+      <View style={s.body}>
+        <Words skeleton={skeleton} style={s.column}>
+          Student
+        </Words>
+      </View>
+      <View style={editing ? s.markHead : s.result}>
+        <Words skeleton={skeleton} style={s.column}>
+          Marks
+        </Words>
+      </View>
     </View>
   );
 
-  const renderBody = () => {
-    if (!sheet && (loading || refreshing)) return <SheetSkeleton rows={cls.students} />;
-    if (refreshing) return <SheetSkeleton rows={students.length} />;
-
-    if (!sheet) {
-      return (
-        <View style={s.centeredBox}>
-          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
-          <Text style={s.errorText}>{error ?? 'Something went wrong. Please try again.'}</Text>
-          <TouchableOpacity onPress={load} hitSlop={10}>
-            <Text style={s.linkText}>Try again</Text>
-          </TouchableOpacity>
+  const renderEntryRow = (st: SheetStudent, i: number, skeleton: boolean) => {
+    const value = typed[st.student_detail_id] ?? '';
+    return (
+      <View key={st.student_detail_id} style={[s.row, i < students.length - 1 && s.rowDivider]}>
+        <View style={s.roll}>
+          <Words skeleton={skeleton} style={s.rollText} numberOfLines={1}>
+            {st.roll_no || '—'}
+          </Words>
         </View>
-      );
-    }
+        <View style={s.body}>
+          <Words skeleton={skeleton} style={s.name} numberOfLines={1}>
+            {st.name}
+          </Words>
+          <Words skeleton={skeleton} style={s.meta} numberOfLines={1}>
+            {st.admission_no || '—'}
+          </Words>
+        </View>
+        <View style={s.markCol}>
+          {skeleton ? (
+            <Skeleton width={60} height={38} radius={theme.radius.sm} />
+          ) : (
+            <TextInput
+              ref={r => {
+                inputs.current[st.student_detail_id] = r;
+              }}
+              style={[s.input, value !== '' && s.inputFilled]}
+              value={value}
+              onChangeText={t => setMark(st.student_detail_id, t)}
+              placeholder="—"
+              placeholderTextColor={theme.colors.textMuted}
+              keyboardType="decimal-pad"
+              maxLength={6}
+              returnKeyType={i < students.length - 1 ? 'next' : 'done'}
+              blurOnSubmit={false}
+              onSubmitEditing={() => focusNext(i)}
+              editable={!saving}
+            />
+          )}
+          <View style={s.outOfBox}>
+            <Words skeleton={skeleton} style={s.outOfInput}>
+              / {fmt(total)}
+            </Words>
+          </View>
+        </View>
+      </View>
+    );
+  };
 
+  const renderPage = (v: MarksSheet, skeleton: boolean) => {
     if (students.length === 0) {
       return (
         <ScrollView
           contentContainerStyle={s.fillGrow}
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={<AppRefreshControl refreshing={false} onRefresh={reload} />}
         >
-          <DocNoData icon="people-outline" title="No students" subtitle="There are no students in this class yet." />
+          <DocNoData
+            icon="people-outline"
+            title="No students"
+            subtitle="There are no students in this class yet."
+            skeleton={skeleton}
+          />
         </ScrollView>
       );
     }
@@ -339,92 +459,87 @@ const MarksSheetScreen = ({ navigation, route }: any) => {
         <ScrollView
           contentContainerStyle={s.list}
           showsVerticalScrollIndicator={false}
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          // The skeleton stands in for the spinner.
+          refreshControl={<AppRefreshControl refreshing={false} onRefresh={reload} />}
         >
-          {renderIntro()}
-          {renderColumns()}
+          {renderIntro(v, skeleton)}
+          {renderColumns(skeleton)}
           {students.map((st, i) => (
-            <SavedRow key={st.student_detail_id} st={st} total={total} isLast={i === students.length - 1} />
+            <SavedRow
+              key={st.student_detail_id}
+              st={st}
+              total={total}
+              isLast={i === students.length - 1}
+              skeleton={skeleton}
+            />
           ))}
         </ScrollView>
       );
     }
 
+    // Typed marks are not thrown away by a pull to refresh.
     return (
       <ScrollView
         contentContainerStyle={s.list}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        scrollEnabled={!skeleton}
       >
-        {renderIntro()}
-        {renderColumns()}
-        {students.map((st, i) => {
-          const value = marks[st.student_detail_id] ?? '';
-          return (
-            <View key={st.student_detail_id} style={[s.row, i < students.length - 1 && s.rowDivider]}>
-              <Text style={s.roll} numberOfLines={1}>
-                {st.roll_no || '—'}
-              </Text>
-              <View style={s.body}>
-                <Text style={s.name} numberOfLines={1}>
-                  {st.name}
-                </Text>
-                <Text style={s.meta} numberOfLines={1}>
-                  {st.admission_no || '—'}
-                </Text>
-              </View>
-              <View style={s.markCol}>
-                <TextInput
-                  ref={r => {
-                    inputs.current[st.student_detail_id] = r;
-                  }}
-                  style={[s.input, value !== '' && s.inputFilled]}
-                  value={value}
-                  onChangeText={t => setMark(st.student_detail_id, t)}
-                  placeholder="—"
-                  placeholderTextColor={theme.colors.textMuted}
-                  keyboardType="decimal-pad"
-                  maxLength={6}
-                  returnKeyType={i < students.length - 1 ? 'next' : 'done'}
-                  blurOnSubmit={false}
-                  onSubmitEditing={() => focusNext(i)}
-                  editable={!saving}
-                />
-                <Text style={s.outOfInput}>/ {fmt(total)}</Text>
-              </View>
-            </View>
-          );
-        })}
+        {renderIntro(v, skeleton)}
+        {renderColumns(skeleton)}
+        {students.map((st, i) => renderEntryRow(st, i, skeleton))}
 
         <View style={s.footer}>
-          <Text style={s.footerHint}>
+          <Words skeleton={skeleton} style={s.footerHint}>
             {blank > 0
               ? `${plural(blank, 'student', 'students')} left blank will be marked absent`
               : 'Every student has marks'}
-          </Text>
-          <TouchableOpacity
-            style={[s.saveBtn, (saving || entered === 0) && s.saveOff]}
-            activeOpacity={0.85}
-            disabled={saving}
-            onPress={save}
-          >
-            {saving ? (
-              <ActivityIndicator color={theme.colors.white} />
-            ) : (
-              <Text style={s.saveText}>Save Marks</Text>
-            )}
-          </TouchableOpacity>
+          </Words>
+          {skeleton ? (
+            <Skeleton width="100%" height={48} radius={theme.radius.md} />
+          ) : (
+            <TouchableOpacity
+              style={[s.saveBtn, (saving || entered === 0) && s.saveOff]}
+              activeOpacity={0.85}
+              disabled={saving}
+              onPress={save}
+            >
+              {saving ? (
+                <ActivityIndicator color={theme.colors.white} />
+              ) : (
+                <Text style={s.saveText}>Save Marks</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     );
   };
 
-  const canEdit = !editing && !!sheet && students.length > 0 && !refreshing;
+  const renderBody = () => {
+    if (loading && view) return renderPage(view, true);
+
+    if (!sheet) {
+      return (
+        <View style={s.centeredBox}>
+          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
+          <Text style={s.errorText}>{error ?? 'Something went wrong. Please try again.'}</Text>
+          <TouchableOpacity onPress={reload} hitSlop={10}>
+            <Text style={s.linkText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return renderPage(sheet, false);
+  };
+
+  const canEdit = !editing && !!sheet && !loading && students.length > 0;
 
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <DocHeader
-        title={editing || !sheet ? 'Upload Marks' : 'Marks'}
+        title={editing || !view ? 'Upload Marks' : 'Marks'}
         onBackPress={() => navigation.goBack()}
         rightIcon={canEdit ? 'create-outline' : undefined}
         onRightPress={canEdit ? () => navigation.push('MarksSheet', { exam, cls, edit: true }) : undefined}
@@ -467,7 +582,8 @@ const __mk_s = () => StyleSheet.create({
   // Row
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  roll: { width: 32, fontSize: 13, color: theme.colors.textMuted },
+  roll: { width: 32 },
+  rollText: { fontSize: 13, color: theme.colors.textMuted },
   body: { flex: 1, gap: 3 },
   name: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   meta: { fontSize: 13, color: theme.colors.textSecondary },
@@ -475,7 +591,7 @@ const __mk_s = () => StyleSheet.create({
   // Entry
   markCol: { width: 106, flexDirection: 'row', alignItems: 'center', gap: 6 },
   // Over the box: the column less the "/ 50" beside it
-  markHead: { width: 106, paddingRight: 46, textAlign: 'center' },
+  markHead: { width: 106, paddingRight: 46, alignItems: 'center' },
   input: {
     width: 60,
     height: 38,
@@ -489,10 +605,10 @@ const __mk_s = () => StyleSheet.create({
     paddingVertical: 0,
   },
   inputFilled: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primaryLight },
-  outOfInput: { width: 40, fontSize: 13, color: theme.colors.textMuted },
+  outOfBox: { width: 40 },
+  outOfInput: { fontSize: 13, color: theme.colors.textMuted },
 
   // Saved
-  resultCol: { width: 96, textAlign: 'right' },
   result: { width: 96, alignItems: 'flex-end', gap: 2 },
   score: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary },
   outOf: { fontSize: 13, fontWeight: '400', color: theme.colors.textMuted },
@@ -512,9 +628,6 @@ const __mk_s = () => StyleSheet.create({
   },
   saveOff: { opacity: 0.45 },
   saveText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
-
-  // Loading
-  skBody: { flex: 1, gap: 8 },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

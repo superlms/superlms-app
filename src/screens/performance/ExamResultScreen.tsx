@@ -1,9 +1,10 @@
 import React, { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
-import { Skeleton } from '../../components/Skeleton';
+import { Skeleton, SkeletonIcon } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
-import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
+import { useFocusLoad } from '../../hooks/useRefresh';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { theme, onThemeChange } from '../../utils/theme';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { SubjectRow } from '../subjects/subjectLists';
@@ -16,11 +17,16 @@ import {
   type StudentExamResult,
 } from '../../api/marksApi';
 import type { Exam } from '../exam/examData';
+import { Words } from '../exam/examUi';
 
 /**
  * One exam's result for a student: the score, then each subject as the
  * Subjects list draws it — icon and name — with the marks, grade and
  * percentage the teacher added, "Absent", or that marks aren't in yet.
+ *
+ * A load — the first, a pull to refresh, Try again — draws the page as a
+ * skeleton from the result it shows, the one this exam had last time, the
+ * last of any exam, or an ordinary one.
  */
 
 // 45 → "45", 45.5 → "45.5"
@@ -43,74 +49,122 @@ const scaleText = (scale: GradeBand[]) =>
     .map(b => (b.min <= 0 ? `${b.grade} below ${b.max + 1}` : `${b.grade} ${b.min}–${b.max}`))
     .join(' · ');
 
-const ProgressBar = ({ pct }: { pct: number }) => (
-  <View style={s.barBg}>
-    <View style={[s.barFill, { width: `${Math.max(0, Math.min(100, pct))}%` as any }]} />
-  </View>
-);
+// ── A result to draw before any has loaded here ──────────────────────────────
+const SAMPLE_SCALE: GradeBand[] = [
+  { grade: 'O', min: 91, max: 100, remark: 'Outstanding' },
+  { grade: 'A+', min: 81, max: 90, remark: 'Excellent' },
+  { grade: 'A', min: 71, max: 80, remark: 'Very Good' },
+  { grade: 'B', min: 61, max: 70, remark: 'Good' },
+  { grade: 'C', min: 51, max: 60, remark: 'Fair' },
+  { grade: 'D', min: 41, max: 50, remark: 'Average' },
+  { grade: 'P', min: 35, max: 40, remark: 'Pass' },
+  { grade: 'F', min: 0, max: 34, remark: 'Fail' },
+];
 
-const ResultSkeleton = ({ rows }: { rows: number }) => {
-  const n = rows > 0 ? Math.min(rows, 10) : 5;
-  return (
-    <View style={s.scroll}>
-      <View style={s.hero}>
-        <View style={s.skHeroText}>
-          <Skeleton width={40} height={12} />
-          <Skeleton width={90} height={36} />
-          <Skeleton width={70} height={13} />
-        </View>
-        <Skeleton width={68} height={68} radius={34} />
-      </View>
-      <View style={s.heroBar}>
-        <Skeleton width="100%" height={5} />
-      </View>
-      <View style={s.skCount}>
-        <Skeleton width={70} height={12} />
-      </View>
-      {Array.from({ length: n }, (_, i) => (
-        <View key={i} style={[s.skRow, i < n - 1 && s.rowDivider]}>
-          <Skeleton width={30} height={30} radius={6} />
-          <View style={s.skBody}>
-            <Skeleton width="45%" height={14} />
-            <Skeleton width="35%" height={12} />
-          </View>
-          <Skeleton width={34} height={14} />
-        </View>
-      ))}
+const sampleResult = (exam: Exam): StudentExamResult => {
+  const total = exam.totalMarks > 0 ? exam.totalMarks : 100;
+  const done = exam.status === 'Completed';
+  const subjects = ['English', 'Hindi', 'Mathematics', 'Science', 'Social Science'].map(
+    (name, i): ExamSubjectResult => {
+      const obtained = Math.round(total * (0.62 + i * 0.06));
+      return {
+        subject_id: -(i + 1),
+        subject_name: name,
+        subject_image: null,
+        uploaded: done,
+        is_absent: false,
+        marks_obtained: done ? obtained : null,
+        max_marks: done ? total : null,
+        percentage: done ? (obtained / total) * 100 : null,
+        grade: done ? 'A' : null,
+        remarks: null,
+      };
+    },
+  );
+  const obtained = subjects.reduce((a, x) => a + (x.marks_obtained ?? 0), 0);
+  const max = done ? total * subjects.length : 0;
+  return {
+    exam: { id: Number(exam.id) || 0, name: exam.name, total_marks: total, passing_marks: null },
+    subjects,
+    summary: {
+      subjects: subjects.length,
+      uploaded: done ? subjects.length : 0,
+      absent: 0,
+      marks_obtained: obtained,
+      max_marks: max,
+      percentage: done ? (obtained / max) * 100 : null,
+      grade: done ? 'A' : null,
+      remark: done ? 'Very Good' : null,
+    },
+    grading_scale: SAMPLE_SCALE,
+  };
+};
+
+const isResult = (r: StudentExamResult | null | undefined): r is StudentExamResult =>
+  !!r && Array.isArray(r.subjects);
+
+const ProgressBar = ({ pct, skeleton }: { pct: number; skeleton: boolean }) =>
+  skeleton ? (
+    <Skeleton width="100%" height={5} radius={3} />
+  ) : (
+    <View style={s.barBg}>
+      <View style={[s.barFill, { width: `${Math.max(0, Math.min(100, pct))}%` as any }]} />
     </View>
   );
-};
 
 const ExamResultScreen = ({ navigation, route }: any) => {
   const exam: Exam = route.params.exam;
   const [result, setResult] = useState<StudentExamResult | null>(null);
+  // The skeleton shows on the first load, on a pull to refresh and on "Try
+  // again"; coming back to the screen updates it in place.
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastHere, rememberHere] = useLastLoaded<StudentExamResult>(`exam-result:${exam.id}`);
+  const [lastAny, rememberAny] = useLastLoaded<StudentExamResult>('exam-result');
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setResult(await getStudentExamResult(exam.id));
-    } catch (e: any) {
-      console.log('[getStudentExamResult] Error:', e?.response?.status, e?.message);
-      setError(marksErrorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [exam.id]);
+  const load = useCallback(
+    async (showSkeleton = false) => {
+      if (showSkeleton) setLoading(true);
+      setError(null);
+      try {
+        const next = await getStudentExamResult(exam.id);
+        setResult(next);
+        rememberHere(next);
+        rememberAny(next);
+      } catch (e: any) {
+        console.log('[getStudentExamResult] Error:', e?.response?.status, e?.message);
+        setError(marksErrorMessage(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [exam.id, rememberHere, rememberAny],
+  );
 
-  const { refreshing, onRefresh } = useRefresh(load);
+  const reload = useCallback(() => load(true), [load]);
 
-  useFocusLoad(load);
+  useFocusLoad(() => load());
 
-  const renderScore = (r: StudentExamResult) => {
+  // The result the page is drawn from: while loading, what it last showed.
+  const view: StudentExamResult | null = loading
+    ? result ?? (isResult(lastHere) ? lastHere : isResult(lastAny) ? lastAny : sampleResult(exam))
+    : result;
+
+  const renderScore = (r: StudentExamResult, skeleton: boolean) => {
     const { summary } = r;
     if (summary.uploaded === 0 || summary.percentage === null) {
       return (
         <View style={s.notice}>
-          <VectorIcon iconSet="Ionicons" iconName="time-outline" size={18} color={theme.colors.textMuted} />
-          <Text style={s.noticeText}>Marks for this exam haven’t been added yet.</Text>
+          {skeleton ? (
+            <SkeletonIcon iconName="time-outline" size={18} />
+          ) : (
+            <VectorIcon iconSet="Ionicons" iconName="time-outline" size={18} color={theme.colors.textMuted} />
+          )}
+          <View style={s.noticeBody}>
+            <Words skeleton={skeleton} style={s.noticeText}>
+              Marks for this exam haven’t been added yet.
+            </Words>
+          </View>
         </View>
       );
     }
@@ -132,27 +186,42 @@ const ExamResultScreen = ({ navigation, route }: any) => {
       <View>
         <View style={s.hero}>
           <View style={s.heroText}>
-            <Text style={s.heroCaption}>Score</Text>
-            <Text style={s.bigPct}>{pct}%</Text>
-            {!!summary.remark && <Text style={s.heroLabel}>{summary.remark}</Text>}
+            <Words skeleton={skeleton} style={s.heroCaption}>
+              Score
+            </Words>
+            <Words skeleton={skeleton} style={s.bigPct}>
+              {pct}%
+            </Words>
+            {!!summary.remark && (
+              <Words skeleton={skeleton} style={s.heroLabel}>
+                {summary.remark}
+              </Words>
+            )}
           </View>
-          {!!summary.grade && (
-            <View style={s.gradeBadge}>
-              <Text style={s.gradeValue}>{summary.grade}</Text>
-              <Text style={s.gradeCaption}>Grade</Text>
-            </View>
-          )}
+          {!!summary.grade &&
+            (skeleton ? (
+              <Skeleton width={68} height={68} radius={34} />
+            ) : (
+              <View style={s.gradeBadge}>
+                <Text style={s.gradeValue}>{summary.grade}</Text>
+                <Text style={s.gradeCaption}>Grade</Text>
+              </View>
+            ))}
         </View>
 
         <View style={s.heroBar}>
-          <ProgressBar pct={pct} />
+          <ProgressBar pct={pct} skeleton={skeleton} />
         </View>
 
         <View style={s.stats}>
           {stats.map((st, i) => (
             <View key={st.label} style={[s.stat, i > 0 && s.statDivider]}>
-              <Text style={s.statValue}>{st.value}</Text>
-              <Text style={s.statLabel}>{st.label}</Text>
+              <Words skeleton={skeleton} style={s.statValue}>
+                {st.value}
+              </Words>
+              <Words skeleton={skeleton} style={s.statLabel}>
+                {st.label}
+              </Words>
             </View>
           ))}
         </View>
@@ -160,42 +229,29 @@ const ExamResultScreen = ({ navigation, route }: any) => {
     );
   };
 
-  const renderBody = () => {
-    if (refreshing || (loading && !result)) {
-      return <ResultSkeleton rows={result?.subjects.length ?? 0} />;
-    }
-
-    if (!result) {
-      return (
-        <View style={s.centeredBox}>
-          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
-          <Text style={s.errorText}>{error ?? 'Something went wrong. Please try again.'}</Text>
-          <TouchableOpacity onPress={load} hitSlop={10}>
-            <Text style={s.linkText}>Try again</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
-    const subjects = result.subjects;
-
+  const renderPage = (r: StudentExamResult, skeleton: boolean) => {
+    const subjects = r.subjects;
     return (
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[s.scroll, subjects.length === 0 && s.grow]}
-        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        // The skeleton stands in for the spinner.
+        refreshControl={<AppRefreshControl refreshing={false} onRefresh={reload} />}
       >
-        {renderScore(result)}
+        {renderScore(r, skeleton)}
 
         {subjects.length === 0 ? (
           <DocNoData
             icon="albums-outline"
             title="No subjects yet"
             subtitle="No subjects have been assigned to your class."
+            skeleton={skeleton}
           />
         ) : (
           <>
-            <Text style={s.count}>{plural(subjects.length, 'subject')}</Text>
+            <Words skeleton={skeleton} style={s.count}>
+              {plural(subjects.length, 'subject')}
+            </Words>
             {subjects.map((sub, i) => (
               <SubjectRow
                 key={sub.subject_id}
@@ -203,11 +259,16 @@ const ExamResultScreen = ({ navigation, route }: any) => {
                 title={sub.subject_name}
                 meta={subjectMeta(sub)}
                 isLast={i === subjects.length - 1}
+                skeleton={skeleton}
                 trailing={
                   !sub.uploaded ? null : sub.is_absent ? (
-                    <Text style={[s.trailing, s.absent]}>AB</Text>
+                    <Words skeleton={skeleton} style={[s.trailing, s.absent]}>
+                      AB
+                    </Words>
                   ) : (
-                    <Text style={s.trailing}>{Math.round(sub.percentage ?? 0)}%</Text>
+                    <Words skeleton={skeleton} style={s.trailing}>
+                      {Math.round(sub.percentage ?? 0)}%
+                    </Words>
                   )
                 }
               />
@@ -215,11 +276,31 @@ const ExamResultScreen = ({ navigation, route }: any) => {
           </>
         )}
 
-        {result.summary.uploaded > 0 && result.grading_scale?.length > 0 && (
-          <Text style={s.scale}>Grade scale: {scaleText(result.grading_scale)}</Text>
+        {r.summary.uploaded > 0 && r.grading_scale?.length > 0 && (
+          <Words skeleton={skeleton} style={s.scale}>
+            Grade scale: {scaleText(r.grading_scale)}
+          </Words>
         )}
       </ScrollView>
     );
+  };
+
+  const renderBody = () => {
+    if (loading && view) return renderPage(view, true);
+
+    if (!result) {
+      return (
+        <View style={s.centeredBox}>
+          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
+          <Text style={s.errorText}>{error ?? 'Something went wrong. Please try again.'}</Text>
+          <TouchableOpacity onPress={reload} hitSlop={10}>
+            <Text style={s.linkText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return renderPage(result, false);
   };
 
   return (
@@ -288,21 +369,15 @@ const __mk_s = () => StyleSheet.create({
     borderRadius: theme.radius.md,
     backgroundColor: theme.colors.background,
   },
-  noticeText: { flex: 1, fontSize: 13, color: theme.colors.textSecondary },
+  noticeBody: { flex: 1 },
+  noticeText: { fontSize: 13, color: theme.colors.textSecondary },
 
   // Subjects
-  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 24, paddingBottom: 2 },
+  count: { fontSize: 12, color: theme.colors.textMuted, marginTop: 24, marginBottom: 2 },
   trailing: { fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary },
   absent: { color: theme.colors.danger },
-  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
 
   scale: { fontSize: 12, color: theme.colors.textMuted, lineHeight: 18, marginTop: 20 },
-
-  // Loading
-  skHeroText: { flex: 1, gap: 8 },
-  skCount: { paddingTop: 25, paddingBottom: 3 },
-  skRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13 },
-  skBody: { flex: 1, gap: 8 },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

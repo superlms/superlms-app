@@ -7,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
-import { Skeleton } from '../../components/Skeleton';
+import { Skeleton, SkeletonIcon, SkeletonText } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
@@ -42,6 +42,7 @@ export const SubjectRow = ({
   isLast,
   onPress,
   trailing,
+  skeleton,
 }: {
   image?: string | null;
   title: string;
@@ -50,32 +51,43 @@ export const SubjectRow = ({
   onPress?: () => void;
   /** Shown at the row's end, before any arrow — a subject's score, say. */
   trailing?: React.ReactNode;
+  /** The icon a grey tile, the name and size bars as long as their words. */
+  skeleton?: boolean;
 }) => {
+  const Line = skeleton ? SkeletonText : Text;
   const body = (
     <>
-      <SubjectIcon image={image} size={30} />
+      {skeleton ? <Skeleton width={30} height={30} radius={6} /> : <SubjectIcon image={image} size={30} />}
 
       <View style={s.body}>
-        <Text style={s.name} numberOfLines={1}>
+        <Line style={s.name} numberOfLines={1}>
           {title}
-        </Text>
+        </Line>
         {!!meta && (
-          <Text style={s.meta} numberOfLines={1}>
+          <Line style={s.meta} numberOfLines={1}>
             {meta}
-          </Text>
+          </Line>
         )}
       </View>
 
       {trailing}
 
-      {!!onPress && (
-        <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />
-      )}
+      {!!onPress &&
+        (skeleton ? (
+          <SkeletonIcon iconName="chevron-forward" size={13} />
+        ) : (
+          <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />
+        ))}
     </>
   );
 
   return onPress ? (
-    <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onPress}>
+    <TouchableOpacity
+      style={[s.row, !isLast && s.rowDivider]}
+      activeOpacity={0.6}
+      onPress={onPress}
+      disabled={skeleton}
+    >
       {body}
     </TouchableOpacity>
   ) : (
