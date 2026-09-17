@@ -15,7 +15,7 @@ export const listTimeLabel = (date?: string | null): string => {
 export const previewLine = (c: ChatContact): string => {
   const m = c.last_message;
   if (!m) return 'No messages yet';
-  const what = m.body || (m.attachment_type === 'image' ? 'Photo' : 'File');
+  const what = m.body || (m.attachment_type === 'image' ? 'Photo' : m.attachment_type === 'video' ? 'Video' : 'File');
   return m.mine ? `You: ${what}` : what;
 };
 

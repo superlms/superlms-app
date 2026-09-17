@@ -22,6 +22,23 @@ export const pickImage = (): Promise<PickedFile | null> =>
     });
   });
 
+// A chat takes videos up to 50 MB.
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+
+export const pickVideo = (): Promise<PickedFile | null> =>
+  new Promise(resolve => {
+    launchImageLibrary({ mediaType: 'video' }, res => {
+      if (res.didCancel || res.errorCode) return resolve(null);
+      const a = res.assets?.[0];
+      if (!a?.uri) return resolve(null);
+      if (a.fileSize && a.fileSize > MAX_VIDEO_BYTES) {
+        AppAlert.alert('Video too large', 'Choose a video under 50 MB.');
+        return resolve(null);
+      }
+      resolve({ uri: a.uri, type: a.type ?? 'video/mp4', name: a.fileName ?? 'video.mp4' });
+    });
+  });
+
 export const pickPdf = async (): Promise<PickedFile | null> => {
   if (!DocPicker?.pick) {
     AppAlert.alert('Picker unavailable', 'Rebuild the app to enable PDF uploads.');

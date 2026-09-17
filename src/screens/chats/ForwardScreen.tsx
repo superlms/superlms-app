@@ -18,14 +18,31 @@ import { Skeleton } from '../../components/Skeleton';
 import { AppAlert } from '../../components/AppDialog';
 import { theme, onThemeChange } from '../../utils/theme';
 import { DocNoData } from '../more/docUi';
-import { type ChatContact, chatErrorMessage, forwardChatMessages, getChatContacts } from '../../api/chatApi';
+import {
+  type ChatContact,
+  chatErrorMessage,
+  forwardChatMessages,
+  getChatContacts,
+  sendChatMessage,
+} from '../../api/chatApi';
+import { fileUri, keepSentFile } from './chatFiles';
 
 /**
  * Forward to…, for the messages picked in a conversation. Recent chats come
  * first, then everyone else this user can message; pick one or more and send.
  * Sent to one person, their conversation opens in place of this screen; sent
  * to several, it goes back to where the messages were picked.
+ *
+ * Files leave the server once they reach a phone, so messages with files go
+ * again from this phone's copies, one after another to each person.
  */
+
+// A picked message: its words, and its file on this phone.
+export interface ForwardItem {
+  id: number;
+  body: string | null;
+  file: { path: string; name: string; type: string } | null;
+}
 
 const initials = (name: string) =>
   name
@@ -40,6 +57,7 @@ const detailOf = (p: ChatContact) => [p.standard?.name, p.section?.name].filter(
 
 const ForwardScreen = ({ navigation, route }: any) => {
   const ids: number[] = route?.params?.ids ?? [];
+  const items: ForwardItem[] = route?.params?.items ?? [];
   const userRole = route?.params?.userRole === 'teacher' ? 'teacher' : 'student';
 
   const [people, setPeople] = useState<ChatContact[]>([]);
@@ -81,7 +99,24 @@ const ForwardScreen = ({ navigation, route }: any) => {
     if (!picked.length || sending) return;
     setSending(true);
     try {
-      await forwardChatMessages(ids, picked);
+      if (items.some(item => item.file)) {
+        for (const userId of picked) {
+          for (const item of items) {
+            const file = item.file
+              ? { uri: fileUri(item.file.path), name: item.file.name, type: item.file.type }
+              : null;
+            const saved = await sendChatMessage(userId, {
+              body: item.body ?? undefined,
+              file,
+              forwardedFrom: item.id,
+            });
+            // The copy sent keeps its own file on this phone, as anything sent does.
+            if (file && saved.attachment) await keepSentFile(saved, file);
+          }
+        }
+      } else {
+        await forwardChatMessages(ids, picked);
+      }
       if (Platform.OS === 'android') ToastAndroid.show('Forwarded', ToastAndroid.SHORT);
       const only = picked.length === 1 ? people.find(p => p.user_id === picked[0]) : null;
       if (only) {

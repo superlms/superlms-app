@@ -21,6 +21,7 @@ import ViewQueryScreen from '../screens/contactSchool/ViewQueryScreen';
 import ChatsScreen from '../screens/chats/ChatsScreen';
 import ChatsListScreen from '../screens/chats/ChatsListScreen';
 import NewChatScreen from '../screens/chats/NewChatScreen';
+import ChatMediaScreen from '../screens/chats/ChatMediaScreen';
 import ForwardScreen from '../screens/chats/ForwardScreen';
 import InstructorProfileScreen from '../screens/instructor/InstructorProfileScreen';
 import SubjectDetailsScreen from '../screens/subjects/SubjectDetailsScreen';
@@ -110,6 +111,7 @@ const AppNavigator = () => {
       <Stack.Screen name="UserChats" component={ChatsScreen} />
       <Stack.Screen name="NewChat" component={NewChatScreen} />
       <Stack.Screen name="ForwardChat" component={ForwardScreen} />
+      <Stack.Screen name="ChatMedia" component={ChatMediaScreen} />
 
       {/* Instructor */}
       <Stack.Screen name="InstructorProfile" component={InstructorProfileScreen} />

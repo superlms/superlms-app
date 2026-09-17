@@ -6,7 +6,6 @@ import {
   FlatList,
   Image,
   Keyboard,
-  Linking,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -28,7 +27,8 @@ import { AppAlert } from '../../components/AppDialog';
 import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { useKeyboardLiftStyle } from '../../hooks/useKeyboardLift';
 import { theme, onThemeChange } from '../../utils/theme';
-import { pickDocument, pickImage } from '../../utils/filePickers';
+import { pickDocument, pickImage, pickVideo } from '../../utils/filePickers';
+import { canCopyFiles, copyFileToClipboard } from '../../utils/chatClipboard';
 import type { PickedFile } from '../../api/adminProfileApi';
 import {
   type ChatMessage,
@@ -37,6 +37,7 @@ import {
   chatErrorMessage,
   deleteChatMessages,
   getChatThread,
+  markChatFilesReceived,
   pinChatMessages,
   sendChatMessage,
   unblockChatUsers,
@@ -45,6 +46,16 @@ import { clearChatNotifications } from '../../notifications/chatNotifications';
 import { DayLabel, chatColors as CH, dayLabelFor } from './chatUi';
 import { onChatPush, setOpenChat } from './chatEvents';
 import { bubbleTime, fileSize, SAMPLE_MESSAGES } from './chatFormat';
+import {
+  displayNameOf,
+  downloadChatFile,
+  fileUri,
+  findChatFile,
+  keepSentFile,
+  kindOf,
+  mimeOf,
+  openInPhoneApp,
+} from './chatFiles';
 
 // The clipboard is a native module; it is required lazily so a build without it
 // still runs, and Copy then says to update the app.
@@ -108,7 +119,8 @@ const samePins = (a: ChatMessage[], b: ChatMessage[]) =>
   a.length === b.length && a.every((m, i) => m.id === b[i].id);
 
 // What a message says in one line: its words, or what it carries.
-const previewOf = (m: ChatMessage) => m.body || (m.attachment?.type === 'image' ? 'Photo' : 'File');
+const previewOf = (m: ChatMessage) =>
+  m.body || (m.attachment?.type === 'image' ? 'Photo' : m.attachment?.type === 'video' ? 'Video' : 'File');
 
 const toast = (message: string) =>
   Platform.OS === 'android' ? ToastAndroid.show(message, ToastAndroid.SHORT) : AppAlert.alert(message);
@@ -139,36 +151,44 @@ const Ticks = ({ msg }: { msg: LocalMessage }) =>
 
 // ── One message ──────────────────────────────────────────────────────────────
 // Mine sit on a soft indigo wash, theirs on white behind a hairline. A photo
-// shows in the bubble and a document as its name and size; either opens in the
-// phone's viewer. A forwarded copy says so on top, a pinned one carries a pin
-// by its time. As a skeleton, each bubble is a grey block its own size.
+// shows in the bubble, a video as a dark box with a play button, a document as
+// its name and size — each from this phone's copy, with a spinner while it
+// downloads, and each opens in the app. A forwarded copy says so on top, a
+// pinned one carries a pin by its time. As a skeleton, each bubble is a grey
+// block its own size.
 const Bubble = ({
   msg,
   pinned,
+  path,
+  fetching,
   skeleton,
   selected,
   selectionMode,
   onPress,
   onLongPress,
   onRetry,
+  onOpen,
 }: {
   msg: Row;
   pinned: boolean;
+  // The file's copy on this phone, and whether it is downloading.
+  path: string | null;
+  fetching: boolean;
   skeleton?: boolean;
   selected: boolean;
   selectionMode: boolean;
   onPress: () => void;
   onLongPress: () => void;
   onRetry: () => void;
+  onOpen: () => void;
 }) => {
   const isMe = msg.mine;
   const file = msg.attachment;
-
-  const open = () => {
-    if (!file?.url) return;
-    Linking.openURL(file.url).catch(() => AppAlert.alert('Error', 'Unable to open this file on this device.'));
-  };
-  const tapFile = selectionMode ? onPress : open;
+  const tapFile = selectionMode ? onPress : onOpen;
+  // A file still on its way shows what was picked; a sent one, this phone's copy.
+  const local = path ? fileUri(path) : msg.pending || msg.failed ? file?.url ?? null : null;
+  // Neither on this phone nor on the server any more.
+  const gone = !!file && !local && !fetching && !file.url;
 
   return (
     <>
@@ -207,7 +227,45 @@ const Bubble = ({
             )}
             {file?.type === 'image' && (
               <TouchableOpacity activeOpacity={0.85} onPress={tapFile} onLongPress={onLongPress} disabled={skeleton}>
-                {file.url && !skeleton ? <Image source={{ uri: file.url }} style={s.photo} /> : <View style={s.photo} />}
+                {local && !skeleton ? (
+                  <Image source={{ uri: local }} style={s.photo} />
+                ) : (
+                  <View style={[s.photo, s.mediaEmpty]}>
+                    {!skeleton &&
+                      (fetching ? (
+                        <ActivityIndicator size="small" color={CH.accent} />
+                      ) : (
+                        <>
+                          <VectorIcon iconSet="Ionicons" iconName="image-outline" size={24} color={CH.muted} />
+                          {gone && <Text style={s.mediaGone}>Not on this phone</Text>}
+                        </>
+                      ))}
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
+            {file?.type === 'video' && (
+              <TouchableOpacity
+                style={s.video}
+                activeOpacity={0.85}
+                onPress={tapFile}
+                onLongPress={onLongPress}
+                disabled={skeleton}
+              >
+                {!skeleton && (
+                  <>
+                    {fetching ? (
+                      <ActivityIndicator size="small" color={theme.colors.white} />
+                    ) : (
+                      <View style={s.play}>
+                        <VectorIcon iconSet="Ionicons" iconName="play" size={22} color={theme.colors.white} />
+                      </View>
+                    )}
+                    <Text style={s.videoMeta} numberOfLines={1}>
+                      {gone ? 'Not on this phone' : ['Video', fileSize(file.size)].filter(Boolean).join(' · ')}
+                    </Text>
+                  </>
+                )}
               </TouchableOpacity>
             )}
             {file?.type === 'file' && (
@@ -221,10 +279,15 @@ const Bubble = ({
                 <VectorIcon iconSet="Ionicons" iconName="document-text-outline" size={22} color={CH.accent} />
                 <View style={s.fileText}>
                   <Text style={s.fileName} numberOfLines={1}>
-                    {file.name || 'File'}
+                    {displayNameOf(file)}
                   </Text>
-                  {!!file.size && <Text style={s.fileSize}>{fileSize(file.size)}</Text>}
+                  {gone ? (
+                    <Text style={s.fileSize}>Not on this phone</Text>
+                  ) : (
+                    !!file.size && <Text style={s.fileSize}>{fileSize(file.size)}</Text>
+                  )}
                 </View>
+                {fetching && <ActivityIndicator size="small" color={CH.accent} />}
               </TouchableOpacity>
             )}
             {!!msg.body && <Text style={[s.bubbleText, !!file && s.bubbleTextAfter]}>{msg.body}</Text>}
@@ -296,6 +359,13 @@ const ChatsScreen = ({ navigation, route }: any) => {
   // Follow the newest message unless the reader has scrolled up to older ones.
   const atBottom = useRef(true);
   const checking = useRef(false);
+
+  // Each file's copy on this phone, by message, and the files downloading now.
+  const [files, setFiles] = useState<Record<number, string>>({});
+  const [fetching, setFetching] = useState<Record<number, boolean>>({});
+  const lookedFor = useRef(new Set<number>());
+  const toReport = useRef(new Set<number>());
+  const reportTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectionMode = selectedIds.length > 0;
 
@@ -400,6 +470,72 @@ const ChatsScreen = ({ navigation, route }: any) => {
     );
   }, [loaded, messages, rememberLast]);
 
+  // The server lets a file go once the phone it was sent to has it: say so, a few at a time.
+  const reportReceived = useCallback((id: number) => {
+    toReport.current.add(id);
+    if (reportTimer.current) return;
+    reportTimer.current = setTimeout(() => {
+      reportTimer.current = null;
+      const ids = [...toReport.current];
+      toReport.current.clear();
+      markChatFilesReceived(ids).catch(() => {
+        // Said again the next time the conversation opens.
+      });
+    }, 800);
+  }, []);
+
+  // Leaving the conversation still tells the server about files just saved.
+  useEffect(
+    () => () => {
+      if (!reportTimer.current) return;
+      clearTimeout(reportTimer.current);
+      const ids = [...toReport.current];
+      if (ids.length) markChatFilesReceived(ids).catch(() => {});
+    },
+    [],
+  );
+
+  // A message's file on this phone — downloaded while the server still has it.
+  const ensureFile = useCallback(
+    async (m: LocalMessage) => {
+      const a = m.attachment;
+      if (!a) return;
+      let path = await findChatFile({ id: m.id, attachment: a });
+      if (!path && a.url) {
+        setFetching(prev => ({ ...prev, [m.id]: true }));
+        try {
+          path = await downloadChatFile(m);
+        } catch (e: any) {
+          console.log('[ChatsScreen] download failed:', e?.message);
+          // A tap on it tries again.
+          lookedFor.current.delete(m.id);
+        } finally {
+          setFetching(prev => {
+            const next = { ...prev };
+            delete next[m.id];
+            return next;
+          });
+        }
+      }
+      if (!path) return;
+      const found = path;
+      setFiles(prev => (prev[m.id] === found ? prev : { ...prev, [m.id]: found }));
+      // Mine stay on the server until the other phone has them.
+      if (!m.mine && a.url) reportReceived(m.id);
+    },
+    [reportReceived],
+  );
+
+  // Every file in the conversation is looked for once.
+  useEffect(() => {
+    if (loading) return;
+    messages.forEach(m => {
+      if (!isSent(m) || !m.attachment || lookedFor.current.has(m.id)) return;
+      lookedFor.current.add(m.id);
+      ensureFile(m);
+    });
+  }, [messages, loading, ensureFile]);
+
   // Keep the newest message in view as the keyboard opens.
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -440,7 +576,11 @@ const ChatsScreen = ({ navigation, route }: any) => {
       status: 'sent',
       attachment: attachment
         ? {
-            type: attachment.type?.startsWith('image/') ? 'image' : 'file',
+            type: attachment.type?.startsWith('image/')
+              ? 'image'
+              : attachment.type?.startsWith('video/')
+              ? 'video'
+              : 'file',
             name: attachment.name ?? null,
             size: null,
             url: attachment.uri,
@@ -456,6 +596,13 @@ const ChatsScreen = ({ navigation, route }: any) => {
 
     try {
       const saved = await sendChatMessage(userId, { body: temp.body ?? undefined, file: attachment });
+      // This phone keeps its own copy of what it sent.
+      if (attachment && saved.attachment) {
+        lookedFor.current.add(saved.id);
+        const kept = await keepSentFile(saved, attachment);
+        if (kept) setFiles(prev => ({ ...prev, [saved.id]: kept }));
+        else lookedFor.current.delete(saved.id);
+      }
       setMessages(prev => merge(prev.filter(m => m.id !== temp.id), [saved]));
     } catch (e: any) {
       setMessages(prev => prev.map(m => (m.id === temp.id ? { ...m, pending: false, failed: true } : m)));
@@ -469,6 +616,13 @@ const ChatsScreen = ({ navigation, route }: any) => {
         text: 'Photo',
         onPress: async () => {
           const f = await pickImage();
+          if (f) send(f);
+        },
+      },
+      {
+        text: 'Video',
+        onPress: async () => {
+          const f = await pickVideo();
           if (f) send(f);
         },
       },
@@ -489,7 +643,10 @@ const ChatsScreen = ({ navigation, route }: any) => {
   const pinnedIds = useMemo(() => new Set(pins.map(m => m.id)), [pins]);
   const selectedMessages = messages.filter(m => selectedIds.includes(m.id));
   const allPinned = selectedMessages.length > 0 && selectedMessages.every(m => pinnedIds.has(m.id));
-  const canCopy = selectedMessages.some(m => !!m.body);
+  // One photo, video or document on this phone copies as the file itself; otherwise the words do.
+  const fileToCopy =
+    selectedMessages.length === 1 && selectedMessages[0].attachment ? files[selectedMessages[0].id] ?? null : null;
+  const canCopy = selectedMessages.some(m => !!m.body) || (!!fileToCopy && canCopyFiles());
 
   const pinSelected = async () => {
     const ids = selectedIds;
@@ -510,26 +667,88 @@ const ChatsScreen = ({ navigation, route }: any) => {
     }
   };
 
-  const copySelected = () => {
-    const text = selectedMessages
+  const copySelected = async () => {
+    const chosen = selectedMessages;
+    const path = fileToCopy;
+    setSelectedIds([]);
+
+    const single = chosen[0];
+    if (path && single?.attachment && canCopyFiles()) {
+      const kind = single.attachment.type;
+      try {
+        await copyFileToClipboard(path, displayNameOf(single.attachment));
+        toast(kind === 'image' ? 'Photo copied' : kind === 'video' ? 'Video copied' : 'File copied');
+      } catch (e: any) {
+        AppAlert.alert('Could not copy', e?.message ?? 'Please try again.');
+      }
+      return;
+    }
+
+    const text = chosen
       .map(m => m.body)
       .filter(Boolean)
       .join('\n');
-    const count = selectedMessages.length;
-    setSelectedIds([]);
     if (!text) return;
     try {
       Clipboard.setString(text);
-      toast(count > 1 ? 'Messages copied' : 'Message copied');
+      toast(chosen.length > 1 ? 'Messages copied' : 'Message copied');
     } catch {
       AppAlert.alert('Update the app', 'Copying messages needs the latest version of the app.');
     }
   };
 
+  // Files go on from this phone's copies, so each one must be here.
   const forwardSelected = () => {
-    const ids = selectedIds.filter(id => id > 0);
+    const chosen = selectedMessages.filter(isSent);
     setSelectedIds([]);
-    if (ids.length) navigation.navigate('ForwardChat', { ids, userRole });
+    if (!chosen.length) return;
+    if (chosen.some(m => m.attachment && !files[m.id])) {
+      AppAlert.alert('Not on this phone', 'A file you picked isn’t on this phone yet, so it can’t be forwarded.');
+      return;
+    }
+    navigation.navigate('ForwardChat', {
+      ids: chosen.map(m => m.id),
+      items: chosen.map(m => ({
+        id: m.id,
+        body: m.body,
+        file: m.attachment
+          ? { path: files[m.id], name: displayNameOf(m.attachment), type: mimeOf(m.attachment) }
+          : null,
+      })),
+      userRole,
+    });
+  };
+
+  // A file opens in the app from this phone's copy: a photo, video or text here,
+  // a PDF in the reader, and any other document in the phone's own app for it.
+  const openFile = (m: LocalMessage) => {
+    const a = m.attachment;
+    if (!a || !isSent(m)) return;
+    const path = files[m.id];
+    if (!path) {
+      if (fetching[m.id]) {
+        toast('Downloading…');
+      } else if (a.url) {
+        lookedFor.current.add(m.id);
+        ensureFile(m);
+        toast('Downloading…');
+      } else {
+        AppAlert.alert('Not on this phone', 'This file was kept on the phone it was sent to, and is no longer on the server.');
+      }
+      return;
+    }
+
+    const name = displayNameOf(a);
+    const kind = kindOf(a);
+    if (kind === 'pdf') {
+      navigation.navigate('BookReader', { url: fileUri(path), title: name });
+    } else if (kind === 'other') {
+      openInPhoneApp(path, a).catch(() =>
+        AppAlert.alert('Can’t open this file', 'No app on this phone opens this kind of file.'),
+      );
+    } else {
+      navigation.navigate('ChatMedia', { path, name, kind });
+    }
   };
 
   const deleteSelected = async () => {
@@ -748,12 +967,15 @@ const ChatsScreen = ({ navigation, route }: any) => {
             <Bubble
               msg={item}
               pinned={pinnedIds.has(item.id)}
+              path={files[item.id] ?? null}
+              fetching={!!fetching[item.id]}
               skeleton={loading}
               selected={selectedIds.includes(item.id)}
               selectionMode={selectionMode}
               onLongPress={() => isSent(item) && toggleSelect(item.id)}
               onPress={() => isSent(item) && toggleSelect(item.id)}
               onRetry={() => send(null, item)}
+              onOpen={() => openFile(item)}
             />
           )}
         />
@@ -943,6 +1165,34 @@ const __mk_s = () => StyleSheet.create({
   fileText: { flexShrink: 1 },
   fileName: { fontSize: 14, fontWeight: '500', color: CH.ink },
   fileSize: { fontSize: 11.5, color: CH.muted, marginTop: 1 },
+  // A photo not on this phone yet — or any more
+  mediaEmpty: { alignItems: 'center', justifyContent: 'center', gap: 6 },
+  mediaGone: { fontSize: 11.5, color: CH.muted },
+  // A video: a dark box with a play button, and what it is along the bottom
+  video: {
+    width: 220,
+    height: 140,
+    borderRadius: 12,
+    backgroundColor: '#1F2937',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  play: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoMeta: {
+    position: 'absolute',
+    left: 10,
+    right: 10,
+    bottom: 8,
+    fontSize: 11.5,
+    color: 'rgba(255,255,255,0.85)',
+  },
 
   // A bubble as a skeleton: laid out unseen, under a grey block
   unseen: { opacity: 0 },

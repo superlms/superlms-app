@@ -1,4 +1,6 @@
+import axios from 'axios';
 import apiClient from './apiClient';
+import constant from '../utils/constant';
 import type { PickedFile } from './adminProfileApi';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -6,14 +8,15 @@ import type { PickedFile } from './adminProfileApi';
 //
 //  The backend keeps the web panel's chat rules: one-to-one conversations,
 //  deletes that only hide things for you, and ticks for delivered and read.
-//  Attachments come back with a signed link that lasts about an hour.
+//  Attachments come back with a signed link that lasts about an hour — until
+//  the phone they were sent to has saved them, and then with none at all.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const unwrap = (data: any) => data?.data ?? data;
 
 export interface ChatPreview {
   body: string | null;
-  attachment_type: 'image' | 'file' | null;
+  attachment_type: 'image' | 'video' | 'file' | null;
   mine: boolean;
   created_at: string;
 }
@@ -40,9 +43,10 @@ export interface ChatContact extends ChatPerson {
 }
 
 export interface ChatAttachment {
-  type: 'image' | 'file';
+  type: 'image' | 'video' | 'file';
   name: string | null;
   size: number | null;
+  // null once the other phone has saved the file: each phone opens its own copy.
   url: string | null;
 }
 
@@ -95,22 +99,31 @@ export const getChatThread = async (
   return unwrap(data);
 };
 
-/** Send a message: words, a file, or both. */
+/**
+ * Send a message: words, a file, or both. `forwardedFrom` marks a copy of one of
+ * my messages, sent again with its file from this phone.
+ */
 export const sendChatMessage = async (
   userId: number,
-  message: { body?: string; file?: PickedFile | null },
+  message: { body?: string; file?: PickedFile | null; forwardedFrom?: number },
 ): Promise<ChatMessage> => {
   const form = new FormData();
   if (message.body) form.append('body', message.body);
   if (message.file) {
     form.append('file', { uri: message.file.uri, name: message.file.name, type: message.file.type } as any);
   }
+  if (message.forwardedFrom) form.append('forwarded_from', String(message.forwardedFrom));
   const { data } = await apiClient.post(`/chat/with/${userId}`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    // A file can take a while on a slow connection.
-    timeout: 60000,
+    // A file — a video above all — can take a while on a slow connection.
+    timeout: message.file ? 300000 : 60000,
   });
   return unwrap(data);
+};
+
+/** This phone has saved these messages' files, so the server can let them go. */
+export const markChatFilesReceived = async (ids: number[]): Promise<void> => {
+  await apiClient.post('/chat/attachments/received', { ids });
 };
 
 /** Delete messages for yourself; the other person keeps theirs. */
@@ -129,8 +142,19 @@ export const forwardChatMessages = async (ids: number[], userIds: number[]): Pro
   await apiClient.post('/chat/messages/forward', { ids, user_ids: userIds });
 };
 
-/** This phone has what was sent to its user — the senders see two ticks. */
-export const markChatDelivered = async (): Promise<void> => {
+/**
+ * This phone has what was sent to its user — the senders see two ticks. For
+ * another account signed in on the phone, pass that account's sign-in token.
+ */
+export const markChatDelivered = async (authToken?: string): Promise<void> => {
+  if (authToken) {
+    await axios.post(
+      `${constant.API_BASE_URL}/chat/delivered`,
+      {},
+      { headers: { Accept: 'application/json', Authorization: `Bearer ${authToken}` }, timeout: 15000 },
+    );
+    return;
+  }
   await apiClient.post('/chat/delivered');
 };
 

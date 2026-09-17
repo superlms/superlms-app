@@ -16,6 +16,8 @@ class MainApplication : Application(), ReactApplication {
         PackageList(this).packages.apply {
           // Packages that cannot be autolinked yet can be added manually here, for example:
           // add(MyReactNativePackage())
+          // Copies a chat's photo or document to the clipboard.
+          add(ChatClipboardPackage())
           // Play Store updates run from inside the app.
           add(PlayUpdatePackage())
         },
