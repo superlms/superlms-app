@@ -2,22 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Video from 'react-native-video';
 import VectorIcon from '../../components/VectorIcon';
 import { DocHeader } from '../more/docUi';
 import { theme, onThemeChange } from '../../utils/theme';
 import { fileUri, readTextFile } from './chatFiles';
 
 /**
- * A chat's photo, video or text file, opened in the app from this phone's copy.
+ * A chat's photo or text file, opened in the app from this phone's copy.
  *
  * Route params:
  *   path – the file on this phone
  *   name – its name, for the header
- *   kind – 'image' | 'video' | 'text'
+ *   kind – 'image' | 'text'
  *
  * A photo pinches to zoom, moves while zoomed, and a double tap zooms in or
- * back out; a video plays with the player's own controls.
+ * back out.
  */
 
 const MAX_ZOOM = 5;
@@ -117,11 +116,10 @@ const ZoomImage = ({ uri, onError }: { uri: string; onError: () => void }) => {
 const ChatMediaScreen = ({ navigation, route }: any) => {
   const path: string | undefined = route?.params?.path;
   const name: string = route?.params?.name || 'File';
-  const kind: 'image' | 'video' | 'text' = route?.params?.kind ?? 'image';
+  const kind: 'image' | 'text' = route?.params?.kind === 'text' ? 'text' : 'image';
 
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState<string | null>(null);
-  const [videoReady, setVideoReady] = useState(false);
 
   useEffect(() => {
     if (kind !== 'text' || !path) return;
@@ -155,25 +153,7 @@ const ChatMediaScreen = ({ navigation, route }: any) => {
         )
       ) : (
         <View style={s.stage}>
-          {kind === 'video' ? (
-            <>
-              <Video
-                source={{ uri: fileUri(path) }}
-                style={s.fill}
-                resizeMode="contain"
-                controls
-                onLoad={() => setVideoReady(true)}
-                onError={() => setError('Couldn’t play this video.')}
-              />
-              {!videoReady && (
-                <View style={s.loader} pointerEvents="none">
-                  <ActivityIndicator size="small" color={theme.colors.white} />
-                </View>
-              )}
-            </>
-          ) : (
-            <ZoomImage uri={fileUri(path)} onError={() => setError('Couldn’t open this photo.')} />
-          )}
+          <ZoomImage uri={fileUri(path)} onError={() => setError('Couldn’t open this photo.')} />
         </View>
       )}
     </View>
@@ -184,10 +164,9 @@ export default ChatMediaScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
-  // Photos and videos on black, under the app's own header
+  // Photos on black, under the app's own header
   stage: { flex: 1, backgroundColor: '#000', overflow: 'hidden' },
   fill: { flex: 1, width: '100%' },
-  loader: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 24 },
   stateText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },

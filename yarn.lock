@@ -6386,11 +6386,6 @@ react-native-vector-icons@^10.3.0:
     prop-types "^15.7.2"
     yargs "^16.1.1"
 
-react-native-video@6.19.2:
-  version "6.19.2"
-  resolved "https://registry.yarnpkg.com/react-native-video/-/react-native-video-6.19.2.tgz#91065e087f90bc653b312ff2347903345c4f2411"
-  integrity sha512-gh5dBMGSHywKr8+p4azRXrFQgT+QTmS1tI4sz6kVRjSENORfsrGGLQzmyo/7S9m+ZOTLWQJ3h8ONaXxR4F2Fcw==
-
 react-native-worklets@^0.8.1:
   version "0.8.1"
   resolved "https://registry.npmjs.org/react-native-worklets/-/react-native-worklets-0.8.1.tgz"

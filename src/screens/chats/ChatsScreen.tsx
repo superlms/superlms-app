@@ -27,7 +27,7 @@ import { AppAlert } from '../../components/AppDialog';
 import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { useKeyboardLiftStyle } from '../../hooks/useKeyboardLift';
 import { theme, onThemeChange } from '../../utils/theme';
-import { pickDocument, pickImage, pickVideo } from '../../utils/filePickers';
+import { pickDocument, pickImage } from '../../utils/filePickers';
 import { canCopyFiles, copyFileToClipboard } from '../../utils/chatClipboard';
 import type { PickedFile } from '../../api/adminProfileApi';
 import {
@@ -120,7 +120,7 @@ const samePins = (a: ChatMessage[], b: ChatMessage[]) =>
 
 // What a message says in one line: its words, or what it carries.
 const previewOf = (m: ChatMessage) =>
-  m.body || (m.attachment?.type === 'image' ? 'Photo' : m.attachment?.type === 'video' ? 'Video' : 'File');
+  m.body || (m.attachment?.type === 'image' ? 'Photo' : 'File');
 
 const toast = (message: string) =>
   Platform.OS === 'android' ? ToastAndroid.show(message, ToastAndroid.SHORT) : AppAlert.alert(message);
@@ -150,10 +150,10 @@ const Ticks = ({ msg }: { msg: LocalMessage }) =>
   );
 
 // ── One message ──────────────────────────────────────────────────────────────
-// Mine sit on a soft indigo wash, theirs on white behind a hairline. A photo
-// shows in the bubble, a video as a dark box with a play button, a document as
-// its name and size — each from this phone's copy, with a spinner while it
-// downloads, and each opens in the app. A forwarded copy says so on top, a
+// Mine sit on a soft indigo wash, theirs on white behind a hairline. Chats
+// carry photos and documents, as on WhatsApp: a photo shows in the bubble and
+// anything else as its name and size — each from this phone's copy, with a
+// spinner while it downloads, and each opens in the app. A forwarded copy says so on top, a
 // pinned one carries a pin by its time. As a skeleton, each bubble is a grey
 // block its own size.
 const Bubble = ({
@@ -244,31 +244,7 @@ const Bubble = ({
                 )}
               </TouchableOpacity>
             )}
-            {file?.type === 'video' && (
-              <TouchableOpacity
-                style={s.video}
-                activeOpacity={0.85}
-                onPress={tapFile}
-                onLongPress={onLongPress}
-                disabled={skeleton}
-              >
-                {!skeleton && (
-                  <>
-                    {fetching ? (
-                      <ActivityIndicator size="small" color={theme.colors.white} />
-                    ) : (
-                      <View style={s.play}>
-                        <VectorIcon iconSet="Ionicons" iconName="play" size={22} color={theme.colors.white} />
-                      </View>
-                    )}
-                    <Text style={s.videoMeta} numberOfLines={1}>
-                      {gone ? 'Not on this phone' : ['Video', fileSize(file.size)].filter(Boolean).join(' · ')}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
-            {file?.type === 'file' && (
+            {!!file && file.type !== 'image' && (
               <TouchableOpacity
                 style={s.file}
                 activeOpacity={0.7}
@@ -576,11 +552,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
       status: 'sent',
       attachment: attachment
         ? {
-            type: attachment.type?.startsWith('image/')
-              ? 'image'
-              : attachment.type?.startsWith('video/')
-              ? 'video'
-              : 'file',
+            type: attachment.type?.startsWith('image/') ? 'image' : 'file',
             name: attachment.name ?? null,
             size: null,
             url: attachment.uri,
@@ -620,13 +592,6 @@ const ChatsScreen = ({ navigation, route }: any) => {
         },
       },
       {
-        text: 'Video',
-        onPress: async () => {
-          const f = await pickVideo();
-          if (f) send(f);
-        },
-      },
-      {
         text: 'Document',
         onPress: async () => {
           const f = await pickDocument();
@@ -643,7 +608,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
   const pinnedIds = useMemo(() => new Set(pins.map(m => m.id)), [pins]);
   const selectedMessages = messages.filter(m => selectedIds.includes(m.id));
   const allPinned = selectedMessages.length > 0 && selectedMessages.every(m => pinnedIds.has(m.id));
-  // One photo, video or document on this phone copies as the file itself; otherwise the words do.
+  // One photo or document on this phone copies as the file itself; otherwise the words do.
   const fileToCopy =
     selectedMessages.length === 1 && selectedMessages[0].attachment ? files[selectedMessages[0].id] ?? null : null;
   const canCopy = selectedMessages.some(m => !!m.body) || (!!fileToCopy && canCopyFiles());
@@ -677,7 +642,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
       const kind = single.attachment.type;
       try {
         await copyFileToClipboard(path, displayNameOf(single.attachment));
-        toast(kind === 'image' ? 'Photo copied' : kind === 'video' ? 'Video copied' : 'File copied');
+        toast(kind === 'image' ? 'Photo copied' : 'File copied');
       } catch (e: any) {
         AppAlert.alert('Could not copy', e?.message ?? 'Please try again.');
       }
@@ -719,7 +684,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
     });
   };
 
-  // A file opens in the app from this phone's copy: a photo, video or text here,
+  // A file opens in the app from this phone's copy: a photo or text here,
   // a PDF in the reader, and any other document in the phone's own app for it.
   const openFile = (m: LocalMessage) => {
     const a = m.attachment;
@@ -1168,32 +1133,6 @@ const __mk_s = () => StyleSheet.create({
   // A photo not on this phone yet — or any more
   mediaEmpty: { alignItems: 'center', justifyContent: 'center', gap: 6 },
   mediaGone: { fontSize: 11.5, color: CH.muted },
-  // A video: a dark box with a play button, and what it is along the bottom
-  video: {
-    width: 220,
-    height: 140,
-    borderRadius: 12,
-    backgroundColor: '#1F2937',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  play: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  videoMeta: {
-    position: 'absolute',
-    left: 10,
-    right: 10,
-    bottom: 8,
-    fontSize: 11.5,
-    color: 'rgba(255,255,255,0.85)',
-  },
-
   // A bubble as a skeleton: laid out unseen, under a grey block
   unseen: { opacity: 0 },
   fillBox: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' },

@@ -43,6 +43,7 @@ export interface ChatContact extends ChatPerson {
 }
 
 export interface ChatAttachment {
+  // Chats send photos and documents; a video from elsewhere is shown as a document.
   type: 'image' | 'video' | 'file';
   name: string | null;
   size: number | null;
@@ -115,8 +116,8 @@ export const sendChatMessage = async (
   if (message.forwardedFrom) form.append('forwarded_from', String(message.forwardedFrom));
   const { data } = await apiClient.post(`/chat/with/${userId}`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    // A file — a video above all — can take a while on a slow connection.
-    timeout: message.file ? 300000 : 60000,
+    // A file can take a while on a slow connection.
+    timeout: 60000,
   });
   return unwrap(data);
 };

@@ -9,9 +9,10 @@ import type { PickedFile } from '../../api/adminProfileApi';
 //  The server only carries a file across: the phone it was sent to downloads
 //  it, keeps it and says so, and the server then lets it go. Every phone keeps
 //  its own copy in the app's folder, named by the message — the sender's from
-//  the moment it is sent — and a photo, video or document that arrives is also
-//  put in the phone's Pictures, Movies or Download under SuperLMS, where the
-//  gallery and Files show it.
+//  the moment it is sent — and a photo or document that arrives is also put in
+//  the phone's Pictures or Download under SuperLMS, where the gallery and Files
+//  show it. Chats carry photos and documents only; a video that arrives from
+//  elsewhere is kept and opened as a document.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { fs, config, MediaCollection } = ReactNativeBlobUtil;
@@ -81,16 +82,17 @@ export const mimeOf = (a: ChatAttachment) =>
   MIME[extOf(fileNameOf(a))] ??
   (a.type === 'image' ? 'image/jpeg' : a.type === 'video' ? 'video/mp4' : 'application/octet-stream');
 
-/** How the app opens it: a photo, video or text here, a PDF in the reader, anything else in the phone's app. */
-export const kindOf = (a: ChatAttachment): 'image' | 'video' | 'pdf' | 'text' | 'other' => {
-  if (a.type === 'image' || a.type === 'video') return a.type;
+/** How the app opens it: a photo or text here, a PDF in the reader, anything else in the phone's app. */
+export const kindOf = (a: ChatAttachment): 'image' | 'pdf' | 'text' | 'other' => {
+  if (a.type === 'image') return 'image';
+  if (a.type === 'video') return 'other';
   const ext = extOf(fileNameOf(a));
   return ext === 'pdf' ? 'pdf' : ext === 'txt' ? 'text' : 'other';
 };
 
 /**
  * A file on this phone as a file:// link, each part of the path encoded — the
- * image, video and PDF views all decode it back to the path.
+ * image and PDF views decode it back to the path.
  */
 export const fileUri = (path: string) => {
   if (path.startsWith('file://')) return path;
@@ -160,7 +162,7 @@ const publishToPhone = async (path: string, a: ChatAttachment) => {
   if (Platform.OS !== 'android') return;
   await MediaCollection.copyToMediaStore(
     { name: fileNameOf(a), parentFolder: 'SuperLMS', mimeType: mimeOf(a) },
-    a.type === 'image' ? 'Image' : a.type === 'video' ? 'Video' : 'Download',
+    a.type === 'image' ? 'Image' : 'Download',
     path,
   );
 };
