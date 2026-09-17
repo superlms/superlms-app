@@ -23,7 +23,6 @@ export interface Instructor {
   email: string;
   avatar: string | null;
   employee_id: string;
-  phone: string | null;
   subjects: Subject[];
 }
 
@@ -50,7 +49,6 @@ export interface InstructorDetailResponse {
     employee_id: string;
     subjects: Subject[];
     qualification?: string;
-    phone?: string;
     experience?: string;
     bio?: string;
   };

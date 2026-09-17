@@ -122,22 +122,6 @@ const InstructorDetailModal = ({ visible, instructor, loading, onClose }: Instru
                   </View>
                 </TouchableOpacity>
 
-                {/* Phone if available */}
-                {instructor?.phone && (
-                  <TouchableOpacity
-                    style={styles.detailRow}
-                    onPress={() => Linking.openURL(`tel:${instructor?.phone}`)}
-                  >
-                    <View style={[styles.detailIconBox, { backgroundColor: gradient[0] + '18' }]}>
-                      <VectorIcon iconSet="Feather" iconName="phone" size={18} color={gradient[0]} />
-                    </View>
-                    <View style={styles.detailTextContainer}>
-                      <Text style={styles.detailLabel}>Phone</Text>
-                      <Text style={styles.detailValue}>{instructor?.phone}</Text>
-                    </View>
-                  </TouchableOpacity>
-                )}
-
                 {/* Qualification if available */}
                 {instructor?.qualification && (
                   <View style={styles.detailRow}>

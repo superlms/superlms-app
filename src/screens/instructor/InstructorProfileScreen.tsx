@@ -123,12 +123,9 @@ const InstructorProfileScreen = ({ navigation, route }: any) => {
     .filter(Boolean);
   const location = [profile.address, profile.city, profile.state].filter(Boolean).join(', ');
 
+  // The instructor's mobile number is theirs; a student writes to them by
+  // email, or opens a chat from the header.
   const details = [
-    {
-      label: 'Mobile',
-      value: profile.phone,
-      onPress: profile.phone ? () => Linking.openURL(`tel:${profile.phone}`) : undefined,
-    },
     {
       label: 'Email',
       value: profile.email,
