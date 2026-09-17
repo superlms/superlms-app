@@ -63,6 +63,8 @@ export interface PickedFile {
   uri: string;
   type?: string | null;
   name?: string | null;
+  /** Bytes, when the picker knows — for a size limit checked before uploading. */
+  size?: number | null;
 }
 
 const unwrap = (data: any) => data?.data ?? data;

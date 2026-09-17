@@ -103,26 +103,6 @@ export const getStudentExamResult = async (examId: number | string): Promise<Stu
   return unwrap(data);
 };
 
-export interface StudentExamCopy {
-  id: number;
-  exam: { id: number; name: string };
-  subject: { id: number; name: string };
-  standard: { id: number; name: string };
-  section: { id: number; name: string };
-  pdf_url: string | null;
-  marks_obtained: number | null;
-  max_marks: number | null;
-  percentage: number | null;
-  grade: string | null;
-  remarks: string | null;
-  uploaded_at: string | null;
-}
-
-export const getStudentExamCopies = async (perPage = 100): Promise<StudentExamCopy[]> => {
-  const { data } = await apiClient.get('/student/exam-copies', { params: { per_page: perPage } });
-  return unwrapList(data);
-};
-
 // ════════════════════════════════════════════════════════════════════════════
 //  TEACHER
 // ════════════════════════════════════════════════════════════════════════════
@@ -155,38 +135,116 @@ export const getTeacherClassesSubjects = async (): Promise<ClassSubject[]> => {
   return unwrapList(data);
 };
 
-export interface RosterStudent {
+// Max exam-copy file size accepted by the API (5 MB, as the admin panel takes).
+// Enforced client-side too so the user gets an instant, friendly message
+// instead of a 422.
+export const MAX_COPY_BYTES = 5 * 1024 * 1024;
+export const MAX_COPY_LABEL = '5 MB';
+
+// ─── Upload Copies: exam → class → the class's copies ────────────────────────
+export interface CopyClass {
+  standard_id: number;
+  standard_name: string;
+  section_id: number;
+  section_name: string;
+  subject_id: number;
+  subject_name: string;
+  subject_image: string | null;
+  students: number;
+  /** Students with marks saved for the exam, absent ones included. */
+  marked: number;
+  uploaded: number;
+  /** Copies can only go up once the exam's marks are saved for the subject. */
+  has_marks: boolean;
+}
+
+export const getCopyClasses = async (examId: number | string): Promise<CopyClass[]> => {
+  const { data } = await apiClient.get('/teacher/exam-copies/classes', { params: { exam_id: examId } });
+  return unwrapList(data);
+};
+
+export interface CopyStudent {
   student_detail_id: number;
   name: string;
   roll_no: string | null;
   admission_no: string | null;
-  email: string | null;
-}
-
-export const getMarksStudents = async (
-  standardId: number,
-  sectionId: number,
-): Promise<RosterStudent[]> => {
-  const { data } = await apiClient.get('/teacher/marks/students', {
-    params: { standard_id: standardId, section_id: sectionId },
-  });
-  return unwrapList(data);
-};
-
-// Max exam-copy file size accepted by the API (2 MB). Enforced client-side
-// too so the user gets an instant, friendly message instead of a 422.
-export const MAX_COPY_BYTES = 2 * 1024 * 1024;
-export const MAX_COPY_LABEL = '2 MB';
-
-// ─── Existing teacher rows (used to pre-fill the upload screens for CRUD) ─────
-export interface TeacherMarkRow {
-  id: number;
-  student: { id: number; name: string; roll_no: string | null } | null;
+  marked: boolean;
+  is_absent: boolean;
   marks_obtained: number | null;
   max_marks: number | null;
   grade: string | null;
-  is_absent: boolean;
+  has_copy: boolean;
+  pdf_url: string | null;
+  remarks: string | null;
+  uploaded_at: string | null;
 }
+
+export interface CopySheet {
+  exam: { id: number; name: string; total_marks: number | null };
+  has_marks: boolean;
+  /** Largest copy the server takes, in kilobytes. */
+  max_kb: number;
+  students: CopyStudent[];
+}
+
+export const getCopySheet = async (key: ExistingFilter): Promise<CopySheet> => {
+  const { data } = await apiClient.get('/teacher/exam-copies/sheet', { params: key });
+  return unwrap(data);
+};
+
+// One student's copy goes up (or replaces the one there); the sheet comes back.
+export const uploadCopyPdf = async (
+  key: ExistingFilter,
+  studentDetailId: number,
+  file: CopyFile,
+): Promise<CopySheet> => {
+  const form = new FormData();
+  Object.entries(key).forEach(([k, v]) => form.append(k, String(v)));
+  form.append('student_detail_id', String(studentDetailId));
+  form.append('pdf', { uri: file.uri, name: file.name, type: file.type ?? 'application/pdf' } as any);
+  const { data } = await apiClient.post('/teacher/exam-copies/sheet/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    // A copy can take a while on a slow connection.
+    timeout: 120000,
+  });
+  return unwrap(data);
+};
+
+/** Take one student's copy down; their marks stay. */
+export const removeCopyPdf = async (key: ExistingFilter, studentDetailId: number): Promise<CopySheet> => {
+  const { data } = await apiClient.post('/teacher/exam-copies/sheet/remove', {
+    ...key,
+    student_detail_id: studentDetailId,
+  });
+  return unwrap(data);
+};
+
+// ─── One exam's copies, subject by subject (students) ────────────────────────
+export interface ExamCopySubject {
+  subject_id: number;
+  subject_name: string;
+  subject_image: string | null;
+  has_copy: boolean;
+  pdf_url: string | null;
+  marked: boolean;
+  is_absent: boolean;
+  marks_obtained: number | null;
+  max_marks: number | null;
+  grade: string | null;
+  remarks: string | null;
+  uploaded_at: string | null;
+}
+
+export interface StudentExamCopies {
+  exam: { id: number; name: string; total_marks: number | null };
+  subjects: ExamCopySubject[];
+  copies: number;
+}
+
+export const getStudentExamCopies = async (examId: number | string): Promise<StudentExamCopies> => {
+  const { data } = await apiClient.get(`/student/exam-copies/exams/${examId}`);
+  return unwrap(data);
+};
 
 export interface ExistingFilter {
   exam_id: number;
@@ -194,40 +252,6 @@ export interface ExistingFilter {
   section_id: number;
   subject_id: number;
 }
-
-// Marks already saved for an exam+class+subject, keyed by student_detail_id.
-export const getTeacherMarks = async (
-  filter: ExistingFilter,
-): Promise<Record<number, TeacherMarkRow>> => {
-  const { data } = await apiClient.get('/teacher/marks', {
-    params: { ...filter, per_page: 200 },
-  });
-  const map: Record<number, TeacherMarkRow> = {};
-  unwrapList(data).forEach((r: any) => {
-    if (r?.student?.id != null) map[r.student.id] = r;
-  });
-  return map;
-};
-
-export interface TeacherCopyRow {
-  id: number;
-  student: { id: number; name: string; roll_no: string | null } | null;
-  pdf_url: string | null;
-}
-
-// Exam copies already uploaded for an exam+class+subject, keyed by student_detail_id.
-export const getTeacherExamCopies = async (
-  filter: ExistingFilter,
-): Promise<Record<number, TeacherCopyRow>> => {
-  const { data } = await apiClient.get('/teacher/exam-copies', {
-    params: { ...filter, per_page: 200 },
-  });
-  const map: Record<number, TeacherCopyRow> = {};
-  unwrapList(data).forEach((r: any) => {
-    if (r?.student?.id != null) map[r.student.id] = r;
-  });
-  return map;
-};
 
 // ─── Upload Marks: exam → class → the whole class's marks ────────────────────
 export interface MarksClass {
@@ -287,100 +311,11 @@ export const saveMarksSheet = async (
   return { sheet: unwrap(data), message: data?.message ?? 'Marks saved.' };
 };
 
-export const deleteMark = async (id: number): Promise<void> => {
-  await apiClient.delete(`/teacher/marks/${id}`);
-};
-
-export const deleteExamCopy = async (id: number): Promise<void> => {
-  await apiClient.delete(`/teacher/exam-copies/${id}`);
-};
-
-export interface MarkPayload {
-  exam_id: number;
-  student_detail_id: number;
-  standard_id: number;
-  section_id: number;
-  subject_id: number;
-  marks_obtained: number;
-  max_marks: number;
-  is_absent?: boolean;
-}
-
-// Create marks; if a row already exists (409), find it and update instead.
-export const upsertMark = async (payload: MarkPayload): Promise<void> => {
-  try {
-    await apiClient.post('/teacher/marks', payload);
-  } catch (e: any) {
-    if (e?.response?.status !== 409) throw e;
-    const { data } = await apiClient.get('/teacher/marks', {
-      params: {
-        exam_id: payload.exam_id,
-        student_detail_id: payload.student_detail_id,
-        subject_id: payload.subject_id,
-        standard_id: payload.standard_id,
-        section_id: payload.section_id,
-        per_page: 1,
-      },
-    });
-    const id = unwrapList(data)[0]?.id;
-    if (!id) throw e;
-    await apiClient.put(`/teacher/marks/${id}`, {
-      marks_obtained: payload.marks_obtained,
-      max_marks: payload.max_marks,
-      is_absent: payload.is_absent ?? false,
-    });
-  }
-};
-
 export interface CopyFile {
   uri: string;
   name: string;
   type?: string;
 }
-
-// Upload an exam-copy PDF; if a row already exists (409), replace it.
-export const upsertExamCopy = async (
-  meta: {
-    exam_id: number;
-    student_detail_id: number;
-    standard_id: number;
-    section_id: number;
-    subject_id: number;
-  },
-  file: CopyFile,
-): Promise<void> => {
-  const buildForm = (extra?: Record<string, string>) => {
-    const fd = new FormData();
-    Object.entries(meta).forEach(([k, v]) => fd.append(k, String(v)));
-    if (extra) Object.entries(extra).forEach(([k, v]) => fd.append(k, v));
-    fd.append('pdf', {
-      uri: file.uri,
-      name: file.name,
-      type: file.type ?? 'application/pdf',
-    } as any);
-    return fd;
-  };
-
-  const headers = { 'Content-Type': 'multipart/form-data' };
-  try {
-    await apiClient.post('/teacher/exam-copies', buildForm(), { headers });
-  } catch (e: any) {
-    if (e?.response?.status !== 409) throw e;
-    const { data } = await apiClient.get('/teacher/exam-copies', {
-      params: {
-        exam_id: meta.exam_id,
-        student_detail_id: meta.student_detail_id,
-        subject_id: meta.subject_id,
-        standard_id: meta.standard_id,
-        section_id: meta.section_id,
-        per_page: 1,
-      },
-    });
-    const id = unwrapList(data)[0]?.id;
-    if (!id) throw e;
-    await apiClient.post(`/teacher/exam-copies/${id}`, buildForm({ _method: 'PUT' }), { headers });
-  }
-};
 
 // ─── Shared error → message helper ─────────────────────────────────────────────
 export const marksErrorMessage = (e: any): string => {

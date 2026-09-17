@@ -9,26 +9,42 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { SubjectIcon } from '../subjects/subjectIcon';
 import { plural } from '../subjects/subjectsUi';
-import { getMarksClasses, marksErrorMessage, type MarksClass } from '../../api/marksApi';
+import { getCopyClasses, marksErrorMessage, type CopyClass } from '../../api/marksApi';
 import type { Exam } from '../exam/examData';
 import { Words } from '../exam/examUi';
+import { marksClassLabel } from './MarksClassesScreen';
 
 /**
- * Upload Marks, step two: the classes and sections the teacher teaches (one
- * row per subject taught there), each saying whether the exam's marks are in.
- * A row opens the class's students (MarksSheet).
+ * Upload Copy, step two: the classes and sections the teacher teaches (one
+ * row per subject taught there), each saying how many copies are up. A row
+ * opens the class's students (CopySheet).
+ *
+ * As in the admin panel, a copy can only go up against saved marks, so a class
+ * whose marks aren't in says so.
  *
  * A load — the first, a pull to refresh, Try again — draws the page as a
  * skeleton from the classes it shows, or those it held last time.
  */
 
-// "Class 5 - A", for a marks class or a copies one.
-export const marksClassLabel = (c: { standard_name: string; section_name: string }) =>
-  [c.standard_name, c.section_name].filter(Boolean).join(' - ');
+const classKey = (c: CopyClass) => `${c.standard_id}-${c.section_id}-${c.subject_id}`;
 
-const classKey = (c: MarksClass) => `${c.standard_id}-${c.section_id}-${c.subject_id}`;
+// "No copies uploaded" · "4 of 30 copies uploaded" · "All copies uploaded"
+export const copyStatus = (c: CopyClass) => {
+  if (!c.has_marks) return 'Marks not added yet';
+  if (c.uploaded === 0) return 'No copies uploaded';
+  if (c.uploaded < c.marked) return `${c.uploaded} of ${c.marked} copies uploaded`;
+  return 'All copies uploaded';
+};
 
-const sampleClass = (id: number, standard: string, section: string, subject: string, students: number): MarksClass => ({
+const sampleClass = (
+  id: number,
+  standard: string,
+  section: string,
+  subject: string,
+  students: number,
+  marked: number,
+  uploaded: number,
+): CopyClass => ({
   standard_id: id,
   standard_name: standard,
   section_id: id,
@@ -37,82 +53,78 @@ const sampleClass = (id: number, standard: string, section: string, subject: str
   subject_name: subject,
   subject_image: null,
   students,
-  saved: 0,
-  absent: 0,
+  marked,
+  uploaded,
+  has_marks: marked > 0,
 });
 
 // Ordinary classes, for a list never loaded on this phone.
-const SAMPLE_CLASSES: MarksClass[] = [
-  sampleClass(1, 'Class 6', 'A', 'Mathematics', 32),
-  sampleClass(2, 'Class 7', 'A', 'Mathematics', 30),
-  sampleClass(3, 'Class 8', 'B', 'Science', 28),
+const SAMPLE_CLASSES: CopyClass[] = [
+  sampleClass(1, 'Class 6', 'A', 'Mathematics', 32, 32, 12),
+  sampleClass(2, 'Class 7', 'A', 'Mathematics', 30, 30, 0),
+  sampleClass(3, 'Class 8', 'B', 'Science', 28, 0, 0),
 ];
 
 //   (icon)  Class 5 - A                                  >
 //           Hindi · 32 students
-//           Marks added · 2 absent
+//           4 of 32 copies uploaded
 const ClassRow = ({
   item,
   isLast,
   onPress,
   skeleton,
 }: {
-  item: MarksClass;
+  item: CopyClass;
   isLast: boolean;
   onPress: () => void;
   skeleton?: boolean;
-}) => {
-  const added = item.saved > 0;
-  const status = !added
-    ? 'Marks not added'
-    : item.saved < item.students
-    ? `Marks added for ${item.saved} of ${item.students}`
-    : ['Marks added', item.absent > 0 ? `${item.absent} absent` : null].filter(Boolean).join(' · ');
+}) => (
+  <TouchableOpacity
+    style={[s.row, !isLast && s.rowDivider]}
+    activeOpacity={0.6}
+    onPress={onPress}
+    disabled={skeleton}
+  >
+    {skeleton ? (
+      <Skeleton width={30} height={30} radius={6} />
+    ) : (
+      <SubjectIcon image={item.subject_image} size={30} />
+    )}
+    <View style={s.body}>
+      <Words skeleton={skeleton} style={s.name} numberOfLines={1}>
+        {marksClassLabel(item)}
+      </Words>
+      <Words skeleton={skeleton} style={s.meta} numberOfLines={1}>
+        {item.subject_name} · {plural(item.students, 'student')}
+      </Words>
+      <Words
+        skeleton={skeleton}
+        style={[s.status, item.uploaded > 0 && s.statusUploaded]}
+        numberOfLines={1}
+      >
+        {copyStatus(item)}
+      </Words>
+    </View>
+    {skeleton ? (
+      <SkeletonIcon iconName="chevron-forward" size={13} />
+    ) : (
+      <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />
+    )}
+  </TouchableOpacity>
+);
 
-  return (
-    <TouchableOpacity
-      style={[s.row, !isLast && s.rowDivider]}
-      activeOpacity={0.6}
-      onPress={onPress}
-      disabled={skeleton}
-    >
-      {skeleton ? (
-        <Skeleton width={30} height={30} radius={6} />
-      ) : (
-        <SubjectIcon image={item.subject_image} size={30} />
-      )}
-      <View style={s.body}>
-        <Words skeleton={skeleton} style={s.name} numberOfLines={1}>
-          {marksClassLabel(item)}
-        </Words>
-        <Words skeleton={skeleton} style={s.meta} numberOfLines={1}>
-          {item.subject_name} · {plural(item.students, 'student')}
-        </Words>
-        <Words skeleton={skeleton} style={[s.status, added && s.statusAdded]} numberOfLines={1}>
-          {status}
-        </Words>
-      </View>
-      {skeleton ? (
-        <SkeletonIcon iconName="chevron-forward" size={13} />
-      ) : (
-        <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />
-      )}
-    </TouchableOpacity>
-  );
-};
-
-const MarksClassesScreen = ({ navigation, route }: any) => {
+const CopyClassesScreen = ({ navigation, route }: any) => {
   const exam: Exam = route.params.exam;
-  const [classes, setClasses] = useState<MarksClass[]>([]);
+  const [classes, setClasses] = useState<CopyClass[]>([]);
   // The skeleton shows on the first load, on a pull to refresh and on "Try
-  // again"; coming back from a saved class updates the list in place.
+  // again"; coming back from a class updates the list in place.
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The classes are the teacher's whatever the exam: this exam's last list,
   // else the last one of any exam.
-  const [lastHere, rememberHere] = useLastLoaded<MarksClass[]>(`marks-classes:${exam.id}`);
-  const [lastAny, rememberAny] = useLastLoaded<MarksClass[]>('marks-classes');
+  const [lastHere, rememberHere] = useLastLoaded<CopyClass[]>(`copy-classes:${exam.id}`);
+  const [lastAny, rememberAny] = useLastLoaded<CopyClass[]>('copy-classes');
   const last = Array.isArray(lastHere) ? lastHere : lastAny;
 
   const load = useCallback(
@@ -120,13 +132,13 @@ const MarksClassesScreen = ({ navigation, route }: any) => {
       if (showSkeleton) setLoading(true);
       setError(null);
       try {
-        const list = await getMarksClasses(exam.id);
+        const list = await getCopyClasses(exam.id);
         setClasses(list);
         setLoaded(true);
         rememberHere(list);
         rememberAny(list);
       } catch (e: any) {
-        console.log('[getMarksClasses] Error:', e?.response?.status, e?.message);
+        console.log('[getCopyClasses] Error:', e?.response?.status, e?.message);
         setError(marksErrorMessage(e));
       } finally {
         setLoading(false);
@@ -161,7 +173,7 @@ const MarksClassesScreen = ({ navigation, route }: any) => {
             item={item}
             isLast={i === shown.length - 1}
             skeleton={skeleton}
-            onPress={() => navigation.navigate('MarksSheet', { exam, cls: item })}
+            onPress={() => navigation.navigate('CopySheet', { exam, cls: item })}
           />
         ))}
       </>
@@ -194,7 +206,7 @@ const MarksClassesScreen = ({ navigation, route }: any) => {
   );
 };
 
-export default MarksClassesScreen;
+export default CopyClassesScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
@@ -204,14 +216,14 @@ const __mk_s = () => StyleSheet.create({
   listEmpty: { flexGrow: 1 },
   count: { fontSize: 12, color: theme.colors.textMuted, marginTop: 12, marginBottom: 2 },
 
-  // Row — the subject's icon tile, then the class, subject and marks status
+  // Row — the subject's icon tile, then the class, subject and copies status
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   body: { flex: 1, gap: 3 },
   name: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   meta: { fontSize: 13, color: theme.colors.textSecondary },
   status: { fontSize: 12, color: theme.colors.textMuted },
-  statusAdded: { color: theme.colors.primary, fontWeight: '500' },
+  statusUploaded: { color: theme.colors.primary, fontWeight: '500' },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

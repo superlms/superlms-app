@@ -18,7 +18,7 @@ export const pickImage = (): Promise<PickedFile | null> =>
       if (res.didCancel || res.errorCode) return resolve(null);
       const a = res.assets?.[0];
       if (!a?.uri) return resolve(null);
-      resolve({ uri: a.uri, type: a.type ?? 'image/jpeg', name: a.fileName ?? 'photo.jpg' });
+      resolve({ uri: a.uri, type: a.type ?? 'image/jpeg', name: a.fileName ?? 'photo.jpg', size: a.fileSize });
     });
   });
 
@@ -34,7 +34,7 @@ export const pickPdf = async (): Promise<PickedFile | null> => {
     });
     const f = Array.isArray(results) ? results[0] : results;
     if (!f?.uri) return null;
-    return { uri: f.uri, type: f.type ?? 'application/pdf', name: f.name ?? 'document.pdf' };
+    return { uri: f.uri, type: f.type ?? 'application/pdf', name: f.name ?? 'document.pdf', size: f.size };
   } catch (e: any) {
     if (String(e?.code ?? e?.message ?? '').toLowerCase().includes('cancel')) return null;
     AppAlert.alert('Could not pick file', e?.message ?? 'Please try again.');
