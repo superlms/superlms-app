@@ -45,14 +45,22 @@ export interface ApiSyllabusChapter {
   topics: ApiSyllabusTopic[];
 }
 
+// One class, section (null: the whole class) and subject of an exam's syllabus.
 export interface ApiSyllabusGroup {
   standard_id: number;
   standard_name: string | null;
+  section_id?: number | null;
+  section_name?: string | null;
   subject_id: number;
   subject_name: string | null;
+  subject_image?: string | null;
   chapter_count: number;
   chapters: ApiSyllabusChapter[];
 }
+
+/** "Class 5 - A", "Class 5" */
+export const syllabusClassLabel = (g: ApiSyllabusGroup) =>
+  [g.standard_name, g.section_name].filter(Boolean).join(' - ');
 
 // ─── Mappers ───────────────────────────────────────────────────────────────────
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -75,9 +83,13 @@ const fmtRange = (start?: string | null, end?: string | null): string => {
 };
 
 // Turn the grouped API syllabus into the flat { subject, topics[] } the UI uses.
+// A subject that comes more than once (a teacher's classes) says whose it is.
 export const mapSyllabus = (groups: ApiSyllabusGroup[]): SyllabusItem[] =>
   (groups || []).map(g => ({
-    subject: g.subject_name || 'Subject',
+    subject:
+      (groups || []).filter(o => o.subject_name === g.subject_name).length > 1 && syllabusClassLabel(g)
+        ? `${g.subject_name || 'Subject'} · ${syllabusClassLabel(g)}`
+        : g.subject_name || 'Subject',
     topics: (g.chapters || []).flatMap(ch =>
       ch.topics?.length ? ch.topics.map(t => t.topic_name) : [ch.name],
     ),
@@ -137,6 +149,18 @@ export const getExamSyllabus = async (
     params: subjectId ? { subject_id: subjectId } : undefined,
   });
   return mapSyllabus(unwrapList(data) as ApiSyllabusGroup[]);
+};
+
+// GET /exams/{id}/syllabus — the caller's blocks as they come: each class,
+// section and subject with its chapters and their topics.
+export const getExamSyllabusGroups = async (
+  id: number | string,
+  subjectId?: number,
+): Promise<ApiSyllabusGroup[]> => {
+  const { data } = await apiClient.get(`/exams/${id}/syllabus`, {
+    params: subjectId ? { subject_id: subjectId } : undefined,
+  });
+  return unwrapList(data) as ApiSyllabusGroup[];
 };
 
 // ─── Date sheet ────────────────────────────────────────────────────────────────

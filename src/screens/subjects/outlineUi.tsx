@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
-import { Skeleton } from '../../components/Skeleton';
+import { Skeleton, SkeletonIcon, SkeletonText } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
@@ -83,6 +83,7 @@ export const ChapterRow = ({
   expandable,
   trailing,
   showDescription,
+  skeleton,
   children,
 }: {
   number: number;
@@ -98,41 +99,47 @@ export const ChapterRow = ({
   showDescription?: boolean;
   /** What the chapter opens onto; its topics on one line, dot-separated, by default. */
   children?: React.ReactNode;
+  /** Every line a bar as long as its words, the arrow a grey box. */
+  skeleton?: boolean;
 }) => {
   const count = chapter.topics.length;
   const canOpen = expandable ?? count > 0;
+  const Line = skeleton ? SkeletonText : Text;
 
   return (
     <View style={[!isLast && s.rowDivider]}>
-      <TouchableOpacity style={s.chapter} activeOpacity={0.6} onPress={onToggle} disabled={!canOpen}>
-        <Text style={s.chapterNo}>{number}</Text>
+      <TouchableOpacity style={s.chapter} activeOpacity={0.6} onPress={onToggle} disabled={!canOpen || skeleton}>
+        <Line style={s.chapterNo}>{number}</Line>
         <View style={s.body}>
-          <Text style={s.chapterName}>{quietCaps(chapter.name)}</Text>
+          <Line style={s.chapterName}>{quietCaps(chapter.name)}</Line>
           {showDescription && !!chapter.description && (
             <Text style={s.chapterDesc} numberOfLines={open ? undefined : 1}>
               {chapter.description}
             </Text>
           )}
-          <Text style={s.meta}>{count > 0 ? plural(count, 'topic') : 'No topics yet'}</Text>
+          <Line style={s.meta}>{count > 0 ? plural(count, 'topic') : 'No topics yet'}</Line>
         </View>
         {trailing ??
-          (canOpen && (
-            <VectorIcon
-              iconSet="Ionicons"
-              iconName={open ? 'chevron-up' : 'chevron-down'}
-              size={16}
-              color={theme.colors.textMuted}
-              style={s.chevron}
-            />
-          ))}
+          (canOpen &&
+            (skeleton ? (
+              <SkeletonIcon iconName={open ? 'chevron-up' : 'chevron-down'} size={16} style={s.chevron} />
+            ) : (
+              <VectorIcon
+                iconSet="Ionicons"
+                iconName={open ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color={theme.colors.textMuted}
+                style={s.chevron}
+              />
+            )))}
       </TouchableOpacity>
 
       {open && canOpen && (
         <View style={s.topics}>
           {children ?? (
-            <Text style={s.topicsInline}>
+            <Line style={s.topicsInline}>
               {chapter.topics.map(topic => quietCaps(topic.name)).join('  ·  ')}
-            </Text>
+            </Line>
           )}
         </View>
       )}
