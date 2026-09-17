@@ -41,12 +41,15 @@ export const SubjectRow = ({
   meta,
   isLast,
   onPress,
+  trailing,
 }: {
   image?: string | null;
   title: string;
   meta?: string | null;
   isLast: boolean;
   onPress?: () => void;
+  /** Shown at the row's end, before any arrow — a subject's score, say. */
+  trailing?: React.ReactNode;
 }) => {
   const body = (
     <>
@@ -62,6 +65,8 @@ export const SubjectRow = ({
           </Text>
         )}
       </View>
+
+      {trailing}
 
       {!!onPress && (
         <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />

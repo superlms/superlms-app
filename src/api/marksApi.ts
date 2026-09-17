@@ -60,6 +60,49 @@ export const getStudentPerformance = async (): Promise<StudentPerformance> => {
   return unwrap(data);
 };
 
+// ─── One exam's result, subject by subject (Performance) ──────────────────────
+export interface ExamSubjectResult {
+  subject_id: number;
+  subject_name: string;
+  subject_image: string | null;
+  /** false while the subject's marks haven't been added. */
+  uploaded: boolean;
+  is_absent: boolean;
+  marks_obtained: number | null;
+  max_marks: number | null;
+  percentage: number | null;
+  grade: string | null;
+  remarks: string | null;
+}
+
+export interface GradeBand {
+  grade: string;
+  min: number;
+  max: number;
+  remark: string;
+}
+
+export interface StudentExamResult {
+  exam: { id: number; name: string; total_marks: number | null; passing_marks: number | null };
+  subjects: ExamSubjectResult[];
+  summary: {
+    subjects: number;
+    uploaded: number;
+    absent: number;
+    marks_obtained: number;
+    max_marks: number;
+    percentage: number | null;
+    grade: string | null;
+    remark: string | null;
+  };
+  grading_scale: GradeBand[];
+}
+
+export const getStudentExamResult = async (examId: number | string): Promise<StudentExamResult> => {
+  const { data } = await apiClient.get(`/student/marks/exams/${examId}`);
+  return unwrap(data);
+};
+
 export interface StudentExamCopy {
   id: number;
   exam: { id: number; name: string };
@@ -184,6 +227,64 @@ export const getTeacherExamCopies = async (
     if (r?.student?.id != null) map[r.student.id] = r;
   });
   return map;
+};
+
+// ─── Upload Marks: exam → class → the whole class's marks ────────────────────
+export interface MarksClass {
+  standard_id: number;
+  standard_name: string;
+  section_id: number;
+  section_name: string;
+  subject_id: number;
+  subject_name: string;
+  subject_image: string | null;
+  students: number;
+  /** Students with marks saved for the exam, absent ones included. */
+  saved: number;
+  absent: number;
+}
+
+// The (class, section, subject) rows a teacher teaches, with the exam's progress in each.
+export const getMarksClasses = async (examId: number | string): Promise<MarksClass[]> => {
+  const { data } = await apiClient.get('/teacher/marks/classes', { params: { exam_id: examId } });
+  return unwrapList(data);
+};
+
+export interface SheetStudent {
+  student_detail_id: number;
+  name: string;
+  roll_no: string | null;
+  admission_no: string | null;
+  mark_id: number | null;
+  saved: boolean;
+  is_absent: boolean;
+  /** null when absent or not saved. */
+  marks_obtained: number | null;
+  max_marks: number | null;
+  percentage: number | null;
+  grade: string | null;
+}
+
+export interface MarksSheet {
+  exam: { id: number; name: string; total_marks: number; passing_marks: number | null };
+  /** Marks have been saved for this class before. */
+  uploaded: boolean;
+  students: SheetStudent[];
+}
+
+export const getMarksSheet = async (key: ExistingFilter): Promise<MarksSheet> => {
+  const { data } = await apiClient.get('/teacher/marks/sheet', { params: key });
+  return unwrap(data);
+};
+
+// Saves the whole class at once. The server marks every student sent without
+// marks — or left out — absent, as the web panel does.
+export const saveMarksSheet = async (
+  key: ExistingFilter,
+  marks: { student_detail_id: number; marks_obtained: number | null }[],
+): Promise<{ sheet: MarksSheet; message: string }> => {
+  const { data } = await apiClient.post('/teacher/marks/sheet', { ...key, marks });
+  return { sheet: unwrap(data), message: data?.message ?? 'Marks saved.' };
 };
 
 export const deleteMark = async (id: number): Promise<void> => {

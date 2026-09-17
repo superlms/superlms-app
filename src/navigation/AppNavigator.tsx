@@ -37,6 +37,10 @@ import ReportCardScreen from '../screens/exam/ReportCardScreen';
 import UploadCopyScreen from '../screens/teacherUpload/UploadCopyScreen';
 import UploadMarksScreen from '../screens/teacherUpload/UploadMarksScreen';
 import ManageEntriesScreen from '../screens/teacherUpload/ManageEntriesScreen';
+import MarksClassesScreen from '../screens/teacherUpload/MarksClassesScreen';
+import MarksSheetScreen from '../screens/teacherUpload/MarksSheetScreen';
+import PerformanceScreen from '../screens/performance/PerformanceScreen';
+import ExamResultScreen from '../screens/performance/ExamResultScreen';
 import AddHomeworkScreen from '../screens/homework/AddHomeworkScreen';
 import ManageSyllabusScreen from '../screens/syllabus/ManageSyllabusScreen';
 import MarkAttendanceReviewScreen from '../screens/markAttendance/MarkAttendanceReviewScreen';
@@ -133,6 +137,10 @@ const AppNavigator = () => {
       <Stack.Screen name="UploadCopyScreen" component={UploadCopyScreen} />
       <Stack.Screen name="UploadMarksScreen" component={UploadMarksScreen} />
       <Stack.Screen name="ManageEntries" component={ManageEntriesScreen} />
+      <Stack.Screen name="MarksClasses" component={MarksClassesScreen} />
+      <Stack.Screen name="MarksSheet" component={MarksSheetScreen} />
+      <Stack.Screen name="PerformanceScreen" component={PerformanceScreen} />
+      <Stack.Screen name="ExamResult" component={ExamResultScreen} />
       <Stack.Screen name="AddHomework" component={AddHomeworkScreen} />
       <Stack.Screen name="ManageSyllabus" component={ManageSyllabusScreen} />
 
