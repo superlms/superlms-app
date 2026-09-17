@@ -63,6 +63,10 @@ import NotificationScreen from '../screens/notification/NotificationScreen';
 import BookReaderScreen from '../screens/books/BookReaderScreen';
 import PayAmountScreen from '../screens/fees/PayAmountScreen';
 import TransportPayScreen from '../screens/fees/TransportPayScreen';
+import TransportRouteScreen from '../screens/transport/TransportRouteScreen';
+import TransportFeesScreen from '../screens/transport/TransportFeesScreen';
+import TransportPaymentsScreen from '../screens/transport/TransportPaymentsScreen';
+import TransportReceiptScreen from '../screens/transport/TransportReceiptScreen';
 import AdminProfileScreen from '../screens/admin/AdminProfileScreen';
 import PanelDrawerNavigator from './PanelDrawerNavigator';
 import AdminDrawerNavigator from './AdminDrawerNavigator';
@@ -181,6 +185,12 @@ const AppNavigator = () => {
       {/* Fee payment */}
       <Stack.Screen name="PayAmount" component={PayAmountScreen} />
       <Stack.Screen name="TransportPay" component={TransportPayScreen} />
+
+      {/* Transport — the route, the fee year and the receipts */}
+      <Stack.Screen name="TransportRoute" component={TransportRouteScreen} />
+      <Stack.Screen name="TransportFees" component={TransportFeesScreen} />
+      <Stack.Screen name="TransportPaymentsList" component={TransportPaymentsScreen} />
+      <Stack.Screen name="TransportReceipt" component={TransportReceiptScreen} />
 
       {/* School Admin — dashboard + the web panel's sidebar */}
       <Stack.Screen name="AdminDashboard" component={AdminDrawerNavigator} />
