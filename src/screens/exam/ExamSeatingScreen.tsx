@@ -14,7 +14,7 @@ import {
   type SeatingPaper,
 } from '../../api/examApi';
 import type { Exam } from './examData';
-import { Words } from './examUi';
+import { Words, marksLabel } from './examUi';
 import { clock, dayOf, papersRange, soon, timeLine } from './paperUi';
 
 /**
@@ -59,15 +59,18 @@ const isSeating = (v: ExamSeating | null | undefined): v is ExamSeating => !!v &
 // ── One paper ────────────────────────────────────────────────────────────────
 //   OCT   Mathematics                                SHIFT 2
 //     2   Friday  ·  In 5 days
-//         10:00 AM – 1:00 PM  ·  3 hrs
-//         ROOM  12      SEAT  B2 (1)
+//         10:00 AM – 1:00 PM  ·  3 hrs  ·  80 marks
+//         Room 12  ·  Seat B2 (1)
 const PaperRow = ({
   paper,
+  totalMarks,
   showShift,
   isLast,
   skeleton,
 }: {
   paper: SeatingPaper;
+  /** What the exam is out of. */
+  totalMarks: number;
   showShift: boolean;
   isLast: boolean;
   skeleton: boolean;
@@ -115,28 +118,15 @@ const PaperRow = ({
           {!!when && <Text style={today ? s.accent : undefined}>{`  ·  ${when}`}</Text>}
         </Words>
         <Words skeleton={skeleton} style={s.when} numberOfLines={1}>
-          {timeLine(paper)}
+          {[timeLine(paper), marksLabel(totalMarks)].filter(Boolean).join('  ·  ')}
         </Words>
 
         {seated ? (
-          <View style={s.seatLine}>
-            <View style={s.seatPair}>
-              <Words skeleton={skeleton} style={s.seatLabel}>
-                ROOM
-              </Words>
-              <Words skeleton={skeleton} style={s.seatValue} numberOfLines={1}>
-                {paper.room || '—'}
-              </Words>
-            </View>
-            <View style={s.seatPair}>
-              <Words skeleton={skeleton} style={s.seatLabel}>
-                SEAT
-              </Words>
-              <Words skeleton={skeleton} style={s.seatValue} numberOfLines={1}>
-                {paper.seat || '—'}
-              </Words>
-            </View>
-          </View>
+          <Words skeleton={skeleton} style={s.seat} numberOfLines={1}>
+            {[paper.room ? `Room ${paper.room}` : null, paper.seat ? `Seat ${paper.seat}` : null]
+              .filter(Boolean)
+              .join('  ·  ')}
+          </Words>
         ) : (
           <Words skeleton={skeleton} style={s.unseated}>
             Room and seat not allotted yet
@@ -231,6 +221,7 @@ const ExamSeatingScreen = ({ navigation, route }: any) => {
               <PaperRow
                 key={p.id}
                 paper={p}
+                totalMarks={v.exam.totalMarks || exam.totalMarks}
                 showShift={showShift}
                 isLast={i === papers.length - 1}
                 skeleton={skeleton}
@@ -306,12 +297,9 @@ const __mk_s = () => StyleSheet.create({
   meta: { fontSize: 13, color: theme.colors.textSecondary },
   when: { fontSize: 12, color: theme.colors.textMuted },
 
-  // Room and seat
-  seatLine: { flexDirection: 'row', gap: 24, marginTop: 6 },
-  seatPair: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
-  seatLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: theme.colors.textMuted },
-  seatValue: { fontSize: 15, fontWeight: '600', color: theme.colors.primary },
-  unseated: { fontSize: 12, color: theme.colors.textMuted, marginTop: 6 },
+  // Room and seat, as plain text
+  seat: { fontSize: 13, color: theme.colors.textPrimary, marginTop: 4 },
+  unseated: { fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

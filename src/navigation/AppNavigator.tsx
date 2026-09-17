@@ -33,6 +33,7 @@ import ExamSyllabusScreen from '../screens/exam/ExamSyllabusScreen';
 import ExamSyllabusSubjectsScreen from '../screens/exam/ExamSyllabusSubjectsScreen';
 import ExamSyllabusChaptersScreen from '../screens/exam/ExamSyllabusChaptersScreen';
 import ExamSeatingScreen from '../screens/exam/ExamSeatingScreen';
+import ExamAdmitCardScreen from '../screens/exam/ExamAdmitCardScreen';
 import DateSheetScreen from '../screens/exam/DateSheetScreen';
 import ExamDateSheetScreen from '../screens/exam/ExamDateSheetScreen';
 import ExamDetailScreen from '../screens/exam/ExamDetailScreen';
@@ -142,6 +143,7 @@ const AppNavigator = () => {
       <Stack.Screen name="ExamDateSheet" component={ExamDateSheetScreen} />
       <Stack.Screen name="ExamDetail" component={ExamDetailScreen} />
       <Stack.Screen name="AdmitCardScreen" component={AdmitCardScreen} />
+      <Stack.Screen name="ExamAdmitCard" component={ExamAdmitCardScreen} />
       <Stack.Screen name="SeatingPlanScreen" component={SeatingPlanScreen} />
       <Stack.Screen name="ExamSeating" component={ExamSeatingScreen} />
       <Stack.Screen name="ExamCopyScreen" component={ExamCopyScreen} />
