@@ -9,6 +9,7 @@ export interface DashExam {
   type: string | null;
   academic_year: string | null;
   date_range: string;
+  total_marks?: number | null;
   status: 'upcoming' | 'ongoing' | 'completed' | string;
 }
 

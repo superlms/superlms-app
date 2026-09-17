@@ -8,7 +8,7 @@ import AppRefreshControl from '../../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../../utils/theme';
 import { quietCaps } from '../../../utils/quietCaps';
-import { humanize } from '../../exam/examUi';
+import { humanize, marksLabel } from '../../exam/examUi';
 import {
   getStudentDashboard,
   dashboardErrorMessage,
@@ -149,7 +149,7 @@ const StudentHomeScreen = () => {
               <LineRow
                 key={exam.id}
                 title={exam.name}
-                meta={[humanize(exam.type), exam.date_range].filter(Boolean).join(' · ')}
+                meta={[humanize(exam.type), exam.date_range, marksLabel(exam.total_marks)].filter(Boolean).join(' · ')}
                 trailing={<Tag text={exam.status} accent={exam.status === 'ongoing'} />}
                 onPress={() => navigation.navigate('ExamDetail', { examId: exam.id })}
                 isLast={i === exams.length - 1}

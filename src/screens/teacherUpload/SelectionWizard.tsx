@@ -16,6 +16,7 @@ import {
   marksErrorMessage,
   type ClassSubject,
 } from '../../api/marksApi';
+import { marksLabel } from '../exam/examUi';
 
 type Step = 'exam' | 'cls' | 'subject';
 const STEP_ORDER: Step[] = ['exam', 'cls', 'subject'];
@@ -52,7 +53,12 @@ const SelectionWizard = ({ value, onChange }: Props) => {
       setExamOptions(
         exams.map(e => ({
           id: String(e.id),
-          label: e.academic_year ? `${e.exam_name} (${e.academic_year})` : e.exam_name,
+          label: [
+            e.academic_year ? `${e.exam_name} (${e.academic_year})` : e.exam_name,
+            marksLabel(e.total_marks),
+          ]
+            .filter(Boolean)
+            .join(' · '),
           examId: e.id,
           totalMarks: Number(e.total_marks ?? 100) || 100,
         })),

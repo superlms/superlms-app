@@ -35,6 +35,8 @@ const same = (a?: string, b?: string) =>
 const ExamDetailScreen = ({ navigation, route }: any) => {
   const summary: Exam | undefined = route.params?.exam;
   const examId: string | number | undefined = route.params?.examId ?? summary?.id;
+  // The instructions are the student's (admit card, hall); a teacher goes without them.
+  const teacher = !!route.params?.teacher;
 
   // Start from the summary the list passed along (instant render), then fill in
   // the syllabus and description from the detail endpoint.
@@ -125,7 +127,7 @@ const ExamDetailScreen = ({ navigation, route }: any) => {
           </Section>
         )}
 
-        {exam.instructions.length > 0 && (
+        {!teacher && exam.instructions.length > 0 && (
           <Section title="Instructions">
             {exam.instructions.map((text, i) => (
               <View key={i} style={s.instRow}>

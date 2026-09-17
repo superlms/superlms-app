@@ -139,6 +139,41 @@ export const getExamSyllabus = async (
   return mapSyllabus(unwrapList(data) as ApiSyllabusGroup[]);
 };
 
+// ─── Date sheet ────────────────────────────────────────────────────────────────
+export interface DateSheetPaper {
+  id: number;
+  subject_id: number;
+  subject_name: string | null;
+  subject_image: string | null;
+  /** "YYYY-MM-DD", or null while the day isn't set. */
+  exam_date: string | null;
+  /** "HH:mm" */
+  start_time: string | null;
+  end_time: string | null;
+  shift: number;
+}
+
+export interface DateSheetClass {
+  standard_id: number;
+  standard_name: string | null;
+  section_id: number | null;
+  section_name: string | null;
+  papers: DateSheetPaper[];
+}
+
+export interface ExamDateSheet {
+  exam: Exam;
+  /** A student's class — or each class a teacher teaches, with their own subjects' papers. */
+  classes: DateSheetClass[];
+}
+
+// GET /exams/{id}/datesheet — the exam's papers, day by day, for the caller.
+export const getExamDateSheet = async (id: number | string): Promise<ExamDateSheet> => {
+  const { data } = await apiClient.get(`/exams/${id}/datesheet`);
+  const d = unwrap(data);
+  return { exam: mapExam(d?.exam ?? {}), classes: Array.isArray(d?.classes) ? d.classes : [] };
+};
+
 // ─── Error → friendly message ──────────────────────────────────────────────────
 export const examErrorMessage = (e: any): string => {
   const status = e?.response?.status;

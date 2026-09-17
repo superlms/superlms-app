@@ -30,6 +30,8 @@ import EditTopicContentScreen from '../screens/content/EditTopicContentScreen';
 import ChangePasswordScreen from '../screens/setting/ChangePasswordScreen';
 import ExamsScreen from '../screens/exam/ExamsScreen';
 import TeacherExamsScreen from '../screens/exam/TeacherExamsScreen';
+import DateSheetScreen from '../screens/exam/DateSheetScreen';
+import ExamDateSheetScreen from '../screens/exam/ExamDateSheetScreen';
 import ExamDetailScreen from '../screens/exam/ExamDetailScreen';
 import AdmitCardScreen from '../screens/exam/AdmitCardScreen';
 import SeatingPlanScreen from '../screens/exam/SeatingPlanScreen';
@@ -131,6 +133,8 @@ const AppNavigator = () => {
       {/* Exam */}
       <Stack.Screen name="ExamsScreen" component={ExamsScreen} />
       <Stack.Screen name="TeacherExamsScreen" component={TeacherExamsScreen} />
+      <Stack.Screen name="DateSheet" component={DateSheetScreen} />
+      <Stack.Screen name="ExamDateSheet" component={ExamDateSheetScreen} />
       <Stack.Screen name="ExamDetail" component={ExamDetailScreen} />
       <Stack.Screen name="AdmitCardScreen" component={AdmitCardScreen} />
       <Stack.Screen name="SeatingPlanScreen" component={SeatingPlanScreen} />

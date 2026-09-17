@@ -32,6 +32,12 @@ export const humanize = (v?: string | null): string => {
   return t === t.toLowerCase() ? t.replace(/\b[a-z]/g, c => c.toUpperCase()) : t;
 };
 
+// What an exam is out of — "80 marks" — or null when the school set no total.
+export const marksLabel = (total?: number | string | null): string | null => {
+  const n = Number(total);
+  return Number.isFinite(n) && n > 0 ? `${Number(n.toFixed(2))} marks` : null;
+};
+
 // "2026-27" and "2026-2027" are the same academic year; both key on 2026.
 const yearKey = (y: string) => /\d{4}/.exec(y)?.[0] ?? y;
 
@@ -153,9 +159,15 @@ export const ExamRow = ({
   const done = exam.status === 'Completed';
   const when = examWhen(exam);
 
-  // Term and type, minus anything that only repeats the exam's own name.
+  // Term and type, minus anything that only repeats the exam's own name, then
+  // what the exam is out of.
   const seen = new Set([exam.name.trim().toLowerCase()]);
-  const meta = [humanize(exam.term), humanize(exam.type), showYear ? exam.academicYear : null]
+  const meta = [
+    humanize(exam.term),
+    humanize(exam.type),
+    showYear ? exam.academicYear : null,
+    marksLabel(exam.totalMarks),
+  ]
     .filter((v): v is string => {
       const key = (v ?? '').trim().toLowerCase();
       if (!key || seen.has(key)) return false;

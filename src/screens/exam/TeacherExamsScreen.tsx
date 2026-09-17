@@ -17,7 +17,7 @@ import {
 import type { Exam, SyllabusItem } from './examData';
 import { ExamList, SyllabusList } from './examUi';
 
-const TITLE = 'Exams';
+const TITLE = 'Exam Syllabus';
 
 // A syllabus is fetched the first time its exam is opened, and kept.
 type SyllabusState = SyllabusItem[] | 'loading' | 'error';

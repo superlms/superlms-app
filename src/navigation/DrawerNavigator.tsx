@@ -50,7 +50,7 @@ import TeacherHomeworkScreen from '../screens/homework/TeacherHomeworkScreen';
 import TeacherContentScreen from '../screens/content/TeacherContentScreen';
 import StudentContentScreen from '../screens/content/StudentContentScreen';
 import markAttendanceScreen from '../screens/markAttendance/markAttendanceScreen';
-import TeacherExamsScreen from '../screens/exam/TeacherExamsScreen';
+import TeacherExamMainScreen from '../screens/exam/TeacherExamMainScreen';
 import PerformanceScreen from '../screens/performance/PerformanceScreen';
 import AnalyticsScreen from '../screens/analytics/AnalyticsScreen';
 import IDCardScreen from '../screens/idCard/IDCardScreen';
@@ -484,7 +484,7 @@ const DrawerNavigator = ({ route }: any) => {
       />
       <Drawer.Screen
         name="Exams"
-        component={role === 'teacher' ? TeacherExamsScreen : ExamMainScreen}
+        component={role === 'teacher' ? TeacherExamMainScreen : ExamMainScreen}
         initialParams={{ title: 'Exams' }}
       />
       <Drawer.Screen

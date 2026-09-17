@@ -3,6 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
 import { Exam, EXAMS, iconForType } from './examData';
+import { marksLabel } from './examUi';
 
 interface Props {
   selected: Exam;
@@ -71,7 +72,7 @@ const ExamDropdown = ({ selected, onSelect, exams = EXAMS }: Props) => {
                     {exam.name}
                   </Text>
                   <Text style={s.itemSub}>
-                    {exam.type} · {exam.academicYear}
+                    {[exam.type, exam.academicYear, marksLabel(exam.totalMarks)].filter(Boolean).join(' · ')}
                   </Text>
                 </View>
                 {active && (

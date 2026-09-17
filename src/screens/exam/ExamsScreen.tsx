@@ -9,7 +9,9 @@ import { ExamList } from './examUi';
 
 const TITLE = 'Exams';
 
-const ExamsScreen = ({ navigation }: any) => {
+// Route params: teacher – true when a teacher opens it from their Exams.
+const ExamsScreen = ({ navigation, route }: any) => {
+  const teacher = !!route?.params?.teacher;
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,8 +44,12 @@ const ExamsScreen = ({ navigation }: any) => {
         onRefresh={onRefresh}
         error={error}
         onRetry={load}
-        onPressExam={exam => navigation.navigate('ExamDetail', { examId: exam.id, exam })}
-        emptySubtitle="Exams the school schedules for your class will appear here."
+        onPressExam={exam => navigation.navigate('ExamDetail', { examId: exam.id, exam, teacher })}
+        emptySubtitle={
+          teacher
+            ? 'Exams set for the classes and subjects you teach will appear here.'
+            : 'Exams the school schedules for your class will appear here.'
+        }
       />
     </View>
   );
