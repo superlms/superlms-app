@@ -19,10 +19,19 @@ import { ExamList, SyllabusList } from './examUi';
 
 const TITLE = 'Exam Syllabus';
 
+/**
+ * Exam Syllabus, for students and teachers: the exams, each opening in place
+ * onto what it covers — a student's class, or the teacher's own subjects.
+ *
+ * Route params:
+ *   teacher – true on a teacher's Exams
+ */
+
 // A syllabus is fetched the first time its exam is opened, and kept.
 type SyllabusState = SyllabusItem[] | 'loading' | 'error';
 
-const TeacherExamsScreen = ({ navigation }: any) => {
+const ExamSyllabusScreen = ({ navigation, route }: any) => {
+  const teacher = !!route?.params?.teacher;
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,13 +116,17 @@ const TeacherExamsScreen = ({ navigation }: any) => {
         onRetry={load}
         onPressExam={toggle}
         rowExtras={rowExtras}
-        emptySubtitle="Exams set for the classes and subjects you teach will appear here."
+        emptySubtitle={
+          teacher
+            ? 'Exams set for the classes and subjects you teach will appear here.'
+            : 'Exams the school schedules for your class will appear here.'
+        }
       />
     </View>
   );
 };
 
-export default TeacherExamsScreen;
+export default ExamSyllabusScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },

@@ -1,29 +1,91 @@
 import React, { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
-import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
+import { useFocusLoad } from '../../hooks/useRefresh';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { theme, onThemeChange } from '../../utils/theme';
-import { DocError, DocHeader, DocLoading } from '../more/docUi';
+import { DocHeader } from '../more/docUi';
 import { getExamDetail, examErrorMessage } from '../../api/examApi';
-import type { Exam } from './examData';
-import { SyllabusList, examWhen, humanize, longDate, shortRange } from './examUi';
+import type { Exam, SyllabusItem } from './examData';
+import {
+  SyllabusList,
+  Words,
+  examWhen,
+  examsToDraw,
+  humanize,
+  longDate,
+  shortRange,
+} from './examUi';
 
-const TITLE = 'Exam';
+/**
+ * Exam Detail, for students and teachers: what the exam is, when, its marks,
+ * what it covers and — for a student — the instructions.
+ *
+ * Route params:
+ *   exam    – the exam from the list, drawn at once
+ *   examId  – when opened without one (the home screen)
+ *   teacher – true for a teacher, who goes without the student's instructions
+ *
+ * A load — the first, a pull to refresh, Try again — draws the page as a
+ * skeleton from its own data: the exam on screen or from the list, with the
+ * syllabus and description this exam had last time (else another exam's
+ * syllabus, else an ordinary one).
+ */
+
+const TITLE = 'Exam Detail';
+
+// An ordinary syllabus, for a detail never loaded on this phone.
+const SAMPLE_SYLLABUS: SyllabusItem[] = [
+  { subject: 'English', topics: ['Reading comprehension', 'Grammar', 'Letter writing'] },
+  { subject: 'Mathematics', topics: ['Number system', 'Algebra', 'Geometry', 'Mensuration'] },
+  { subject: 'Science', topics: ['Food', 'Materials', 'Living things'] },
+];
+
+const isExam = (v: Exam | null | undefined): v is Exam => !!v && typeof v.name === 'string';
 
 // ── Label / value row ────────────────────────────────────────────────────────
-const InfoRow = ({ label, value, last }: { label: string; value: string; last?: boolean }) => (
+const InfoRow = ({
+  label,
+  value,
+  last,
+  skeleton,
+}: {
+  label: string;
+  value: string;
+  last?: boolean;
+  skeleton: boolean;
+}) => (
   <View style={[s.infoRow, !last && s.rowDivider]}>
-    <Text style={s.infoLabel}>{label}</Text>
-    <Text style={s.infoValue}>{value}</Text>
+    <View style={s.infoLabelCol}>
+      <Words skeleton={skeleton} style={s.infoLabel}>
+        {label}
+      </Words>
+    </View>
+    <View style={s.infoValueCol}>
+      <Words skeleton={skeleton} style={s.infoValue}>
+        {value}
+      </Words>
+    </View>
   </View>
 );
 
 // A block under a plain heading, separated from the last by a line.
-const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+const Section = ({
+  title,
+  skeleton,
+  children,
+}: {
+  title: string;
+  skeleton: boolean;
+  children: React.ReactNode;
+}) => (
   <>
     <View style={s.divider} />
     <View style={s.section}>
-      <Text style={s.sectionTitle}>{title}</Text>
+      <Words skeleton={skeleton} style={s.sectionTitle}>
+        {title}
+      </Words>
       {children}
     </View>
   </>
@@ -38,70 +100,100 @@ const ExamDetailScreen = ({ navigation, route }: any) => {
   // The instructions are the student's (admit card, hall); a teacher goes without them.
   const teacher = !!route.params?.teacher;
 
-  // Start from the summary the list passed along (instant render), then fill in
-  // the syllabus and description from the detail endpoint.
-  const [exam, setExam] = useState<Exam | undefined>(summary);
+  const [detail, setDetail] = useState<Exam | null>(null);
+  // The skeleton shows on the first load, on a pull to refresh and on "Try
+  // again"; coming back to the screen updates it in place.
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastHere, rememberHere] = useLastLoaded<Exam>(examId != null ? `exam-detail:${examId}` : null);
+  const [lastAny, rememberAny] = useLastLoaded<Exam>('exam-detail');
 
-  const load = useCallback(async () => {
-    if (examId == null) {
-      setError('Exam not found.');
-      return;
-    }
-    setError(null);
-    try {
-      setExam(await getExamDetail(examId));
-    } catch (e: any) {
-      console.log('[getExamDetail] Error:', e?.response?.status, e?.message);
-      setError(examErrorMessage(e));
-    }
-  }, [examId]);
+  const load = useCallback(
+    async (showSkeleton = false) => {
+      if (examId == null) {
+        setError('Exam not found.');
+        setLoading(false);
+        return;
+      }
+      if (showSkeleton) setLoading(true);
+      setError(null);
+      try {
+        const next = await getExamDetail(examId);
+        setDetail(next);
+        rememberHere(next);
+        rememberAny(next);
+      } catch (e: any) {
+        console.log('[getExamDetail] Error:', e?.response?.status, e?.message);
+        setError(examErrorMessage(e));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [examId, rememberHere, rememberAny],
+  );
 
-  const { refreshing, onRefresh } = useRefresh(load);
+  const reload = useCallback(() => load(true), [load]);
 
-  useFocusLoad(load);
+  useFocusLoad(() => load());
 
-  // Once there is an exam on screen it stays there; a failed refresh does not
-  // swap it for an error.
-  if (!exam) {
-    return error ? (
-      <DocError title={TITLE} message={error} onRetry={load} />
-    ) : (
-      <DocLoading title={TITLE} />
-    );
-  }
+  // While loading: the exam as far as it is known, shaped by what it held
+  // last time. Once there is an exam on screen it stays there; a failed
+  // refresh does not swap it for an error.
+  const drawn = (): Exam => {
+    if (detail) return detail;
+    const here = isExam(lastHere) ? lastHere : null;
+    const base = summary ?? here ?? examsToDraw(false, [], null)[0];
+    return {
+      ...base,
+      description: here ? here.description : base.description,
+      syllabus: here
+        ? here.syllabus
+        : isExam(lastAny) && lastAny.syllabus.length > 0
+        ? lastAny.syllabus
+        : SAMPLE_SYLLABUS,
+    };
+  };
 
-  const live = exam.status === 'Ongoing';
-  const standing = [exam.status, examWhen(exam)].filter(Boolean).join(' · ');
-  const type = humanize(exam.type);
-  const term = humanize(exam.term);
+  const shown: Exam | null = loading ? drawn() : detail ?? summary ?? null;
 
-  // Only the lines that are actually filled in, and no term that merely
-  // repeats the type or name above.
-  const rows = [
-    ['Academic Year', exam.academicYear],
-    ['Term', same(term, type) || same(term, exam.name) ? '' : term],
-    ['Starts', longDate(exam.startIso)],
-    ['Ends', longDate(exam.endIso)],
-    ['Total Marks', exam.totalMarks > 0 ? String(exam.totalMarks) : ''],
-    ['Passing Marks', exam.passingMarks > 0 ? String(exam.passingMarks) : ''],
-  ].filter(([, v]) => !!v) as [string, string][];
+  const renderPage = (exam: Exam, skeleton: boolean) => {
+    const live = exam.status === 'Ongoing';
+    const standing = [exam.status, examWhen(exam)].filter(Boolean).join(' · ');
+    const type = humanize(exam.type);
+    const term = humanize(exam.term);
 
-  return (
-    <View style={s.root}>
-      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+    // Only the lines that are actually filled in, and no term that merely
+    // repeats the type or name above.
+    const rows = [
+      ['Academic Year', exam.academicYear],
+      ['Term', same(term, type) || same(term, exam.name) ? '' : term],
+      ['Starts', longDate(exam.startIso)],
+      ['Ends', longDate(exam.endIso)],
+      ['Total Marks', exam.totalMarks > 0 ? String(exam.totalMarks) : ''],
+      ['Passing Marks', exam.passingMarks > 0 ? String(exam.passingMarks) : ''],
+    ].filter(([, v]) => !!v) as [string, string][];
 
+    return (
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.scroll}
-        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        // The skeleton stands in for the spinner.
+        refreshControl={<AppRefreshControl refreshing={false} onRefresh={reload} />}
       >
         {/* What it is, when, and where it stands */}
         <View style={s.head}>
-          <Text style={s.kicker}>{type.toUpperCase()}</Text>
-          <Text style={s.title}>{exam.name}</Text>
-          <Text style={s.range}>{shortRange(exam)}</Text>
-          <Text style={[s.standing, live && s.standingLive]}>{standing}</Text>
+          <Words skeleton={skeleton} style={s.kicker}>
+            {type.toUpperCase()}
+          </Words>
+          <Words skeleton={skeleton} style={s.title}>
+            {exam.name}
+          </Words>
+          <Words skeleton={skeleton} style={s.range}>
+            {shortRange(exam)}
+          </Words>
+          <Words skeleton={skeleton} style={[s.standing, live && s.standingLive]}>
+            {standing}
+          </Words>
         </View>
 
         {rows.length > 0 && (
@@ -109,35 +201,70 @@ const ExamDetailScreen = ({ navigation, route }: any) => {
             <View style={s.divider} />
             <View style={s.body}>
               {rows.map(([label, value], i) => (
-                <InfoRow key={label} label={label} value={value} last={i === rows.length - 1} />
+                <InfoRow
+                  key={label}
+                  label={label}
+                  value={value}
+                  last={i === rows.length - 1}
+                  skeleton={skeleton}
+                />
               ))}
             </View>
           </>
         )}
 
         {!!exam.description && (
-          <Section title="About">
-            <Text style={s.paragraph}>{exam.description}</Text>
+          <Section title="About" skeleton={skeleton}>
+            <Words skeleton={skeleton} style={s.paragraph}>
+              {exam.description}
+            </Words>
           </Section>
         )}
 
         {exam.syllabus.length > 0 && (
-          <Section title="Syllabus">
-            <SyllabusList items={exam.syllabus} />
+          <Section title="Syllabus" skeleton={skeleton}>
+            <SyllabusList items={exam.syllabus} skeleton={skeleton} />
           </Section>
         )}
 
         {!teacher && exam.instructions.length > 0 && (
-          <Section title="Instructions">
+          <Section title="Instructions" skeleton={skeleton}>
             {exam.instructions.map((text, i) => (
               <View key={i} style={s.instRow}>
-                <Text style={s.instNum}>{i + 1}.</Text>
-                <Text style={s.instText}>{text}</Text>
+                <View style={s.instNumCol}>
+                  <Words skeleton={skeleton} style={s.instNum}>
+                    {i + 1}.
+                  </Words>
+                </View>
+                <View style={s.instTextCol}>
+                  <Words skeleton={skeleton} style={s.instText}>
+                    {text}
+                  </Words>
+                </View>
               </View>
             ))}
           </Section>
         )}
       </ScrollView>
+    );
+  };
+
+  return (
+    <View style={s.root}>
+      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+      {shown ? (
+        renderPage(shown, loading)
+      ) : (
+        <View style={s.center}>
+          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
+          <Text style={s.errorText}>{error ?? 'Exam not found.'}</Text>
+          {examId != null && (
+            <TouchableOpacity onPress={reload} hitSlop={10}>
+              <Text style={s.linkText}>Try again</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
     </View>
   );
 };
@@ -169,18 +296,27 @@ const __mk_s = () => StyleSheet.create({
   body: { paddingHorizontal: 20, paddingTop: 2 },
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 14 },
   rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-  infoLabel: { width: '40%', paddingRight: 12, fontSize: 14, color: theme.colors.textSecondary },
-  infoValue: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
+  infoLabelCol: { width: '40%', paddingRight: 12 },
+  infoLabel: { fontSize: 14, color: theme.colors.textSecondary },
+  infoValueCol: { flex: 1 },
+  infoValue: { fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
 
   // Sections
   section: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 8 },
   sectionTitle: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 4 },
-  paragraph: { fontSize: 14, lineHeight: 22, color: theme.colors.textPrimary, paddingTop: 6, paddingBottom: 10 },
+  paragraph: { fontSize: 14, lineHeight: 22, color: theme.colors.textPrimary, marginTop: 6, marginBottom: 10 },
 
   // Instructions
   instRow: { flexDirection: 'row', paddingVertical: 6 },
-  instNum: { width: 22, fontSize: 14, lineHeight: 21, color: theme.colors.textMuted },
-  instText: { flex: 1, fontSize: 14, lineHeight: 21, color: theme.colors.textPrimary },
+  instNumCol: { width: 22 },
+  instNum: { fontSize: 14, lineHeight: 21, color: theme.colors.textMuted },
+  instTextCol: { flex: 1 },
+  instText: { fontSize: 14, lineHeight: 21, color: theme.colors.textPrimary },
+
+  // Error
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 24 },
+  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  linkText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

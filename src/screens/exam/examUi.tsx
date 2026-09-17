@@ -244,7 +244,8 @@ export const ExamRow = ({
 // ── Syllabus ─────────────────────────────────────────────────────────────────
 // Each subject on its own line with how many topics it has, and the topics
 // underneath as one run of text rather than a chip each.
-export const SyllabusList = ({ items }: { items: SyllabusItem[] }) => (
+// As a skeleton, each line is a bar as long as its words.
+export const SyllabusList = ({ items, skeleton }: { items: SyllabusItem[]; skeleton?: boolean }) => (
   <View>
     {items.map((item, i) => (
       <View
@@ -252,15 +253,19 @@ export const SyllabusList = ({ items }: { items: SyllabusItem[] }) => (
         style={[s.sylRow, i < items.length - 1 && s.sylDivider]}
       >
         <View style={s.line}>
-          <Text style={s.sylSubject} numberOfLines={1}>
-            {item.subject}
-          </Text>
-          <Text style={s.sylCount}>
+          <View style={s.fill}>
+            <Words skeleton={skeleton} style={s.sylSubject} numberOfLines={1}>
+              {item.subject}
+            </Words>
+          </View>
+          <Words skeleton={skeleton} style={s.sylCount}>
             {item.topics.length} {item.topics.length === 1 ? 'topic' : 'topics'}
-          </Text>
+          </Words>
         </View>
         {item.topics.length > 0 && (
-          <Text style={s.sylTopics}>{item.topics.join('  ·  ')}</Text>
+          <Words skeleton={skeleton} style={s.sylTopics}>
+            {item.topics.join('  ·  ')}
+          </Words>
         )}
       </View>
     ))}

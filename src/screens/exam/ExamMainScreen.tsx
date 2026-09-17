@@ -27,6 +27,12 @@ const STUDENT_ENTRIES: HubEntry[] = [
     route: 'ExamsScreen',
   },
   {
+    title: 'Exam Syllabus',
+    sub: 'What each exam covers',
+    icon: 'book-outline',
+    route: 'ExamSyllabus',
+  },
+  {
     title: 'Date Sheet',
     sub: 'Which paper is on which day',
     icon: 'calendar-number-outline',

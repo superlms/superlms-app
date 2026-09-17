@@ -17,7 +17,8 @@ const TEACHER_ENTRIES: HubEntry[] = [
     title: 'Exam Syllabus',
     sub: 'What each exam covers in your subjects',
     icon: 'book-outline',
-    route: 'TeacherExamsScreen',
+    route: 'ExamSyllabus',
+    params: { teacher: true },
   },
   {
     title: 'Date Sheet',
