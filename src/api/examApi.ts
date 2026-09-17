@@ -198,6 +198,40 @@ export const getExamDateSheet = async (id: number | string): Promise<ExamDateShe
   return { exam: mapExam(d?.exam ?? {}), classes: Array.isArray(d?.classes) ? d.classes : [] };
 };
 
+// ─── Seating plan (students) ───────────────────────────────────────────────────
+export interface SeatingPaper extends Omit<DateSheetPaper, 'subject_id'> {
+  /** null for a session listed without a date sheet. */
+  subject_id: number | null;
+  room: string | null;
+  /** "B2 (1)" — the desk and the place at it. */
+  seat: string | null;
+}
+
+export interface ExamSeating {
+  exam: Exam;
+  /** "Class 5 - A" */
+  class: string;
+  exam_center: string | null;
+  reporting_time: string | null;
+  /** Some paper has a room or seat. */
+  seated: boolean;
+  papers: SeatingPaper[];
+}
+
+// GET /exams/{id}/seating — the student's room and seat for each paper.
+export const getExamSeating = async (id: number | string): Promise<ExamSeating> => {
+  const { data } = await apiClient.get(`/exams/${id}/seating`);
+  const d = unwrap(data);
+  return {
+    exam: mapExam(d?.exam ?? {}),
+    class: d?.class ?? '',
+    exam_center: d?.exam_center ?? null,
+    reporting_time: d?.reporting_time ?? null,
+    seated: !!d?.seated,
+    papers: Array.isArray(d?.papers) ? d.papers : [],
+  };
+};
+
 // ─── Error → friendly message ──────────────────────────────────────────────────
 export const examErrorMessage = (e: any): string => {
   const status = e?.response?.status;

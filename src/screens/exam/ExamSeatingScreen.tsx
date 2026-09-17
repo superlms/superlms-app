@@ -8,73 +8,66 @@ import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { theme, onThemeChange } from '../../utils/theme';
 import { DocHeader, DocNoData } from '../more/docUi';
 import {
-  getExamDateSheet,
+  getExamSeating,
   examErrorMessage,
-  type DateSheetClass,
-  type DateSheetPaper,
-  type ExamDateSheet,
+  type ExamSeating,
+  type SeatingPaper,
 } from '../../api/examApi';
 import type { Exam } from './examData';
 import { Words } from './examUi';
-import { dayOf, papersRange, soon, timeLine } from './paperUi';
+import { clock, dayOf, papersRange, soon, timeLine } from './paperUi';
 
 /**
- * One exam's date sheet: its papers day by day — the date, the subject, the
- * time and how long it runs. A student sees their class's sheet; a teacher
- * sees each class they teach, with their own subjects' papers.
- *
- * Route params:
- *   exam    – the exam, from the list
- *   teacher – true for a teacher
+ * Seating Plan, one exam: each paper of the student's date sheet with its day,
+ * time, and the room and seat the school's seating plan gives for that
+ * paper's own session.
  *
  * A load — the first, a pull to refresh, Try again — draws the page as a
- * skeleton from the sheet it shows, the one this exam had last time, or an
- * ordinary one.
+ * skeleton from the papers it shows, those this exam had last time, or
+ * ordinary ones.
  */
-
-const classLabel = (c: DateSheetClass) => [c.standard_name, c.section_name].filter(Boolean).join(' - ');
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-// ── A sheet to draw before this exam's has loaded here ───────────────────────
-const sampleSheet = (exam: Exam, teacher: boolean): ExamDateSheet => {
+// ── Papers to draw before this exam's have loaded here ───────────────────────
+const sampleSeating = (exam: Exam): ExamSeating => {
   const start = dayOf(exam.startIso) ?? moment().startOf('day');
-  const subjects = teacher ? ['Mathematics', 'Mathematics'] : ['English', 'Hindi', 'Mathematics', 'Science', 'Social Science'];
-  const papers = (names: string[], offset: number): DateSheetPaper[] =>
-    names.map((name, i) => ({
-      id: -(offset + i + 1),
-      subject_id: -(offset + i + 1),
+  const subjects = ['English', 'Hindi', 'Mathematics', 'Science', 'Social Science'];
+  return {
+    exam,
+    class: 'Class 6 - A',
+    exam_center: null,
+    reporting_time: null,
+    seated: true,
+    papers: subjects.map((name, i) => ({
+      id: -(i + 1),
+      subject_id: -(i + 1),
       subject_name: name,
       subject_image: null,
       exam_date: start.clone().add(i * 2, 'days').format('YYYY-MM-DD'),
       start_time: '10:00',
       end_time: '13:00',
       shift: 1,
-    }));
-  return {
-    exam,
-    classes: teacher
-      ? [
-          { standard_id: -1, standard_name: 'Class 6', section_id: -1, section_name: 'A', papers: papers(subjects.slice(0, 1), 0) },
-          { standard_id: -2, standard_name: 'Class 7', section_id: -2, section_name: 'A', papers: papers(subjects.slice(1), 10) },
-        ]
-      : [{ standard_id: -1, standard_name: 'Class 6', section_id: -1, section_name: 'A', papers: papers(subjects, 0) }],
+      room: `${i + 1}`,
+      seat: `B${i + 2} (1)`,
+    })),
   };
 };
 
-const isSheet = (v: ExamDateSheet | null | undefined): v is ExamDateSheet => !!v && Array.isArray(v.classes);
+const isSeating = (v: ExamSeating | null | undefined): v is ExamSeating => !!v && Array.isArray(v.papers);
 
 // ── One paper ────────────────────────────────────────────────────────────────
 //   OCT   Mathematics                                SHIFT 2
-//     2   10:00 AM – 1:00 PM  ·  3 hrs
-//         Friday  ·  In 5 days
+//     2   Friday  ·  In 5 days
+//         10:00 AM – 1:00 PM  ·  3 hrs
+//         ROOM  12      SEAT  B2 (1)
 const PaperRow = ({
   paper,
   showShift,
   isLast,
   skeleton,
 }: {
-  paper: DateSheetPaper;
+  paper: SeatingPaper;
   showShift: boolean;
   isLast: boolean;
   skeleton: boolean;
@@ -83,6 +76,7 @@ const PaperRow = ({
   const today = !!day && day.isSame(moment(), 'day');
   const past = !!day && day.isBefore(moment().startOf('day'));
   const when = day ? soon(day) : null;
+  const seated = !!paper.room || !!paper.seat;
 
   return (
     <View style={[s.row, !isLast && s.rowDivider]}>
@@ -107,7 +101,7 @@ const PaperRow = ({
         <View style={s.line}>
           <View style={s.fill}>
             <Words skeleton={skeleton} style={s.name} numberOfLines={1}>
-              {paper.subject_name || 'Subject'}
+              {paper.subject_name || 'Paper'}
             </Words>
           </View>
           {showShift && (
@@ -117,39 +111,61 @@ const PaperRow = ({
           )}
         </View>
         <Words skeleton={skeleton} style={s.meta} numberOfLines={1}>
-          {timeLine(paper)}
-        </Words>
-        <Words skeleton={skeleton} style={s.when} numberOfLines={1}>
           {day ? day.format('dddd') : 'Date to be announced'}
           {!!when && <Text style={today ? s.accent : undefined}>{`  ·  ${when}`}</Text>}
         </Words>
+        <Words skeleton={skeleton} style={s.when} numberOfLines={1}>
+          {timeLine(paper)}
+        </Words>
+
+        {seated ? (
+          <View style={s.seatLine}>
+            <View style={s.seatPair}>
+              <Words skeleton={skeleton} style={s.seatLabel}>
+                ROOM
+              </Words>
+              <Words skeleton={skeleton} style={s.seatValue} numberOfLines={1}>
+                {paper.room || '—'}
+              </Words>
+            </View>
+            <View style={s.seatPair}>
+              <Words skeleton={skeleton} style={s.seatLabel}>
+                SEAT
+              </Words>
+              <Words skeleton={skeleton} style={s.seatValue} numberOfLines={1}>
+                {paper.seat || '—'}
+              </Words>
+            </View>
+          </View>
+        ) : (
+          <Words skeleton={skeleton} style={s.unseated}>
+            Room and seat not allotted yet
+          </Words>
+        )}
       </View>
     </View>
   );
 };
 
-const ExamDateSheetScreen = ({ navigation, route }: any) => {
+const ExamSeatingScreen = ({ navigation, route }: any) => {
   const exam: Exam = route.params.exam;
-  const teacher = !!route.params?.teacher;
-  const [sheet, setSheet] = useState<ExamDateSheet | null>(null);
+  const [seating, setSeating] = useState<ExamSeating | null>(null);
   // The skeleton shows on the first load, on a pull to refresh and on "Try
   // again"; coming back to the screen updates it in place.
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [last, rememberLast] = useLastLoaded<ExamDateSheet>(
-    `datesheet:${teacher ? 'teacher' : 'student'}:${exam.id}`,
-  );
+  const [last, rememberLast] = useLastLoaded<ExamSeating>(`seating:${exam.id}`);
 
   const load = useCallback(
     async (showSkeleton = false) => {
       if (showSkeleton) setLoading(true);
       setError(null);
       try {
-        const next = await getExamDateSheet(exam.id);
-        setSheet(next);
+        const next = await getExamSeating(exam.id);
+        setSeating(next);
         rememberLast(next);
       } catch (e: any) {
-        console.log('[getExamDateSheet] Error:', e?.response?.status, e?.message);
+        console.log('[getExamSeating] Error:', e?.response?.status, e?.message);
         setError(examErrorMessage(e));
       } finally {
         setLoading(false);
@@ -162,16 +178,19 @@ const ExamDateSheetScreen = ({ navigation, route }: any) => {
 
   useFocusLoad(() => load());
 
-  // The sheet the page is drawn from: while loading, what it last showed.
-  const view: ExamDateSheet | null = loading
-    ? sheet ?? (isSheet(last) ? last : sampleSheet(exam, teacher))
-    : sheet;
+  // The page is drawn from: while loading, what it last showed.
+  const view: ExamSeating | null = loading
+    ? seating ?? (isSeating(last) ? last : sampleSeating(exam))
+    : seating;
 
-  const renderPage = (v: ExamDateSheet, skeleton: boolean) => {
-    const classes = v.classes.filter(c => c.papers.length > 0);
-    const papers = classes.flatMap(c => c.papers);
-    const range = papersRange(papers);
-    const own = v.classes[0];
+  const renderPage = (v: ExamSeating, skeleton: boolean) => {
+    const papers = v.papers;
+    const showShift = papers.some(p => (p.shift || 1) > 1);
+    // "09:30" as a time; anything else the school typed, as it is.
+    const reporting = v.reporting_time ? clock(v.reporting_time.slice(0, 5)) ?? v.reporting_time : null;
+    const centre = [v.exam_center ? `Centre: ${v.exam_center}` : null, reporting ? `Report by ${reporting}` : null]
+      .filter(Boolean)
+      .join('  ·  ');
 
     return (
       <ScrollView
@@ -182,53 +201,41 @@ const ExamDateSheetScreen = ({ navigation, route }: any) => {
       >
         {papers.length === 0 ? (
           <DocNoData
-            icon="calendar-outline"
-            title="No date sheet yet"
-            subtitle={
-              teacher
-                ? 'The date sheet for your classes and subjects will appear here once the school sets it.'
-                : 'Your class’s date sheet will appear here once the school sets it.'
-            }
+            icon="grid-outline"
+            title="Seating plan not out yet"
+            subtitle="Your room and seat for each paper will appear here once the school makes the seating plan."
             skeleton={skeleton}
           />
         ) : (
           <>
             <View style={s.intro}>
               <Words skeleton={skeleton} style={s.introTitle} numberOfLines={1}>
-                {teacher ? 'Your subjects’ papers' : own ? classLabel(own) || 'Your class' : 'Your class'}
+                {v.class || 'Your class'}
               </Words>
               <Words skeleton={skeleton} style={s.meta} numberOfLines={1}>
-                {[
-                  plural(papers.length, 'paper'),
-                  teacher ? `${classes.length} ${classes.length === 1 ? 'class' : 'classes'}` : null,
-                  range,
-                ]
-                  .filter(Boolean)
-                  .join('  ·  ')}
+                {[plural(papers.length, 'paper'), papersRange(papers)].filter(Boolean).join('  ·  ')}
               </Words>
+              {!!centre && (
+                <Words skeleton={skeleton} style={s.meta}>
+                  {centre}
+                </Words>
+              )}
+              {!v.seated && (
+                <Words skeleton={skeleton} style={s.notice}>
+                  The school hasn’t allotted rooms and seats for this exam yet.
+                </Words>
+              )}
             </View>
 
-            {classes.map(c => {
-              const showShift = c.papers.some(p => (p.shift || 1) > 1);
-              return (
-                <View key={`${c.standard_id}-${c.section_id ?? 0}`}>
-                  {teacher && (
-                    <Words skeleton={skeleton} style={s.groupTitle}>
-                      {classLabel(c)} · {plural(c.papers.length, 'paper')}
-                    </Words>
-                  )}
-                  {c.papers.map((p, i) => (
-                    <PaperRow
-                      key={p.id}
-                      paper={p}
-                      showShift={showShift}
-                      isLast={i === c.papers.length - 1}
-                      skeleton={skeleton}
-                    />
-                  ))}
-                </View>
-              );
-            })}
+            {papers.map((p, i) => (
+              <PaperRow
+                key={p.id}
+                paper={p}
+                showShift={showShift}
+                isLast={i === papers.length - 1}
+                skeleton={skeleton}
+              />
+            ))}
           </>
         )}
       </ScrollView>
@@ -238,7 +245,7 @@ const ExamDateSheetScreen = ({ navigation, route }: any) => {
   const renderBody = () => {
     if (loading && view) return renderPage(view, true);
 
-    if (!sheet) {
+    if (!seating) {
       return (
         <View style={s.centeredBox}>
           <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
@@ -250,7 +257,7 @@ const ExamDateSheetScreen = ({ navigation, route }: any) => {
       );
     }
 
-    return renderPage(sheet, false);
+    return renderPage(seating, false);
   };
 
   return (
@@ -261,7 +268,7 @@ const ExamDateSheetScreen = ({ navigation, route }: any) => {
   );
 };
 
-export default ExamDateSheetScreen;
+export default ExamSeatingScreen;
 
 // The date column and the gap after it, as on the exams list.
 const DATE_COL = 40;
@@ -273,7 +280,7 @@ const __mk_s = () => StyleSheet.create({
   grow: { flexGrow: 1 },
   fill: { flex: 1 },
 
-  // The class and how many papers, over what days
+  // The class, its papers and where to report
   intro: {
     paddingTop: 16,
     paddingBottom: 14,
@@ -282,9 +289,9 @@ const __mk_s = () => StyleSheet.create({
     borderBottomColor: theme.colors.border,
   },
   introTitle: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  groupTitle: { fontSize: 12, color: theme.colors.textMuted, marginTop: 16, marginBottom: 2 },
+  notice: { fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
 
-  // Row — the day as its own column, then the paper
+  // Row — the day as its own column, then the paper and the seat
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: GAP, paddingVertical: 14 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   dateCol: { width: DATE_COL, alignItems: 'center', paddingTop: 1 },
@@ -297,7 +304,14 @@ const __mk_s = () => StyleSheet.create({
   name: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   shift: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: theme.colors.textSecondary },
   meta: { fontSize: 13, color: theme.colors.textSecondary },
-  when: { fontSize: 12, color: theme.colors.textMuted, marginTop: 1 },
+  when: { fontSize: 12, color: theme.colors.textMuted },
+
+  // Room and seat
+  seatLine: { flexDirection: 'row', gap: 24, marginTop: 6 },
+  seatPair: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  seatLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: theme.colors.textMuted },
+  seatValue: { fontSize: 15, fontWeight: '600', color: theme.colors.primary },
+  unseated: { fontSize: 12, color: theme.colors.textMuted, marginTop: 6 },
 
   // Error
   centeredBox: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
