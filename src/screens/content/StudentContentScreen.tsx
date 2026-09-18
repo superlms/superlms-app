@@ -1,7 +1,10 @@
 import React from 'react';
 import { plural } from '../subjects/subjectsUi';
 import { StudentSubjectList, type SubjectWithChapters } from '../subjects/subjectLists';
-import { hasMaterial } from './contentUi';
+import { SAMPLE_STUDENT_SUBJECTS, hasMaterial } from './contentUi';
+
+// Kept on the phone, so the list draws itself from its own subjects while it loads.
+const KEEP = { name: 'content:subjects:student', sample: SAMPLE_STUDENT_SUBJECTS };
 
 // "3 of 10 topics with material" — how much of the subject there is to read.
 const materialMeta = (sub: SubjectWithChapters) => {
@@ -17,6 +20,7 @@ const StudentContentScreen = ({ navigation }: any) => (
     navigation={navigation}
     title="Study Content"
     metaFor={materialMeta}
+    keep={KEEP}
     onOpen={sub =>
       navigation.navigate('ContentDetail', {
         subjectId: sub.id,

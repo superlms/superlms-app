@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import { Skeleton, SkeletonIcon, SkeletonText } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { theme, onThemeChange } from '../../utils/theme';
 import { quietCaps } from '../../utils/quietCaps';
 import { DocHeader, DocNoData } from '../more/docUi';
@@ -48,6 +49,7 @@ export const TopicLine = ({
   right,
   onPress,
   divider,
+  skeleton,
 }: {
   label: string;
   name: string;
@@ -56,7 +58,21 @@ export const TopicLine = ({
   onPress?: () => void;
   /** A hairline under the topic, to set it off from the next one. */
   divider?: boolean;
+  /** The number and name as bars as long as their words; nothing to press. */
+  skeleton?: boolean;
 }) => {
+  const style = [s.topic, divider && s.topicDivider];
+  if (skeleton) {
+    return (
+      <View style={style}>
+        <SkeletonText style={s.topicNo}>{label}</SkeletonText>
+        <View style={s.topicNameBox}>
+          <SkeletonText style={s.topicNameText}>{quietCaps(name)}</SkeletonText>
+        </View>
+        {right}
+      </View>
+    );
+  }
   const body = (
     <>
       <Text style={s.topicNo}>{label}</Text>
@@ -64,7 +80,6 @@ export const TopicLine = ({
       {right}
     </>
   );
-  const style = [s.topic, divider && s.topicDivider];
   return onPress ? (
     <TouchableOpacity style={style} activeOpacity={0.6} onPress={onPress}>
       {body}
@@ -185,6 +200,91 @@ const OutlineSkeleton = ({ rows }: { rows: number }) => {
   );
 };
 
+// The page drawn from its own chapters: the subject's icon as a grey tile, its
+// name and size, then each chapter's number, name and topic count as bars as
+// long as their words — and, for a chapter left open, its topics the same way.
+const DrawnOutline = ({
+  chapters,
+  title,
+  size,
+  openIds,
+  renderTopics,
+  chapterExpandable,
+}: {
+  chapters: SyllabusChapter[];
+  title: string;
+  size: string;
+  openIds: number[];
+  renderTopics?: ChapterOutlineProps['renderTopics'];
+  chapterExpandable?: (chapter: SyllabusChapter) => boolean;
+}) => (
+  <ScrollView style={s.fill} showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+    <View style={s.head}>
+      <Skeleton width={39} height={39} radius={8} />
+      <View style={s.headText}>
+        <SkeletonText style={s.title}>{title}</SkeletonText>
+        <SkeletonText style={s.size}>{size}</SkeletonText>
+      </View>
+    </View>
+    <View style={s.divider} />
+    <View style={s.list}>
+      {chapters.map((chapter, i) => (
+        <ChapterRow
+          key={chapter.id}
+          number={i + 1}
+          chapter={chapter}
+          open={openIds.includes(chapter.id)}
+          onToggle={() => {}}
+          isLast={i === chapters.length - 1}
+          expandable={chapterExpandable?.(chapter)}
+          skeleton
+        >
+          {renderTopics?.(chapter, i + 1, true)}
+        </ChapterRow>
+      ))}
+    </View>
+  </ScrollView>
+);
+
+/**
+ * What a chapter keeps for the next load's skeleton: names and order, and for
+ * each topic only which kinds of material it has — not the material itself.
+ */
+export const keepChapters = (chapters: SyllabusChapter[]): SyllabusChapter[] =>
+  chapters.map(c => ({
+    id: c.id,
+    name: c.name,
+    description: null,
+    subjectId: c.subjectId,
+    order: c.order,
+    topics: c.topics.map(t => ({
+      id: t.id,
+      name: t.name,
+      order: t.order,
+      content: t.content?.trim() ? '·' : null,
+      imageUrl: t.imageUrl ? '·' : null,
+      pdfUrl: t.pdfUrl ? '·' : null,
+      link: t.link?.trim() ? '·' : null,
+    })),
+  }));
+
+// "10th A · 6 chapters · 24 topics · 3 with material"
+const sizeLine = (
+  chapters: SyllabusChapter[],
+  subtitle?: string | null,
+  summaryExtra?: (chapters: SyllabusChapter[]) => string | null,
+) => {
+  const topicCount = chapters.reduce((sum, c) => sum + c.topics.length, 0);
+  return [
+    subtitle,
+    chapters.length === 0 ? 'No chapters yet' : plural(chapters.length, 'chapter'),
+    chapters.length > 0 ? plural(topicCount, 'topic') : null,
+    chapters.length > 0 ? summaryExtra?.(chapters) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+};
+
 // ── The page ─────────────────────────────────────────────────────────────────
 export interface ChapterOutlineProps {
   outline: ChaptersState;
@@ -198,12 +298,17 @@ export interface ChapterOutlineProps {
   emptyChapters: { title: string; subtitle: string };
   /** One more thing to say after the counts, e.g. how much has material. */
   summaryExtra?: (chapters: SyllabusChapter[]) => string | null;
-  /** What an open chapter shows; its topics as plain lines by default. */
-  renderTopics?: (chapter: SyllabusChapter, number: number) => React.ReactNode;
+  /** What an open chapter shows; its topics as plain lines by default. `skeleton` while drawn loading. */
+  renderTopics?: (chapter: SyllabusChapter, number: number, skeleton?: boolean) => React.ReactNode;
   chapterExpandable?: (chapter: SyllabusChapter) => boolean;
   renderTrailing?: (chapter: SyllabusChapter) => React.ReactNode;
   /** Chapter descriptions under their names — only where the syllabus is edited. */
   showDescriptions?: boolean;
+  /**
+   * The chapters to draw as the skeleton while loading — those on screen, or
+   * those kept from last time (OutlineScreen's `keep`). A plain skeleton without.
+   */
+  drawn?: SyllabusChapter[];
 }
 
 export const ChapterOutline = ({
@@ -219,6 +324,7 @@ export const ChapterOutline = ({
   chapterExpandable,
   renderTrailing,
   showDescriptions,
+  drawn,
 }: ChapterOutlineProps) => {
   const { chapters, error, load, openIds, toggle } = outline;
 
@@ -237,18 +343,21 @@ export const ChapterOutline = ({
   // The first load and a pull to refresh show the skeleton; coming back to the
   // page refetches quietly, without blanking it.
   if (chapters === null || refreshing) {
-    return <OutlineSkeleton rows={chapters?.length ?? 0} />;
+    return drawn ? (
+      <DrawnOutline
+        chapters={drawn}
+        title={title}
+        size={sizeLine(drawn, subtitle, summaryExtra)}
+        openIds={openIds}
+        renderTopics={renderTopics}
+        chapterExpandable={chapterExpandable}
+      />
+    ) : (
+      <OutlineSkeleton rows={chapters?.length ?? 0} />
+    );
   }
 
-  const topicCount = chapters.reduce((sum, c) => sum + c.topics.length, 0);
-  const size = [
-    subtitle,
-    chapters.length === 0 ? 'No chapters yet' : plural(chapters.length, 'chapter'),
-    chapters.length > 0 ? plural(topicCount, 'topic') : null,
-    chapters.length > 0 ? summaryExtra?.(chapters) : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const size = sizeLine(chapters, subtitle, summaryExtra);
 
   return (
     <ScrollView
@@ -302,8 +411,9 @@ export const OutlineScreen = ({
   rightSlot,
   renderExtra,
   fetchChapters,
+  keep,
   ...page
-}: Omit<ChapterOutlineProps, 'outline' | 'refreshing' | 'onRefresh'> & {
+}: Omit<ChapterOutlineProps, 'outline' | 'refreshing' | 'onRefresh' | 'drawn'> & {
   navigation: any;
   headerTitle: string;
   rightIcon?: string;
@@ -313,11 +423,24 @@ export const OutlineScreen = ({
   /** Drawn after the page with its chapters to hand — e.g. a sheet that adds to them. */
   renderExtra?: (outline: ChaptersState) => React.ReactNode;
   fetchChapters: () => Promise<SyllabusChapter[]>;
+  /**
+   * Keep the chapters on this phone under `name` (keepChapters), and while the
+   * page loads draw it from them — or from `sample` before its first load.
+   */
+  keep?: { name: string; sample: SyllabusChapter[] };
 }) => {
   const outline = useChapters(fetchChapters);
   const { refreshing, onRefresh } = useRefresh(outline.load);
+  const [last, remember] = useLastLoaded<SyllabusChapter[]>(keep?.name ?? null);
 
   useFocusLoad(outline.load);
+
+  const keepName = keep?.name;
+  useEffect(() => {
+    if (keepName && outline.chapters) remember(keepChapters(outline.chapters));
+  }, [keepName, outline.chapters, remember]);
+
+  const drawn = keep ? outline.chapters ?? (Array.isArray(last) ? last : keep.sample) : undefined;
 
   return (
     <View style={s.root}>
@@ -328,7 +451,7 @@ export const OutlineScreen = ({
         onRightPress={onRightPress}
         rightSlot={rightSlot}
       />
-      <ChapterOutline outline={outline} refreshing={refreshing} onRefresh={onRefresh} {...page} />
+      <ChapterOutline outline={outline} refreshing={refreshing} onRefresh={onRefresh} drawn={drawn} {...page} />
       {renderExtra?.(outline)}
     </View>
   );
@@ -374,6 +497,8 @@ const __mk_s = () => StyleSheet.create({
   topicNo: { width: 34, fontSize: 13, lineHeight: 20, color: theme.colors.textMuted },
   topicName: { flex: 1, fontSize: 14, lineHeight: 20, color: theme.colors.textPrimary },
   topicMuted: { color: theme.colors.textSecondary },
+  topicNameBox: { flex: 1 },
+  topicNameText: { fontSize: 14, lineHeight: 20 },
 
   // Loading
   skeletonBody: { flex: 1, gap: 8 },

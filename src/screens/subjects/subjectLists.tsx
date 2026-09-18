@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -10,6 +10,7 @@ import VectorIcon from '../../components/VectorIcon';
 import { Skeleton, SkeletonIcon, SkeletonText } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { theme, onThemeChange } from '../../utils/theme';
 import { DocHeader, DocNoData } from '../more/docUi';
 import {
@@ -103,10 +104,64 @@ interface Item {
   onPress?: () => void;
 }
 
+/** What a row says, kept so the list can draw itself as a skeleton next time. */
+export interface KeptSubject {
+  key: string;
+  title: string;
+  meta?: string | null;
+}
+
+/**
+ * A list that keeps what it held on this phone (under `name`) and, while it
+ * loads, draws itself from that — or from `sample` before its first load.
+ */
+export interface KeepList {
+  name: string;
+  sample: KeptSubject[];
+}
+
+const toKept = (items: Item[]): KeptSubject[] => items.map(({ key, title, meta }) => ({ key, title, meta }));
+
+// The rows a loading list draws: those on screen, else those it held last time, else the sample.
+const useDrawn = (keep: KeepList | undefined, loaded: boolean, items: Item[]) => {
+  const [last, remember] = useLastLoaded<KeptSubject[]>(keep?.name ?? null);
+  const kept = loaded ? toKept(items) : null;
+  const keptKey = kept ? JSON.stringify(kept) : null;
+
+  const keepName = keep?.name;
+  useEffect(() => {
+    if (keepName && keptKey) remember(JSON.parse(keptKey));
+  }, [keepName, keptKey, remember]);
+
+  if (!keep) return undefined;
+  if (kept && kept.length > 0) return kept;
+  return Array.isArray(last) && last.length > 0 ? last : keep.sample;
+};
+
 // ── Loading ──────────────────────────────────────────────────────────────────
 // The list line for line: the count, then each subject's icon tile, name, size
 // and arrow (where rows open) — a row per subject there was, or five before the
 // first load.
+// The list drawn from its own rows: the count, then each subject's icon as a
+// grey tile, and its name and line as bars as long as their words.
+const DrawnSkeleton = ({ rows, arrows }: { rows: KeptSubject[]; arrows: boolean }) => (
+  <View style={s.list}>
+    <View style={s.countBox}>
+      <SkeletonText style={s.countText}>{plural(rows.length, 'subject')}</SkeletonText>
+    </View>
+    {rows.map((r, i) => (
+      <SubjectRow
+        key={r.key}
+        title={r.title}
+        meta={r.meta}
+        isLast={i === rows.length - 1}
+        onPress={arrows ? () => {} : undefined}
+        skeleton
+      />
+    ))}
+  </View>
+);
+
 const ListSkeleton = ({ rows, arrows }: { rows: number; arrows: boolean }) => {
   const n = rows > 0 ? Math.min(rows, 10) : 5;
   return (
@@ -137,6 +192,7 @@ const ListBody = ({
   items,
   openable,
   empty,
+  drawn,
 }: {
   loading: boolean;
   refreshing: boolean;
@@ -147,11 +203,17 @@ const ListBody = ({
   /** Whether the rows open onto anything — the skeleton draws their arrows. */
   openable: boolean;
   empty: { title: string; subtitle: string };
+  /** The rows to draw as the skeleton (see KeepList); a plain one without. */
+  drawn?: KeptSubject[];
 }) => {
   // The first load and a pull to refresh show the skeleton; coming back to the
   // list refetches quietly, without blanking it.
   if (refreshing || (loading && items.length === 0)) {
-    return <ListSkeleton rows={items.length} arrows={openable} />;
+    return drawn ? (
+      <DrawnSkeleton rows={drawn} arrows={openable} />
+    ) : (
+      <ListSkeleton rows={items.length} arrows={openable} />
+    );
   }
 
   if (error && items.length === 0) {
@@ -209,15 +271,20 @@ export const StudentSubjectList = ({
   title,
   metaFor = sub => chapterSize(sub.chapters),
   onOpen,
+  keep,
 }: {
   navigation: any;
   title: string;
   metaFor?: (subject: SubjectWithChapters) => string | null;
   /** Leave out for a list that opens nothing. */
   onOpen?: (subject: SubjectWithChapters) => void;
+  /** Draw the loading list from what it held last time (see KeepList). */
+  keep?: KeepList;
 }) => {
   const [subjects, setSubjects] = useState<SubjectWithChapters[]>([]);
   const [loading, setLoading] = useState(true);
+  // The list on screen came from the school.
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -235,10 +302,12 @@ export const StudentSubjectList = ({
         bySubject.set(c.subjectId, list);
       });
       setSubjects(subs.map(sub => ({ ...sub, chapters: bySubject.get(sub.id) ?? [] })));
+      setLoaded(true);
     } catch (e: any) {
       console.log('[StudentSubjectList] Error:', e?.response?.status, e?.message);
       setError(contentErrorMessage(e));
       setSubjects([]);
+      setLoaded(false);
     } finally {
       setLoading(false);
     }
@@ -256,6 +325,7 @@ export const StudentSubjectList = ({
     meta: metaFor(sub),
     onPress: onOpen ? () => onOpen(sub) : undefined,
   }));
+  const drawn = useDrawn(keep, loaded, items);
 
   return (
     <View style={s.root}>
@@ -269,6 +339,7 @@ export const StudentSubjectList = ({
         items={items}
         openable={!!onOpen}
         empty={{ title: 'No subjects yet', subtitle: 'No subjects have been assigned to your class.' }}
+        drawn={drawn}
       />
     </View>
   );
@@ -279,13 +350,18 @@ export const TeacherSubjectList = ({
   navigation,
   title,
   onOpen,
+  keep,
 }: {
   navigation: any;
   title: string;
   onOpen: (combo: TeacherCombo) => void;
+  /** Draw the loading list from what it held last time (see KeepList). */
+  keep?: KeepList;
 }) => {
   const [combos, setCombos] = useState<TeacherCombo[]>([]);
   const [loading, setLoading] = useState(true);
+  // The list on screen came from the school.
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -293,10 +369,12 @@ export const TeacherSubjectList = ({
     setError(null);
     try {
       setCombos(await getTeacherSubjects());
+      setLoaded(true);
     } catch (e: any) {
       console.log('[TeacherSubjectList] Error:', e?.response?.status, e?.message);
       setError(contentErrorMessage(e));
       setCombos([]);
+      setLoaded(false);
     } finally {
       setLoading(false);
     }
@@ -313,6 +391,7 @@ export const TeacherSubjectList = ({
     meta: comboClass(c) || null,
     onPress: () => onOpen(c),
   }));
+  const drawn = useDrawn(keep, loaded, items);
 
   return (
     <View style={s.root}>
@@ -326,6 +405,7 @@ export const TeacherSubjectList = ({
         items={items}
         openable
         empty={{ title: 'No subjects assigned', subtitle: 'You don’t teach any class and subject yet.' }}
+        drawn={drawn}
       />
     </View>
   );
@@ -338,6 +418,8 @@ const __mk_s = () => StyleSheet.create({
   list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
   listEmpty: { flexGrow: 1 },
   count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
+  countBox: { paddingTop: 12, paddingBottom: 2 },
+  countText: { fontSize: 12 },
 
   // Row — the subject's own coloured icon tile, then its name and size
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13 },

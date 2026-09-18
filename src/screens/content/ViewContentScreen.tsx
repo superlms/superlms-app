@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Image,
   Linking,
@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { theme, onThemeChange } from '../../utils/theme';
+import { Skeleton } from '../../components/Skeleton';
 import { quietCaps } from '../../utils/quietCaps';
 import { DocHeader, DocNoData } from '../more/docUi';
 import AttachmentPreviewModal from '../announcement/AttachmentPreviewModal';
@@ -38,6 +39,9 @@ const ViewContentScreen = ({ navigation, route }: any) => {
   const hasAny = !!(content || imageUrl || pdfUrl || link);
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // The picture's place stays a skeleton until the picture has come.
+  const [imageReady, setImageReady] = useState(false);
+  useEffect(() => setImageReady(false), [imageUrl]);
 
   const openUrl = async (url: string) => {
     if (!url) return;
@@ -91,7 +95,15 @@ const ViewContentScreen = ({ navigation, route }: any) => {
           <View style={s.body}>
             {!!imageUrl && (
               <TouchableOpacity activeOpacity={0.9} onPress={() => setPreviewUrl(imageUrl)}>
-                <Image source={{ uri: imageUrl }} style={s.image} resizeMode="cover" />
+                <Image
+                  source={{ uri: imageUrl }}
+                  style={s.image}
+                  resizeMode="cover"
+                  onLoadEnd={() => setImageReady(true)}
+                />
+                {!imageReady && (
+                  <Skeleton width="100%" height={200} radius={theme.radius.md} style={s.imageSkeleton} />
+                )}
               </TouchableOpacity>
             )}
 
@@ -151,6 +163,7 @@ const __mk_s = () => StyleSheet.create({
   // Material
   body: { paddingHorizontal: 20, paddingTop: 20, gap: 22 },
   image: { width: '100%', height: 200, borderRadius: theme.radius.md, backgroundColor: theme.colors.background },
+  imageSkeleton: { position: 'absolute', top: 0, left: 0 },
   paragraph: { fontSize: 15, lineHeight: 24, color: theme.colors.textPrimary },
   sectionTitle: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 2 },
 });
