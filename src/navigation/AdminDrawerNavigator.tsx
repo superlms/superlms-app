@@ -20,7 +20,6 @@ import VectorIcon from '../components/VectorIcon';
 import { DrawerShadeBridge } from './drawerShade';
 import AdminTabNavigator from './AdminTabNavigator';
 import { ADMIN_MODULE_TARGETS, openAdminModule } from './adminRoutes';
-import AdminQuickLinksScreen from '../screens/admin/AdminQuickLinksScreen';
 import AdminAnalyticsScreen from '../screens/admin/AdminAnalyticsScreen';
 import AdminTimetableScreen from '../screens/admin/AdminTimetableScreen';
 import AdminArrangementScreen from '../screens/admin/AdminArrangementScreen';
@@ -31,7 +30,6 @@ import AdminAdmitCardScreen from '../screens/admin/AdminAdmitCardScreen';
 import AdminReportCardScreen from '../screens/admin/AdminReportCardScreen';
 import AdminTcCertificateScreen from '../screens/admin/AdminTcCertificateScreen';
 import AdminListsScreen from '../screens/admin/AdminListsScreen';
-import AdminComingSoonScreen from '../screens/admin/AdminComingSoonScreen';
 import AdminAssistantScreen from '../screens/admin/AdminAssistantScreen';
 import SettingsScreen from '../screens/setting/SettingsScreen';
 import {
@@ -55,10 +53,8 @@ import { visibleAdminModules } from '../screens/admin/adminModules';
 
 const Drawer = createDrawerNavigator();
 
-// The sidebar's outline glyph for each module (the Quick Links tiles use the
-// filled ones).
+// The sidebar's outline glyph for each module.
 const MENU_ICONS: Record<string, string> = {
-  'quick-links': 'link-outline',
   dashboard: 'home-outline',
   analytics: 'analytics-outline',
   standard: 'book-outline',
@@ -349,7 +345,6 @@ const AdminDrawerNavigator = () => {
       }}
     >
       <Drawer.Screen name="PanelHome" component={AdminTabNavigator} />
-      <Drawer.Screen name="AdminQuickLinks" component={AdminQuickLinksScreen} />
       <Drawer.Screen name="AdminAnalytics" component={AdminAnalyticsScreen} />
       <Drawer.Screen name="AdminStandard" component={AdminStandardStack} />
       <Drawer.Screen name="AdminTransport" component={AdminTransportScreen} />
@@ -374,12 +369,6 @@ const AdminDrawerNavigator = () => {
       <Drawer.Screen name="AdminCredit" component={AdminCreditScreen} />
       <Drawer.Screen name="AdminSettings" component={SettingsScreen} />
       <Drawer.Screen name="AdminMore" component={AdminMoreStack} />
-      {/* The top bar's message icon — admin chat isn't in the app yet */}
-      <Drawer.Screen
-        name="AdminMessages"
-        component={AdminComingSoonScreen}
-        initialParams={{ title: 'Messages', icon: 'chatbubbles-outline' }}
-      />
       {/* LMS Assist, from the dashboard's button */}
       <Drawer.Screen name="AdminAssistant" component={AdminAssistantScreen} />
     </Drawer.Navigator>

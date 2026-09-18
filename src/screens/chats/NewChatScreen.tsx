@@ -7,15 +7,15 @@ import VectorIcon from '../../components/VectorIcon';
 import { Skeleton } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
 import { DocNoData } from '../more/docUi';
-import { type ChatContact, chatErrorMessage, getChatContacts } from '../../api/chatApi';
-
-type DrawerRole = 'student' | 'teacher';
+import { type ChatContact, type ChatRole, chatErrorMessage, chatRoleOf, getChatContacts } from '../../api/chatApi';
 
 /**
  * Starting a chat, from the + on Chats.
  *
  *  - A student picks one of the teachers who teach their class's subjects.
  *  - A teacher picks a class, then one of its students.
+ *  - An admin, in Messages, picks one of the school's admins, sub-admins or
+ *    accounts team — the people of the other roles, as on the web panel.
  *
  * The conversation opens in place of this screen, so going back from it lands
  * on Chats, where it now shows once a message has been sent.
@@ -52,8 +52,9 @@ const Avatar = ({ person }: { person: ChatContact }) =>
   );
 
 const NewChatScreen = ({ navigation, route }: any) => {
-  const userRole: DrawerRole = route?.params?.userRole === 'teacher' ? 'teacher' : 'student';
+  const userRole: ChatRole = chatRoleOf(route?.params?.userRole);
   const isTeacher = userRole === 'teacher';
+  const isAdmin = userRole === 'admin';
 
   const [people, setPeople] = useState<ChatContact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,13 +66,13 @@ const NewChatScreen = ({ navigation, route }: any) => {
     setLoading(true);
     setError(null);
     try {
-      setPeople(await getChatContacts());
+      setPeople(await getChatContacts(userRole));
     } catch (e: any) {
       setError(chatErrorMessage(e));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userRole]);
 
   useEffect(() => {
     load();
@@ -117,7 +118,7 @@ const NewChatScreen = ({ navigation, route }: any) => {
       userRole,
     });
 
-  const title = isTeacher ? (picked ? picked.label : 'Choose a class') : 'Choose a teacher';
+  const title = isTeacher ? (picked ? picked.label : 'Choose a class') : isAdmin ? 'Choose a person' : 'Choose a teacher';
   const choosingClass = isTeacher && !picked;
   const list = isTeacher ? picked?.students ?? [] : people;
 
@@ -198,10 +199,12 @@ const NewChatScreen = ({ navigation, route }: any) => {
         ListEmptyComponent={
           <DocNoData
             icon="chatbubbles-outline"
-            title={isTeacher ? 'No students' : 'No teachers yet'}
+            title={isTeacher ? 'No students' : isAdmin ? 'No one to message yet' : 'No teachers yet'}
             subtitle={
               isTeacher
                 ? 'There are no students in this class yet.'
+                : isAdmin
+                ? 'Your school has no one else on its admin or accounts panels yet.'
                 : 'No teachers are assigned to your class subjects yet.'
             }
           />

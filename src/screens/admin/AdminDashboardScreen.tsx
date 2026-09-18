@@ -137,7 +137,7 @@ const AdminDashboardScreen = ({ navigation }: any) => {
       <TopBar
         school={profile?.organization ?? null}
         onBellPress={() => navigation.navigate('Notifications')}
-        onMessagePress={() => navigation.navigate('AdminMessages')}
+        onMessagePress={() => navigation.navigate('ChatsList', { userRole: 'admin' })}
       />
 
       {loading && !refreshing ? (

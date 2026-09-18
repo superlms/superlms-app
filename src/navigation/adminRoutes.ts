@@ -12,7 +12,6 @@ type Target = { route: string; params?: object };
 const tab = (screen: string): Target => ({ route: 'PanelHome', params: { screen } });
 
 export const ADMIN_MODULE_TARGETS: Record<string, Target> = {
-  'quick-links': { route: 'AdminQuickLinks' },
   dashboard: tab('Dashboard'),
   analytics: { route: 'AdminAnalytics' },
   standard: { route: 'AdminStandard' },

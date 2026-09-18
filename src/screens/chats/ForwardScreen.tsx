@@ -21,6 +21,7 @@ import { DocNoData } from '../more/docUi';
 import {
   type ChatContact,
   chatErrorMessage,
+  chatRoleOf,
   forwardChatMessages,
   getChatContacts,
   sendChatMessage,
@@ -34,7 +35,8 @@ import { fileUri, keepSentFile } from './chatFiles';
  * to several, it goes back to where the messages were picked.
  *
  * Files leave the server once they reach a phone, so messages with files go
- * again from this phone's copies, one after another to each person.
+ * again from this phone's copies, one after another to each person. Messages
+ * (the admin app's) keeps its files on the server, which forwards them itself.
  */
 
 // A picked message: its words, and its file on this phone.
@@ -58,7 +60,8 @@ const detailOf = (p: ChatContact) => [p.standard?.name, p.section?.name].filter(
 const ForwardScreen = ({ navigation, route }: any) => {
   const ids: number[] = route?.params?.ids ?? [];
   const items: ForwardItem[] = route?.params?.items ?? [];
-  const userRole = route?.params?.userRole === 'teacher' ? 'teacher' : 'student';
+  const userRole = chatRoleOf(route?.params?.userRole);
+  const isAdmin = userRole === 'admin';
 
   const [people, setPeople] = useState<ChatContact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,7 +75,7 @@ const ForwardScreen = ({ navigation, route }: any) => {
     let live = true;
     setLoading(true);
     setError(null);
-    getChatContacts()
+    getChatContacts(userRole)
       .then(list => {
         // The server lists the latest conversation first.
         if (live) setPeople(list);
@@ -86,7 +89,7 @@ const ForwardScreen = ({ navigation, route }: any) => {
     return () => {
       live = false;
     };
-  }, [attempt]);
+  }, [attempt, userRole]);
 
   const q = query.trim().toLowerCase();
   const list = q
@@ -99,7 +102,7 @@ const ForwardScreen = ({ navigation, route }: any) => {
     if (!picked.length || sending) return;
     setSending(true);
     try {
-      if (items.some(item => item.file)) {
+      if (!isAdmin && items.some(item => item.file)) {
         for (const userId of picked) {
           for (const item of items) {
             const file = item.file
@@ -115,7 +118,7 @@ const ForwardScreen = ({ navigation, route }: any) => {
           }
         }
       } else {
-        await forwardChatMessages(ids, picked);
+        await forwardChatMessages(ids, picked, userRole);
       }
       if (Platform.OS === 'android') ToastAndroid.show('Forwarded', ToastAndroid.SHORT);
       const only = picked.length === 1 ? people.find(p => p.user_id === picked[0]) : null;

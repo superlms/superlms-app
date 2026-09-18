@@ -26,17 +26,18 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { DocNoData } from '../more/docUi';
 import {
   type ChatContact,
+  type ChatRole,
   blockChatUsers,
   chatErrorMessage,
+  chatRoleOf,
   deleteChatConversations,
   getChatContacts,
+  pinChatConversations,
   unblockChatUsers,
 } from '../../api/chatApi';
 import { clearChatNotifications } from '../../notifications/chatNotifications';
 import { onChatPush } from './chatEvents';
 import { listTimeLabel, previewLine, SAMPLE_CONTACTS } from './chatFormat';
-
-type DrawerRole = 'student' | 'teacher';
 
 // While the list is on screen it checks for new messages this often; a push
 // brings one in straight away.
@@ -72,7 +73,8 @@ const Words = ({
 // ── One conversation as a plain row, separated by a divider ──────────────────
 //   [photo]  Ravi Sharma  Physics                10:42 AM
 //            Please submit your assignment…             2
-// A teacher's rows say the student's class where a student's say the subject.
+// A teacher's rows say the student's class where a student's say the subject,
+// and an admin's the person's role; a chat pinned in Messages carries a pin.
 const ChatRow = ({
   item,
   selected,
@@ -147,6 +149,9 @@ const ChatRow = ({
               {item.blocked ? 'Blocked' : previewLine(item)}
             </Words>
           </View>
+          {!!item.pinned && !skeleton && (
+            <VectorIcon iconSet="AntDesign" iconName="pushpin" size={13} color={theme.colors.textMuted} />
+          )}
           {unread && !item.blocked &&
             (skeleton ? (
               <Skeleton width={18} height={18} radius={9} />
@@ -162,8 +167,10 @@ const ChatRow = ({
 };
 
 const ChatsListScreen = ({ navigation, route }: any) => {
-  const userRole: DrawerRole = route?.params?.userRole === 'teacher' ? 'teacher' : 'student';
+  const userRole: ChatRole = chatRoleOf(route?.params?.userRole);
   const isStudent = userRole === 'student';
+  // The admin app's Messages: the web panel's chat, where chats are pinned rather than blocked.
+  const isAdmin = userRole === 'admin';
 
   const [contacts, setContacts] = useState<ChatContact[]>([]);
   // The skeleton shows on the first load and on a pull to refresh; while the
@@ -184,7 +191,7 @@ const ChatsListScreen = ({ navigation, route }: any) => {
     async (showSkeleton = false) => {
       if (showSkeleton) setLoading(true);
       try {
-        const list = await getChatContacts();
+        const list = await getChatContacts(userRole);
         setContacts(list);
         setError(null);
         setLoaded(true);
@@ -198,7 +205,7 @@ const ChatsListScreen = ({ navigation, route }: any) => {
         setLoading(false);
       }
     },
-    [rememberLast],
+    [rememberLast, userRole],
   );
 
   const reload = useCallback(() => load(true), [load]);
@@ -239,6 +246,22 @@ const ChatsListScreen = ({ navigation, route }: any) => {
   const selectedContacts = contacts.filter(c => selectedIds.includes(c.user_id));
   // With every picked chat blocked already, the button unblocks instead.
   const allBlocked = selectedContacts.length > 0 && selectedContacts.every(c => c.blocked);
+  // In Messages, likewise: with every picked chat pinned already, the pin unpins.
+  const allPinned = selectedContacts.length > 0 && selectedContacts.every(c => c.pinned);
+
+  const pinSelected = async () => {
+    const ids = selectedIds;
+    const pin = !allPinned;
+    setSelectedIds([]);
+    setContacts(prev => prev.map(c => (ids.includes(c.user_id) ? { ...c, pinned: pin } : c)));
+    try {
+      await pinChatConversations(ids);
+      toast(pin ? (ids.length > 1 ? 'Chats pinned' : 'Chat pinned') : ids.length > 1 ? 'Chats unpinned' : 'Chat unpinned');
+    } catch (e: any) {
+      AppAlert.alert(pin ? 'Could not pin' : 'Could not unpin', chatErrorMessage(e));
+    }
+    load();
+  };
 
   const unblockSelected = async () => {
     const ids = selectedIds;
@@ -287,7 +310,7 @@ const ChatsListScreen = ({ navigation, route }: any) => {
     setConfirmDelete(false);
     setSelectedIds([]);
     try {
-      await deleteChatConversations(ids);
+      await deleteChatConversations(ids, userRole);
     } catch (e: any) {
       AppAlert.alert('Could not delete', chatErrorMessage(e));
     }
@@ -302,14 +325,25 @@ const ChatsListScreen = ({ navigation, route }: any) => {
   return (
     <View style={s.root}>
       <Header
-        title={selectionMode ? `${selectedIds.length} selected` : 'Chats'}
+        title={selectionMode ? `${selectedIds.length} selected` : isAdmin ? 'Messages' : 'Chats'}
         divider
         height={50}
         onBackPress={() => (selectionMode ? setSelectedIds([]) : navigation.goBack())}
         rightSlot={
           <View style={s.headActions}>
+            {/* Messages: pin the picked chats to the top — or unpin them, when every one is pinned */}
+            {selectionMode && isAdmin && (
+              <TouchableOpacity style={s.headBtn} activeOpacity={0.6} hitSlop={8} onPress={pinSelected}>
+                <VectorIcon
+                  iconSet="AntDesign"
+                  iconName={allPinned ? 'pushpin' : 'pushpino'}
+                  size={19}
+                  color={theme.colors.textPrimary}
+                />
+              </TouchableOpacity>
+            )}
             {/* Block the picked chats — or unblock them, when every one is blocked */}
-            {selectionMode && (
+            {selectionMode && !isAdmin && (
               <TouchableOpacity
                 style={s.headBtn}
                 activeOpacity={0.6}
@@ -343,7 +377,8 @@ const ChatsListScreen = ({ navigation, route }: any) => {
                 color={selectionMode ? theme.colors.danger : theme.colors.primary}
               />
             </TouchableOpacity>
-            {/* + starts a chat: a student picks a teacher, a teacher a class and then a student */}
+            {/* + starts a chat: a student picks a teacher, a teacher a class and then a student,
+                an admin one of the school's admins, sub-admins or accounts team */}
             {!selectionMode && (
               <TouchableOpacity
                 style={s.headBtn}
@@ -404,6 +439,8 @@ const ChatsListScreen = ({ navigation, route }: any) => {
               subtitle={
                 q
                   ? 'Nothing matches that search.'
+                  : isAdmin
+                  ? 'Tap + to message your school’s admin or accounts team.'
                   : isStudent
                   ? 'Tap + to message a teacher of your class.'
                   : 'Tap + to choose a class and message a student.'

@@ -4,15 +4,27 @@ import constant from '../utils/constant';
 import type { PickedFile } from './adminProfileApi';
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Chat between a student and their teachers — /chat/…
+//  Chat between a student and their teachers — /chat/… — and the admin app's
+//  Messages — /admin/chat/… — the web panel's chat between a school's admins,
+//  sub-admins and accounts team.
 //
 //  The backend keeps the web panel's chat rules: one-to-one conversations,
 //  deletes that only hide things for you, and ticks for delivered and read.
 //  Attachments come back with a signed link that lasts about an hour — until
 //  the phone they were sent to has saved them, and then with none at all.
+//  Messages keeps its files on the server, as the web panel does.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const unwrap = (data: any) => data?.data ?? data;
+
+/** Who is signed in: a student or teacher chats with each other, an admin in Messages. */
+export type ChatRole = 'student' | 'teacher' | 'admin';
+
+/** The role a chat screen was opened for — a student's, unless it says otherwise. */
+export const chatRoleOf = (value: any): ChatRole =>
+  value === 'teacher' || value === 'admin' ? value : 'student';
+
+const base = (role?: ChatRole) => (role === 'admin' ? '/admin/chat' : '/chat');
 
 export interface ChatPreview {
   body: string | null;
@@ -26,6 +38,7 @@ export interface ChatPerson {
   name: string;
   avatar: string | null;
   // A student's teacher: the subjects they teach the class. A teacher's student: "10th A".
+  // In Messages: their role, "Admin", "Sub-admin" or "Accounts".
   subtitle: string | null;
   // A teacher: each subject they teach the student's class.
   subjects?: string[];
@@ -40,6 +53,8 @@ export interface ChatContact extends ChatPerson {
   unread: number;
   // You have blocked them.
   blocked?: boolean;
+  // Messages: you have pinned this chat to the top of your list.
+  pinned?: boolean;
 }
 
 export interface ChatAttachment {
@@ -80,9 +95,9 @@ export interface ChatThread {
   can_message?: boolean;
 }
 
-/** Everyone this user can chat with, the latest conversation first. */
-export const getChatContacts = async (): Promise<ChatContact[]> => {
-  const { data } = await apiClient.get('/chat/contacts');
+/** Everyone this user can chat with, the latest conversation first (in Messages, pinned chats before it). */
+export const getChatContacts = async (role?: ChatRole): Promise<ChatContact[]> => {
+  const { data } = await apiClient.get(`${base(role)}/contacts`);
   return unwrap(data) ?? [];
 };
 
@@ -93,8 +108,9 @@ export const getChatContacts = async (): Promise<ChatContact[]> => {
 export const getChatThread = async (
   userId: number,
   opts: { afterId?: number; beforeId?: number } = {},
+  role?: ChatRole,
 ): Promise<ChatThread> => {
-  const { data } = await apiClient.get(`/chat/with/${userId}`, {
+  const { data } = await apiClient.get(`${base(role)}/with/${userId}`, {
     params: { after_id: opts.afterId, before_id: opts.beforeId },
   });
   return unwrap(data);
@@ -107,6 +123,7 @@ export const getChatThread = async (
 export const sendChatMessage = async (
   userId: number,
   message: { body?: string; file?: PickedFile | null; forwardedFrom?: number },
+  role?: ChatRole,
 ): Promise<ChatMessage> => {
   const form = new FormData();
   if (message.body) form.append('body', message.body);
@@ -114,7 +131,7 @@ export const sendChatMessage = async (
     form.append('file', { uri: message.file.uri, name: message.file.name, type: message.file.type } as any);
   }
   if (message.forwardedFrom) form.append('forwarded_from', String(message.forwardedFrom));
-  const { data } = await apiClient.post(`/chat/with/${userId}`, form, {
+  const { data } = await apiClient.post(`${base(role)}/with/${userId}`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
     // A file can take a while on a slow connection.
     timeout: 60000,
@@ -128,19 +145,22 @@ export const markChatFilesReceived = async (ids: number[]): Promise<void> => {
 };
 
 /** Delete messages for yourself; the other person keeps theirs. */
-export const deleteChatMessages = async (ids: number[]): Promise<void> => {
-  await apiClient.post('/chat/messages/delete', { ids });
+export const deleteChatMessages = async (ids: number[], role?: ChatRole): Promise<void> => {
+  await apiClient.post(`${base(role)}/messages/delete`, { ids });
 };
 
 /** Pin messages for both people — or unpin them, when every one is pinned already. */
-export const pinChatMessages = async (ids: number[]): Promise<{ pinned: boolean; ids: number[] }> => {
-  const { data } = await apiClient.post('/chat/messages/pin', { ids });
+export const pinChatMessages = async (
+  ids: number[],
+  role?: ChatRole,
+): Promise<{ pinned: boolean; ids: number[] }> => {
+  const { data } = await apiClient.post(`${base(role)}/messages/pin`, { ids });
   return unwrap(data);
 };
 
 /** Send copies of messages, files included, to other people. */
-export const forwardChatMessages = async (ids: number[], userIds: number[]): Promise<void> => {
-  await apiClient.post('/chat/messages/forward', { ids, user_ids: userIds });
+export const forwardChatMessages = async (ids: number[], userIds: number[], role?: ChatRole): Promise<void> => {
+  await apiClient.post(`${base(role)}/messages/forward`, { ids, user_ids: userIds });
 };
 
 /**
@@ -169,8 +189,14 @@ export const unblockChatUsers = async (userIds: number[]): Promise<void> => {
 };
 
 /** Delete whole chats for yourself; they come back when a new message arrives. */
-export const deleteChatConversations = async (userIds: number[]): Promise<void> => {
-  await apiClient.post('/chat/conversations/delete', { user_ids: userIds });
+export const deleteChatConversations = async (userIds: number[], role?: ChatRole): Promise<void> => {
+  await apiClient.post(`${base(role)}/conversations/delete`, { user_ids: userIds });
+};
+
+/** Messages: pin chats to the top of your own list — or unpin them, when every one is pinned already. */
+export const pinChatConversations = async (userIds: number[]): Promise<{ pinned: boolean }> => {
+  const { data } = await apiClient.post(`${base('admin')}/conversations/pin`, { user_ids: userIds });
+  return unwrap(data);
 };
 
 export const chatErrorMessage = (e: any): string => {

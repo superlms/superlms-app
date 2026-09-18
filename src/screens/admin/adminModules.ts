@@ -1,5 +1,5 @@
-// Admin modules — mirror the web admin sidebar order (config/menu.php → 'admin').
-// Shared by the sidebar and the Quick Links screen so both stay in sync.
+// Admin modules — mirror the web admin sidebar order (config/menu.php → 'admin'),
+// without Quick Links, which the app doesn't have.
 //
 // `perm` is the web admin route name that grants this module (config/menu.php
 // → 'admin' → 'link'). It's how a sub-admin's granted functionalities — sent by
@@ -16,7 +16,6 @@ export interface AdminModule {
 }
 
 export const ADMIN_MODULES: AdminModule[] = [
-  { key: 'quick-links', label: 'Quick Links', icon: 'link', color: '#6366F1', perm: 'admin.quick-links' },
   { key: 'dashboard', label: 'Home', icon: 'home', color: '#22C55E', perm: 'admin.home' },
   { key: 'analytics', label: 'Analytics', icon: 'bar-chart', color: '#0EA5E9', perm: 'admin.analytics' },
   { key: 'standard', label: 'Standard', icon: 'book', color: '#F59E0B', perm: 'admin.standard' },

@@ -33,8 +33,10 @@ import type { PickedFile } from '../../api/adminProfileApi';
 import {
   type ChatMessage,
   type ChatPerson,
+  type ChatRole,
   type ChatThread,
   chatErrorMessage,
+  chatRoleOf,
   deleteChatMessages,
   getChatThread,
   markChatFilesReceived,
@@ -65,8 +67,6 @@ try {
 } catch {
   Clipboard = null;
 }
-
-type DrawerRole = 'student' | 'teacher';
 
 // While a conversation is open it checks for new messages this often; a push
 // brings one in straight away.
@@ -306,7 +306,9 @@ const ChatsScreen = ({ navigation, route }: any) => {
   const contact: ChatPerson | undefined = route?.params?.contact;
   const userId = contact?.user_id;
   // userRole = who is logged in right now
-  const userRole: DrawerRole = route?.params?.userRole === 'teacher' ? 'teacher' : 'student';
+  const userRole: ChatRole = chatRoleOf(route?.params?.userRole);
+  // The admin app's Messages keeps its files on the server, as the web panel does.
+  const isAdmin = userRole === 'admin';
 
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const messagesRef = useRef<LocalMessage[]>([]);
@@ -362,7 +364,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
       if (!userId) return;
       if (showSkeleton) setLoading(true);
       try {
-        const thread = await getChatThread(userId);
+        const thread = await getChatThread(userId, {}, userRole);
         atBottom.current = true;
         setMessages(prev => withReceipts(merge(prev.filter(m => !isSent(m)), thread.messages), thread.receipts));
         takePins(thread);
@@ -377,7 +379,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
         setLoading(false);
       }
     },
-    [userId, takePins],
+    [userId, takePins, userRole],
   );
 
   // New messages since the newest on screen, how far mine have got, and the pins.
@@ -386,7 +388,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
     checking.current = true;
     try {
       const newest = messagesRef.current.reduce((max, m) => (isSent(m) ? Math.max(max, m.id) : max), 0);
-      const thread = await getChatThread(userId, newest > 0 ? { afterId: newest } : {});
+      const thread = await getChatThread(userId, newest > 0 ? { afterId: newest } : {}, userRole);
       setMessages(prev => {
         const next = withReceipts(merge(prev, thread.messages), thread.receipts);
         return sameList(prev, next) ? prev : next;
@@ -397,7 +399,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
     } finally {
       checking.current = false;
     }
-  }, [userId, takePins]);
+  }, [userId, takePins, userRole]);
 
   useEffect(() => {
     loadLatest();
@@ -496,10 +498,10 @@ const ChatsScreen = ({ navigation, route }: any) => {
       if (!path) return;
       const found = path;
       setFiles(prev => (prev[m.id] === found ? prev : { ...prev, [m.id]: found }));
-      // Mine stay on the server until the other phone has them.
-      if (!m.mine && a.url) reportReceived(m.id);
+      // Mine stay on the server until the other phone has them; in Messages, for good.
+      if (!m.mine && a.url && !isAdmin) reportReceived(m.id);
     },
-    [reportReceived],
+    [reportReceived, isAdmin],
   );
 
   // Every file in the conversation is looked for once.
@@ -527,7 +529,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
     setLoadingOlder(true);
     atBottom.current = false;
     try {
-      const thread = await getChatThread(userId, { beforeId: oldest.id });
+      const thread = await getChatThread(userId, { beforeId: oldest.id }, userRole);
       setMessages(prev => merge(prev, thread.messages));
       setHasMore(thread.has_more);
     } catch (e: any) {
@@ -567,7 +569,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
     setMessages(prev => [...prev.filter(m => m.id !== retryOf?.id), temp]);
 
     try {
-      const saved = await sendChatMessage(userId, { body: temp.body ?? undefined, file: attachment });
+      const saved = await sendChatMessage(userId, { body: temp.body ?? undefined, file: attachment }, userRole);
       // This phone keeps its own copy of what it sent.
       if (attachment && saved.attachment) {
         lookedFor.current.add(saved.id);
@@ -618,7 +620,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
     const chosen = selectedMessages;
     setSelectedIds([]);
     try {
-      const res = await pinChatMessages(ids);
+      const res = await pinChatMessages(ids, userRole);
       setPins(prev =>
         res.pinned
           ? [...chosen.filter(m => !prev.some(p => p.id === m.id)), ...prev]
@@ -662,12 +664,13 @@ const ChatsScreen = ({ navigation, route }: any) => {
     }
   };
 
-  // Files go on from this phone's copies, so each one must be here.
+  // Files go on from this phone's copies, so each one must be here — except in
+  // Messages, where the server still has them and forwards them itself.
   const forwardSelected = () => {
     const chosen = selectedMessages.filter(isSent);
     setSelectedIds([]);
     if (!chosen.length) return;
-    if (chosen.some(m => m.attachment && !files[m.id])) {
+    if (!isAdmin && chosen.some(m => m.attachment && !files[m.id])) {
       AppAlert.alert('Not on this phone', 'A file you picked isn’t on this phone yet, so it can’t be forwarded.');
       return;
     }
@@ -676,9 +679,10 @@ const ChatsScreen = ({ navigation, route }: any) => {
       items: chosen.map(m => ({
         id: m.id,
         body: m.body,
-        file: m.attachment
-          ? { path: files[m.id], name: displayNameOf(m.attachment), type: mimeOf(m.attachment) }
-          : null,
+        file:
+          m.attachment && files[m.id]
+            ? { path: files[m.id], name: displayNameOf(m.attachment), type: mimeOf(m.attachment) }
+            : null,
       })),
       userRole,
     });
@@ -723,7 +727,7 @@ const ChatsScreen = ({ navigation, route }: any) => {
     setMessages(prev => prev.filter(m => !ids.includes(m.id)));
     setPins(prev => prev.filter(m => !ids.includes(m.id)));
     try {
-      await deleteChatMessages(ids);
+      await deleteChatMessages(ids, userRole);
     } catch (e: any) {
       AppAlert.alert('Could not delete', chatErrorMessage(e));
       loadLatest();
@@ -808,8 +812,11 @@ const ChatsScreen = ({ navigation, route }: any) => {
     Subtitle rules:
     - logged in as STUDENT  → talking to a Teacher → "Teacher · <subjects>"
     - logged in as TEACHER  → talking to a Student → "Student · <class>"
+    - logged in as ADMIN    → their role           → "Sub-admin"
   */
-  const subtitle = [userRole === 'student' ? 'Teacher' : 'Student', contact.subtitle].filter(Boolean).join(' · ');
+  const subtitle = isAdmin
+    ? contact.subtitle ?? ''
+    : [userRole === 'student' ? 'Teacher' : 'Student', contact.subtitle].filter(Boolean).join(' · ');
 
   const hasText = input.trim().length > 0;
 
