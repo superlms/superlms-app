@@ -3,31 +3,36 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import moment from 'moment';
 import TopBar from '../../../components/TopBar';
-import VectorIcon from '../../../components/VectorIcon';
 import AppRefreshControl from '../../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../../utils/theme';
 import { quietCaps } from '../../../utils/quietCaps';
-import { humanize, marksLabel } from '../../exam/examUi';
 import {
   getTeacherDashboard,
   dashboardErrorMessage,
   type TeacherDashboard,
 } from '../../../api/dashboardApi';
 import {
+  Card,
+  CardHead,
   Chevron,
+  Columns,
   DashError,
-  DashSection,
   DashSkeleton,
+  Initial,
+  KpiGrid,
   LOW_ATTENDANCE,
   LineRow,
+  PASS_MARK,
+  PageLine,
   PctRow,
-  StatStrip,
-  Tag,
+  Pill,
+  PeriodRow,
+  clock12,
+  periodStates,
 } from '../dashboardUi';
-
-// "14:05" — the timetable's own clock format, so times compare as strings.
-const nowHHmm = () => moment().format('HH:mm');
+import { ExamRows, examSoon } from '../dashExams';
+import { ClassAttendanceRows, attendanceToday } from '../dashTeacher';
 
 const TeacherHomeScreen = () => {
   const navigation = useNavigation<any>();
@@ -67,24 +72,29 @@ const TeacherHomeScreen = () => {
 
   const { totals, profile, notices } = data;
   const classes = data.today_classes ?? [];
+  const states = periodStates(classes);
+  const doneCount = states.filter(st => st === 'done').length;
+  const nowIndex = states.indexOf('now');
+  const nextIndex = states.indexOf('next');
   const byClass = data.class_attendance?.by_class ?? [];
-  const overallAtt = Math.round(data.class_attendance?.overall_percentage ?? 0);
+  const today = attendanceToday(data);
   const homework = data.homework?.recent ?? [];
+  const week = data.class_attendance?.week ?? [];
+  const performance = data.class_performance ?? [];
   const exams = data.exams?.upcoming ?? [];
 
-  // A class whose start time has passed is done; the first that has not is next.
-  const cur = nowHHmm();
-  const isDone = (t: string | null) => !!t && t < cur;
-  const doneCount = classes.filter(c => isDone(c.time)).length;
-  const nextIndex = classes.findIndex(c => !isDone(c.time));
+  // "Friday, 18 September · EMP-012"
+  const dateLine = [moment().format('dddd, D MMMM'), profile?.employee_id].filter(Boolean).join(' · ');
 
-  const present = byClass.reduce((sum, c) => sum + c.present, 0);
-  const roster = byClass.reduce((sum, c) => sum + c.total, 0);
-
-  // "Sunday, 13 September · EMP-012"
-  const today = [moment().format('dddd, D MMMM'), profile?.employee_id].filter(Boolean).join(' · ');
-
-  const clock = (t: string | null) => (t ? moment(t, 'HH:mm').format('h:mm A') : '—');
+  // "Now: English, 10 A" · "Next at 11:30 AM" · "All done for today"
+  const classesNote =
+    classes.length === 0
+      ? 'None today'
+      : nowIndex >= 0
+      ? `Now · ${classes[nowIndex].class || quietCaps(classes[nowIndex].subject)}`
+      : nextIndex >= 0
+      ? `Next at ${clock12(classes[nextIndex].time)}`
+      : 'All done for today';
 
   return (
     <View style={s.root}>
@@ -95,29 +105,43 @@ const TeacherHomeScreen = () => {
         contentContainerStyle={s.scroll}
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Text style={s.today}>{today}</Text>
+        <PageLine text={dateLine} />
 
-        {/* The four numbers worth checking, each opening its own screen */}
-        <StatStrip
-          stats={[
+        {/* The four numbers worth checking, each saying what it means */}
+        <KpiGrid
+          items={[
             {
-              label: 'Classes done',
-              value: `${doneCount}/${classes.length}`,
+              icon: 'time-outline',
+              label: 'Classes today',
+              value: classes.length > 0 ? `${doneCount}/${classes.length}` : '0',
+              note: classesNote,
               onPress: () => navigation.navigate('Timetable'),
             },
             {
-              label: 'Students',
-              value: String(totals?.total_students ?? 0),
+              icon: 'people-outline',
+              label: 'Attendance',
+              value: today.pct != null ? `${today.pct}%` : '—',
+              note:
+                today.pct != null
+                  ? `${today.present} of ${today.marked} present`
+                  : byClass.length > 0
+                  ? 'Not marked yet'
+                  : 'No classes assigned',
+              low: today.pct != null && today.pct < LOW_ATTENDANCE,
               onPress: () => navigation.navigate('Analytics', { userRole: 'teacher' }),
             },
             {
+              icon: 'book-outline',
               label: 'Homework',
               value: String(totals?.homework_count ?? 0),
+              note: homework[0]?.date ? `Last set ${homework[0].date}` : 'None set yet',
               onPress: () => navigation.navigate('Homework'),
             },
             {
+              icon: 'document-text-outline',
               label: 'Exams',
-              value: String(totals?.upcoming_exams ?? 0),
+              value: String(totals?.upcoming_exams ?? exams.length),
+              note: exams[0] ? examSoon(exams[0]) : 'None coming up',
               onPress: () => navigation.navigate('Exams'),
             },
           ]}
@@ -125,84 +149,145 @@ const TeacherHomeScreen = () => {
 
         {/* Today's classes, against the clock */}
         {classes.length > 0 && (
-          <DashSection title="Today's classes" action="Timetable" onAction={() => navigation.navigate('Timetable')}>
-            {classes.map((c, i) => {
-              const done = isDone(c.time);
-              const next = i === nextIndex;
-              return (
-                <LineRow
-                  key={`${c.time}-${i}`}
-                  lead={<Text style={[s.time, done && s.timeDone, next && s.timeNext]}>{clock(c.time)}</Text>}
-                  title={quietCaps(c.subject)}
-                  meta={[c.class, c.room ? `Room ${c.room}` : null].filter(Boolean).join(' · ')}
-                  muted={done}
-                  trailing={next ? <Tag text="Next" accent /> : done ? <Tag text="Done" /> : null}
-                  isLast={i === classes.length - 1}
-                />
-              );
-            })}
-          </DashSection>
+          <Card>
+            <CardHead
+              icon="time-outline"
+              title="Today's schedule"
+              sub={`${classes.length} ${classes.length === 1 ? 'class' : 'classes'} · ${doneCount} done`}
+              action="Timetable"
+              onAction={() => navigation.navigate('Timetable')}
+            />
+            {classes.map((c, i) => (
+              <PeriodRow
+                key={`${c.time}-${i}`}
+                start={c.time}
+                end={c.end_time}
+                title={quietCaps(c.subject)}
+                meta={[c.class, c.room ? `Room ${c.room}` : null].filter(Boolean).join(' · ')}
+                state={states[i]}
+                isFirst={i === 0}
+                isLast={i === classes.length - 1}
+              />
+            ))}
+          </Card>
         )}
 
         {/* Who is in today, class by class */}
         {byClass.length > 0 && (
-          <DashSection
-            title={`Attendance today · ${overallAtt}%`}
-            action="Details"
-            onAction={() => navigation.navigate('Analytics', { userRole: 'teacher' })}
-          >
-            <Text style={s.caption}>
-              {present} of {roster} students present
-            </Text>
-            {byClass.map((c, i) => (
+          <Card>
+            <CardHead
+              icon="people-outline"
+              title="Attendance today"
+              sub={
+                today.pct != null
+                  ? `${today.pct}% · ${today.present} of ${today.marked} present`
+                  : `${today.roster} students · not marked yet`
+              }
+              action="Details"
+              onAction={() => navigation.navigate('Analytics', { userRole: 'teacher' })}
+            />
+            <ClassAttendanceRows rows={byClass} />
+            {week.length > 0 && (
+              <>
+                <Text style={s.caption}>Last 7 days, all classes</Text>
+                <Columns
+                  height={56}
+                  data={week.map(d => ({
+                    key: d.date,
+                    label: moment(d.date, 'YYYY-MM-DD').format('ddd'),
+                    sub: moment(d.date, 'YYYY-MM-DD').format('D'),
+                    value: d.percentage,
+                    low: d.percentage != null && d.percentage < LOW_ATTENDANCE,
+                  }))}
+                />
+              </>
+            )}
+          </Card>
+        )}
+
+        {/* Each class and subject's latest exam, against the one before */}
+        {performance.length > 0 && (
+          <Card>
+            <CardHead
+              icon="trophy-outline"
+              title="Class performance"
+              sub="Latest exam · the tick is the exam before"
+              action="Details"
+              onAction={() => navigation.navigate('Analytics', { userRole: 'teacher' })}
+            />
+            {performance.slice(0, 4).map((p, i, list) => (
               <PctRow
-                key={`${c.class}-${i}`}
-                label={c.class}
-                pct={Math.round(c.percentage)}
-                low={c.percentage < LOW_ATTENDANCE}
-                meta={`${c.present} of ${c.total} present`}
-                isLast={i === byClass.length - 1}
+                key={`${p.class}-${p.subject}-${i}`}
+                label={`${p.class} · ${quietCaps(p.subject)}`}
+                pct={p.average}
+                low={p.average < PASS_MARK}
+                mark={p.previous_average}
+                tag={
+                  p.previous_average != null ? (
+                    <Pill
+                      text={`${p.average >= p.previous_average ? '▲' : '▼'} ${Math.abs(p.average - p.previous_average)}%`}
+                      tone={p.average >= p.previous_average ? 'good' : 'bad'}
+                    />
+                  ) : null
+                }
+                meta={[p.exam_name, `high ${p.highest}% · low ${p.lowest}%`, p.passed != null ? `${p.passed}/${p.students} passed` : null]
+                  .filter(Boolean)
+                  .join(' · ')}
+                isLast={i === list.length - 1}
               />
             ))}
-          </DashSection>
+          </Card>
         )}
 
         {homework.length > 0 && (
-          <DashSection title="Assigned homework" action="See all" onAction={() => navigation.navigate('Homework')}>
-            {homework.map((hw, i) => (
-              <LineRow
-                key={hw.id}
-                title={quietCaps(hw.title) || 'Homework'}
-                meta={[quietCaps(hw.subject_name), hw.class, hw.date].filter(Boolean).join(' · ')}
-                onPress={() => navigation.navigate('Homework')}
-                isLast={i === homework.length - 1}
-              />
-            ))}
-          </DashSection>
+          <Card>
+            <CardHead
+              icon="book-outline"
+              title="Assigned homework"
+              sub={`${totals?.homework_count ?? homework.length} in all`}
+              action="See all"
+              onAction={() => navigation.navigate('Homework')}
+            />
+            {homework.map((hw, i) => {
+              const done = typeof hw.done === 'number' ? hw.done : null;
+              return (
+                <LineRow
+                  key={hw.id}
+                  lead={<Initial text={quietCaps(hw.subject_name) || hw.title} />}
+                  title={quietCaps(hw.title) || 'Homework'}
+                  meta={[quietCaps(hw.subject_name), hw.class, hw.date].filter(Boolean).join(' · ')}
+                  trailing={
+                    done != null && (hw.students ?? 0) > 0 ? (
+                      <Pill text={`${done}/${hw.students} done`} tone={done >= (hw.students ?? 0) ? 'good' : 'neutral'} />
+                    ) : null
+                  }
+                  onPress={() => navigation.navigate('Homework')}
+                  isLast={i === homework.length - 1}
+                />
+              );
+            })}
+          </Card>
         )}
 
         {exams.length > 0 && (
-          <DashSection title="Upcoming exams" action="See all" onAction={() => navigation.navigate('Exams')}>
-            {exams.map((exam, i) => (
-              <LineRow
-                key={exam.id}
-                title={exam.name}
-                meta={[humanize(exam.type), exam.date_range, marksLabel(exam.total_marks)].filter(Boolean).join(' · ')}
-                trailing={<Tag text={exam.status} accent={exam.status === 'ongoing'} />}
-                isLast={i === exams.length - 1}
-              />
-            ))}
-          </DashSection>
+          <Card>
+            <CardHead
+              icon="document-text-outline"
+              title="Upcoming exams"
+              sub={`${exams.length} scheduled`}
+              action="See all"
+              onAction={() => navigation.navigate('Exams')}
+            />
+            <ExamRows exams={exams} />
+          </Card>
         )}
 
         {notices.length > 0 && (
-          <DashSection title="Notices">
+          <Card>
+            <CardHead icon="megaphone-outline" title="Notices" />
             {notices.map((n, i) => (
               <LineRow
                 key={n.id}
-                lead={
-                  <VectorIcon iconSet="Ionicons" iconName="megaphone-outline" size={18} color={theme.colors.textSecondary} />
-                }
                 title={n.title || 'Notice'}
                 meta={n.time}
                 trailing={<Chevron />}
@@ -210,7 +295,7 @@ const TeacherHomeScreen = () => {
                 isLast={i === notices.length - 1}
               />
             ))}
-          </DashSection>
+          </Card>
         )}
       </ScrollView>
     </View>
@@ -220,15 +305,9 @@ const TeacherHomeScreen = () => {
 export default TeacherHomeScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.card },
-  scroll: { paddingBottom: 32 },
-  today: { fontSize: 12, color: theme.colors.textMuted, paddingHorizontal: 20, paddingTop: 16 },
-  caption: { fontSize: 12, color: theme.colors.textMuted, marginBottom: 2 },
-
-  // Class times, as their own column
-  time: { width: 64, fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
-  timeDone: { color: theme.colors.textMuted },
-  timeNext: { color: theme.colors.primary },
+  root: { flex: 1, backgroundColor: theme.colors.background },
+  scroll: { paddingBottom: 28 },
+  caption: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted, marginTop: 10 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.
