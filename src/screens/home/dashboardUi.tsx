@@ -186,7 +186,7 @@ export const MiniStats = ({
   </View>
 );
 
-// ── Section (Fees keeps using this plain one) ────────────────────────────────
+// ── Section (the transport pay form keeps using this plain one) ──────────────
 // A plain heading, with an optional link to the full screen, under a line.
 export const DashSection = ({
   title,
@@ -215,16 +215,7 @@ export const DashSection = ({
   </>
 );
 
-// ── A percentage as a thin bar (Fees keeps using this one) ───────────────────
-export const Bar = ({ pct, low }: { pct: number; low?: boolean }) => (
-  <View style={s.barBg}>
-    <View
-      style={[s.barFill, { width: `${Math.max(2, Math.min(pct, 100))}%` as any }, low && s.barFillLow]}
-    />
-  </View>
-);
-
-// A slightly heavier bar for the cards.
+// ── A percentage as a bar, for the cards ─────────────────────────────────────
 // `mark` draws a tick where something to compare with sits — the class average.
 export const Meter = ({
   pct,
@@ -742,18 +733,13 @@ const __mk_s = () => StyleSheet.create({
   miniValue: { fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary },
   miniLabel: { fontSize: 11, color: theme.colors.textMuted, marginTop: 2 },
 
-  // Plain section (Fees)
+  // Plain section (transport pay form)
   divider: { height: 1, backgroundColor: theme.colors.divider },
   section: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 8 },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
   sectionTitle: { fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary },
   sectionAction: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
   rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-
-  // Thin bar (Fees)
-  barBg: { height: 4, borderRadius: 2, backgroundColor: theme.colors.border, overflow: 'hidden' },
-  barFill: { height: '100%', borderRadius: 2, backgroundColor: theme.colors.primary },
-  barFillLow: { backgroundColor: theme.colors.danger },
 
   // Card bar
   meterWrap: { justifyContent: 'center' },

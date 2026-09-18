@@ -63,6 +63,8 @@ import NotificationScreen from '../screens/notification/NotificationScreen';
 import BookReaderScreen from '../screens/books/BookReaderScreen';
 import PayAmountScreen from '../screens/fees/PayAmountScreen';
 import TransportPayScreen from '../screens/fees/TransportPayScreen';
+import QrPayScreen from '../screens/fees/QrPayScreen';
+import FeeImageScreen from '../screens/fees/FeeImageScreen';
 import TransportRouteScreen from '../screens/transport/TransportRouteScreen';
 import TransportFeesScreen from '../screens/transport/TransportFeesScreen';
 import TransportPaymentsScreen from '../screens/transport/TransportPaymentsScreen';
@@ -185,6 +187,9 @@ const AppNavigator = () => {
       {/* Fee payment */}
       <Stack.Screen name="PayAmount" component={PayAmountScreen} />
       <Stack.Screen name="TransportPay" component={TransportPayScreen} />
+      {/* Paying on the school's own UPI QR, and its QR / a screenshot full screen */}
+      <Stack.Screen name="QrPay" component={QrPayScreen} />
+      <Stack.Screen name="FeeImage" component={FeeImageScreen} />
 
       {/* Transport — the route, the fee year and the receipts */}
       <Stack.Screen name="TransportRoute" component={TransportRouteScreen} />

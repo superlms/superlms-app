@@ -21,7 +21,7 @@ import { fileUri, readTextFile } from './chatFiles';
 
 const MAX_ZOOM = 5;
 
-const ZoomImage = ({ uri, onError }: { uri: string; onError: () => void }) => {
+export const ZoomImage = ({ uri, onError }: { uri: string; onError: () => void }) => {
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const x = useSharedValue(0);

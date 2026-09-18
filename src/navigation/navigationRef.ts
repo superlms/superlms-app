@@ -18,6 +18,7 @@ const DRAWER_SCREENS = new Set<string>([
   'Timetable',
   'Subjects',
   'Transport',
+  'Fees',
 ]);
 
 let pending: { screen: string; params?: Record<string, any> } | null = null;

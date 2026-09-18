@@ -10,7 +10,6 @@ import {
 import VectorIcon from '../../components/VectorIcon';
 import { Skeleton } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
-import { Bar } from '../home/dashboardUi';
 import type { Installment, InstallmentStatus, MonthRow, PaymentRow } from '../../api/feeApi';
 
 /**
@@ -23,74 +22,6 @@ export const inr = (n: number) =>
   `₹ ${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
 const capitalise = (v?: string | null) => (v ? v.charAt(0).toUpperCase() + v.slice(1) : '');
-
-// ── Tabs ─────────────────────────────────────────────────────────────────────
-export const FeeTabs = <T extends string>({
-  tabs,
-  active,
-  onSelect,
-}: {
-  tabs: T[];
-  active: T;
-  onSelect: (t: T) => void;
-}) => (
-  <>
-    <View style={s.tabs}>
-      {tabs.map(t => {
-        const on = t === active;
-        return (
-          <TouchableOpacity
-            key={t}
-            activeOpacity={0.6}
-            onPress={() => onSelect(t)}
-            style={[s.tab, on && s.tabActive]}
-          >
-            <Text style={[s.tabText, on && s.tabTextActive]}>{t}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-    <View style={s.fullDivider} />
-  </>
-);
-
-// ── The figure a tab opens with ──────────────────────────────────────────────
-//   ACADEMIC · 2026-27
-//   ₹ 12,000 due
-//   ₹ 30,000 paid of ₹ 42,000
-//   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━──────────
-export const FeeHead = ({
-  kicker,
-  amount,
-  suffix,
-  line,
-  pct,
-  danger,
-  children,
-}: {
-  kicker: string;
-  amount: string;
-  suffix?: string;
-  line?: string | null;
-  pct?: number | null;
-  danger?: boolean;
-  children?: React.ReactNode;
-}) => (
-  <View style={s.head}>
-    <Text style={s.kicker}>{kicker.toUpperCase()}</Text>
-    <View style={s.bigRow}>
-      <Text style={[s.big, danger && s.danger]}>{amount}</Text>
-      {!!suffix && <Text style={s.bigSuffix}>{suffix}</Text>}
-    </View>
-    {!!line && <Text style={s.line}>{line}</Text>}
-    {pct != null && (
-      <View style={s.headBar}>
-        <Bar pct={pct} />
-      </View>
-    )}
-    {children}
-  </View>
-);
 
 // ── Buttons ──────────────────────────────────────────────────────────────────
 export const PayButton = ({
@@ -321,23 +252,6 @@ const __mk_s = () => StyleSheet.create({
   danger: { color: theme.colors.danger },
   accent: { color: theme.colors.primary },
   muted: { color: theme.colors.textMuted },
-
-  // Tabs
-  tabs: { flexDirection: 'row', gap: 20, paddingHorizontal: 20, paddingTop: 12 },
-  tab: { paddingBottom: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabActive: { borderBottomColor: theme.colors.primary },
-  tabText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
-  tabTextActive: { color: theme.colors.primary, fontWeight: '600' },
-  fullDivider: { height: 1, backgroundColor: theme.colors.border },
-
-  // Head
-  head: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 20 },
-  kicker: { fontSize: 11, fontWeight: '600', letterSpacing: 0.8, color: theme.colors.textMuted },
-  bigRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 6 },
-  big: { fontSize: 34, fontWeight: '700', lineHeight: 42, color: theme.colors.textPrimary },
-  bigSuffix: { fontSize: 15, color: theme.colors.textSecondary },
-  line: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 2 },
-  headBar: { marginTop: 12 },
 
   // Pay
   payAction: { marginTop: 18 },

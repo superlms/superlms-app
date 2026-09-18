@@ -207,3 +207,88 @@ export const getFeePaymentStatus = async (
   );
   return data?.data ?? data;
 };
+
+// ─── Paying on the school's own UPI QR ───────────────────────────────────────
+// The money goes straight to the school; the student then reports it (UTR
+// and/or a screenshot) and the school checks it before it counts as paid.
+export type QrRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface SchoolQr {
+  image_url: string | null;
+  upi_id: string | null;
+  payee_name: string | null;
+  instructions: string | null;
+  updated_at: string | null;
+}
+
+export interface QrPaymentRequest {
+  id: number;
+  fee_type: FeeType;
+  amount: number;
+  approved_amount: number | null;
+  utr: string | null;
+  paid_on: string | null;
+  note: string | null;
+  months: string[];
+  installment: string | null;
+  status: QrRequestStatus;
+  review_note: string | null;
+  receipt_number: string | null;
+  screenshot_url: string | null;
+  submitted_at: string | null;
+  reviewed_at: string | null;
+}
+
+export interface FeeQr {
+  /** The school's QR while it takes fees on it, else null. */
+  qr: SchoolQr | null;
+  /** The school's own online gateway is set up too. */
+  gateway_ready: boolean;
+  requests: QrPaymentRequest[];
+  pending_count: number;
+  pending_amount: number;
+}
+
+export interface QrSubmitPayload {
+  feeType: FeeType;
+  amount: number;
+  utr?: string;
+  paidOn?: string; // YYYY-MM-DD
+  note?: string;
+  months?: string[];
+  transportationId?: number;
+  installment?: string;
+  screenshot?: { uri: string; type?: string | null; name?: string | null } | null;
+}
+
+// GET /fees/qr — the school's QR and what this student has sent on it.
+export const getFeeQr = async (): Promise<FeeQr> => {
+  const { data } = await apiClient.get('/fees/qr');
+  return data?.data ?? data;
+};
+
+// POST /fees/qr/submit — report a payment made on the QR (multipart).
+export const submitQrPayment = async (p: QrSubmitPayload): Promise<QrPaymentRequest> => {
+  const fd = new FormData();
+  fd.append('fee_type', p.feeType);
+  fd.append('amount', String(p.amount));
+  if (p.utr) fd.append('utr', p.utr);
+  if (p.paidOn) fd.append('paid_on', p.paidOn);
+  if (p.note) fd.append('note', p.note);
+  (p.months ?? []).forEach(m => fd.append('months[]', m));
+  if (p.transportationId) fd.append('transportation_id', String(p.transportationId));
+  if (p.installment) fd.append('installment', p.installment);
+  if (p.screenshot?.uri) {
+    fd.append('screenshot', {
+      uri: p.screenshot.uri,
+      type: p.screenshot.type ?? 'image/jpeg',
+      name: p.screenshot.name ?? 'payment.jpg',
+    } as any);
+  }
+  const { data } = await apiClient.post('/fees/qr/submit', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    // A screenshot on a slow connection takes longer than the usual 15 s.
+    timeout: 60000,
+  });
+  return data?.data ?? data;
+};
