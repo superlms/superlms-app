@@ -1,11 +1,9 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,27 +13,49 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import VectorIcon from '../../components/VectorIcon';
+import { AppDialog } from '../../components/AppDialog';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr, pickImage, pickPdf } from '../../utils/filePickers';
 import { PickedFile } from '../../api/adminProfileApi';
 import {
   AdminAnnouncement,
   AnnouncementType,
+  ClassOption,
   createAnnouncement,
+  getAdminAnnouncements,
   updateAnnouncement,
 } from '../../api/adminContentApi';
 import { DocHeader } from '../more/docUi';
-import { AppDialog } from '../../components/AppDialog';
+import {
+  FieldLabel,
+  FileChip,
+  FormCard,
+  FormError,
+  Hint,
+  OptionSheet,
+  PickerCard,
+  Segment,
+  SubmitButton,
+  isPdfFile,
+  withinOneMb,
+} from './adminFormUi';
+import { lastKnownClasses } from './AdminAnnouncementScreen';
+
+/**
+ * A new announcement, or one being edited, as the admin panel's form has it:
+ * the title (up to 1000 characters) and content (up to 3000), who it goes to —
+ * everyone, the teachers, or the students (all of them, or one class) — and an
+ * image or PDF of up to 1 MB from the clip in the header. On an edit the files
+ * already on it show as chips; the cross takes one off when it is saved.
+ */
 
 const AUDIENCES: { key: AnnouncementType; label: string }[] = [
-  { key: 'all', label: 'Both' },
+  { key: 'all', label: 'All' },
   { key: 'user', label: 'Students' },
   { key: 'teacher', label: 'Teachers' },
 ];
 
-// Attachments are named by type, never by file name.
-const fileLabel = (f: PickedFile) =>
-  f.type === 'application/pdf' || f.name?.toLowerCase().endsWith('.pdf') ? 'PDF' : 'Image';
+const ALL_CLASSES = 'all';
 
 const AdminAnnouncementFormScreen = ({ navigation, route }: any) => {
   const item: AdminAnnouncement | undefined = route?.params?.item;
@@ -44,32 +64,49 @@ const AdminAnnouncementFormScreen = ({ navigation, route }: any) => {
   const [name, setName] = useState(item?.announcement_name ?? '');
   const [content, setContent] = useState(item?.announcement_content ?? '');
   const [type, setType] = useState<AnnouncementType>(item?.type ?? 'all');
+  const [standardId, setStandardId] = useState<number | null>(item?.standard_id ?? null);
+  const [classes, setClasses] = useState<ClassOption[]>(lastKnownClasses());
+  const [classOpen, setClassOpen] = useState(false);
   const [file, setFile] = useState<PickedFile | null>(null);
-  const [focused, setFocused] = useState<'title' | 'content' | null>(null);
+  const [removeImage, setRemoveImage] = useState(false);
+  const [removePdf, setRemovePdf] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
-  const titleRef = useRef<TextInput>(null);
   const contentRef = useRef<TextInput>(null);
   const insets = useSafeAreaInsets();
 
-  // Whatever is already attached to the announcement, while no new file is picked.
-  const existingFiles = file
-    ? []
-    : ([
-        item?.image_url ? { label: 'Image', icon: 'image', url: item.image_url } : null,
-        item?.pdf_url ? { label: 'PDF', icon: 'file-text', url: item.pdf_url } : null,
-      ].filter(Boolean) as { label: string; icon: string; url: string }[]);
+  // The school's classes, for "Which students", when the list hasn't brought them.
+  useEffect(() => {
+    if (classes.length > 0) return;
+    getAdminAnnouncements({ days: 1 })
+      .then(r => setClasses(r.standards))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const className = classes.find(c => c.id === standardId)?.name ?? item?.standard_name ?? null;
+
+  // A new file of a kind replaces the one of that kind on save.
+  const newIsPdf = file ? isPdfFile(file) : false;
+  const keptImage = !!item?.image_url && !removeImage && !(file && !newIsPdf);
+  const keptPdf = !!item?.pdf_url && !removePdf && !(file && newIsPdf);
 
   const attach = async (kind: 'image' | 'pdf') => {
     setPickerOpen(false);
     const f = kind === 'image' ? await pickImage() : await pickPdf();
-    if (f) {
+    if (f && withinOneMb(f)) {
       setFile(f);
       setError('');
     }
+  };
+
+  const pickType = (t: AnnouncementType) => {
+    setType(t);
+    // Leaving the students drops the class with them.
+    if (t !== 'user') setStandardId(null);
   };
 
   const save = async () => {
@@ -89,7 +126,10 @@ const AdminAnnouncementFormScreen = ({ navigation, route }: any) => {
         announcement_name: name.trim(),
         announcement_content: content.trim(),
         type,
+        standard_id: type === 'user' ? standardId : null,
         file,
+        remove_image: isEdit && removeImage,
+        remove_pdf: isEdit && removePdf,
       };
       if (isEdit) await updateAnnouncement(item!.id, payload);
       else await createAnnouncement(payload);
@@ -110,6 +150,8 @@ const AdminAnnouncementFormScreen = ({ navigation, route }: any) => {
     navigation.goBack();
   };
 
+  const hasAnyFile = !!file || keptImage || keptPdf;
+
   return (
     <View style={s.root}>
       {/* The clip icon in the header attaches an image or a PDF */}
@@ -120,136 +162,94 @@ const AdminAnnouncementFormScreen = ({ navigation, route }: any) => {
         onRightPress={() => setPickerOpen(true)}
       />
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Title card — tap anywhere on it to type */}
-          <Pressable
-            style={[s.field, focused === 'title' && s.fieldFocused]}
-            onPress={() => titleRef.current?.focus()}
-          >
-            <Text style={s.fieldLabel}>Title</Text>
-            <TextInput
-              ref={titleRef}
-              style={s.fieldInput}
-              placeholder="What is this announcement about?"
-              placeholderTextColor={theme.colors.textMuted}
-              value={name}
-              onChangeText={t => { setName(t); setError(''); }}
-              onFocus={() => setFocused('title')}
-              onBlur={() => setFocused(null)}
-              multiline
-              submitBehavior="submit"
-              textAlignVertical="top"
-              returnKeyType="next"
-              onSubmitEditing={() => contentRef.current?.focus()}
-            />
-          </Pressable>
+          <FormCard
+            label="Title"
+            value={name}
+            onChangeText={t => {
+              setName(t);
+              setError('');
+            }}
+            placeholder="What is this announcement about?"
+            multiline
+            maxLength={1000}
+            returnKeyType="next"
+            onSubmitEditing={() => contentRef.current?.focus()}
+          />
 
-          {/* Content card */}
-          <Pressable
-            style={[s.field, focused === 'content' && s.fieldFocused]}
-            onPress={() => contentRef.current?.focus()}
-          >
-            <Text style={s.fieldLabel}>Content</Text>
-            <TextInput
-              ref={contentRef}
-              style={[s.fieldInput, s.fieldInputMulti]}
-              placeholder="Write the announcement here..."
-              placeholderTextColor={theme.colors.textMuted}
-              value={content}
-              onChangeText={t => { setContent(t); setError(''); }}
-              onFocus={() => setFocused('content')}
-              onBlur={() => setFocused(null)}
-              multiline
-              textAlignVertical="top"
-            />
-          </Pressable>
+          <FormCard
+            label="Content"
+            inputRef={contentRef}
+            value={content}
+            onChangeText={t => {
+              setContent(t);
+              setError('');
+            }}
+            placeholder="Write the announcement here..."
+            multiline
+            minHeight={140}
+            maxLength={3000}
+          />
 
-          {/* Audience */}
+          {/* Audience, and for students which of them */}
           <View>
-            <Text style={s.sectionLabel}>Audience</Text>
-            <View style={s.segment}>
-              {AUDIENCES.map(a => {
-                const active = type === a.key;
-                return (
-                  <TouchableOpacity
-                    key={a.key}
-                    activeOpacity={0.7}
-                    onPress={() => setType(a.key)}
-                    style={[s.segmentItem, active && s.segmentItemActive]}
-                  >
-                    <Text style={[s.segmentText, active && s.segmentTextActive]}>{a.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <FieldLabel>Audience</FieldLabel>
+            <Segment options={AUDIENCES} value={type} onChange={pickType} />
           </View>
 
-          {/* Attachment: the new file, the existing one, or a quiet hint */}
-          {file ? (
-            <View style={s.chips}>
-              <View style={s.chip}>
-                <VectorIcon
-                  iconSet="Feather"
-                  iconName={fileLabel(file) === 'PDF' ? 'file-text' : 'image'}
-                  size={14}
-                  color={theme.colors.primary}
-                />
-                <Text style={s.chipText} numberOfLines={1}>{fileLabel(file)}</Text>
-                <TouchableOpacity onPress={() => setFile(null)} hitSlop={8}>
-                  <VectorIcon iconSet="Ionicons" iconName="close" size={15} color={theme.colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
+          {type === 'user' && (
+            <View style={s.group}>
+              <PickerCard
+                label="Which students"
+                value={standardId ? className : 'All Classes'}
+                onPress={() => setClassOpen(true)}
+              />
+              <Hint>
+                {standardId
+                  ? `Only students of ${className ?? 'this class'} will see it.`
+                  : 'Every student in the school will see it.'}
+              </Hint>
             </View>
-          ) : existingFiles.length > 0 ? (
-            <View>
-              <View style={s.chips}>
-                {existingFiles.map(f => (
-                  <TouchableOpacity
-                    key={f.label}
-                    style={s.chip}
-                    activeOpacity={0.7}
-                    onPress={() => Linking.openURL(f.url)}
-                  >
-                    <VectorIcon iconSet="Feather" iconName={f.icon} size={14} color={theme.colors.primary} />
-                    <Text style={s.chipText} numberOfLines={1}>{f.label}</Text>
-                    <VectorIcon iconSet="Feather" iconName="external-link" size={12} color={theme.colors.textMuted} />
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={s.hint}>
-                Attach a new file with the clip icon at the top to replace this one.
-              </Text>
-            </View>
-          ) : (
-            <Text style={s.hint}>
-              Optional: attach an image or a PDF with the clip icon at the top.
-            </Text>
           )}
 
-          {!!error && <Text style={s.errorText}>{error}</Text>}
+          {/* Attachments: the new file, what is already on it, or a quiet hint */}
+          {hasAnyFile ? (
+            <View style={s.group}>
+              <View style={s.chips}>
+                {keptImage && (
+                  <FileChip
+                    kind="image"
+                    onPress={() => Linking.openURL(item!.image_url!)}
+                    onRemove={() => setRemoveImage(true)}
+                  />
+                )}
+                {keptPdf && (
+                  <FileChip
+                    kind="pdf"
+                    onPress={() => Linking.openURL(item!.pdf_url!)}
+                    onRemove={() => setRemovePdf(true)}
+                  />
+                )}
+                {!!file && <FileChip kind={newIsPdf ? 'pdf' : 'image'} onRemove={() => setFile(null)} />}
+              </View>
+              <Hint>Image (JPG/PNG/GIF/WebP) or PDF · max 1 MB. The clip at the top adds or replaces one.</Hint>
+            </View>
+          ) : (
+            <Hint>Optional: attach an image or a PDF (max 1 MB) with the clip icon at the top.</Hint>
+          )}
 
-          <TouchableOpacity
-            activeOpacity={0.85}
+          <FormError>{error}</FormError>
+
+          <SubmitButton
+            label={isEdit ? 'Update Announcement' : 'Post Announcement'}
+            busy={saving}
             onPress={save}
-            style={[s.submitBtn, saving && s.submitBtnBusy]}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator color={theme.colors.white} size="small" />
-            ) : (
-              <Text style={s.submitText}>
-                {isEdit ? 'Update Announcement' : 'Post Announcement'}
-              </Text>
-            )}
-          </TouchableOpacity>
+          />
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -277,6 +277,18 @@ const AdminAnnouncementFormScreen = ({ navigation, route }: any) => {
         </View>
       </Modal>
 
+      <OptionSheet
+        visible={classOpen}
+        title="Which students"
+        options={[
+          { key: ALL_CLASSES, label: 'All Classes' },
+          ...classes.map(c => ({ key: String(c.id), label: c.name })),
+        ]}
+        selected={[standardId ? String(standardId) : ALL_CLASSES]}
+        onPick={k => setStandardId(k === ALL_CLASSES ? null : Number(k))}
+        onClose={() => setClassOpen(false)}
+      />
+
       {/* Saved */}
       <AppDialog
         visible={!!successMsg}
@@ -293,83 +305,10 @@ export default AdminAnnouncementFormScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
+  flex: { flex: 1 },
   scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 14 },
-
-  // Input cards — label inside, borderless input underneath
-  field: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.card,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  fieldFocused: { borderColor: theme.colors.primary },
-  fieldLabel: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted },
-  fieldInput: {
-    fontSize: 15,
-    color: theme.colors.textPrimary,
-    paddingHorizontal: 0,
-    paddingVertical: 4,
-    marginTop: 2,
-  },
-  fieldInputMulti: { minHeight: 140 },
-
-  // Audience segment
-  sectionLabel: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted, marginBottom: 8 },
-  segment: {
-    flexDirection: 'row',
-    padding: 3,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.background,
-  },
-  segmentItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  segmentItemActive: {
-    backgroundColor: theme.colors.card,
-    borderColor: theme.colors.border,
-  },
-  segmentText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
-  segmentTextActive: { color: theme.colors.primary, fontWeight: '600' },
-
-  // Attachment chip
+  group: { gap: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    maxWidth: 200,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: theme.radius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.background,
-  },
-  chipText: { flexShrink: 1, fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
-  hint: { fontSize: 12, color: theme.colors.textMuted, marginTop: 8 },
-  errorText: { fontSize: 13, color: theme.colors.danger, lineHeight: 18 },
-
-  // Submit
-  submitBtn: {
-    height: 48,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  submitBtnBusy: { opacity: 0.7 },
-  submitText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 
   // Attachment sheet
   sheetWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' },

@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import constant from '../utils/constant';
 import { PickedFile } from './adminProfileApi';
 
 // Transport module. Mirrors app/Livewire/Admin/Transport.php + HandlesTransportFees
@@ -16,22 +17,54 @@ export interface TransportStats {
   monthly_revenue: number;
 }
 
-export interface RouteRow {
-  id: number;
+/**
+ * A route as the panel lists it: one per route, with a row under it for each
+ * vehicle type it runs (a driver is set per type).
+ */
+export interface RouteGroup {
+  key: string;
   route_name: string;
-  driver_id: number | null;
-  driver_name: string | null;
+  vehicle_types: string[];
+  driver_names: string[];
+  driver_image: string | null;
+  vehicle_nos: string[];
   pickup_time: string | null;
   drop_time: string | null;
   monthly_fee: number;
+  /** The year at the default eleven months (June off). */
+  annual_fee: number;
   capacity: number;
-  students_count: number;
+  students: number;
   is_active: boolean;
+  rows: {
+    id: number;
+    vehicle_type: string | null;
+    driver_id: number | null;
+    driver_name: string | null;
+    driver_phone: string | null;
+    vehicle_no: string | null;
+    students: number;
+    is_active: boolean;
+  }[];
 }
+
+/** One vehicle-type row, for pickers: "Route 1 — Bus". */
+export interface RouteOption {
+  id: number;
+  route_name: string;
+  vehicle_type?: string | null;
+  group?: string;
+  is_active?: boolean;
+  label?: string;
+}
+
+export const routeLabel = (r: RouteOption) =>
+  r.label ?? `${r.route_name}${r.vehicle_type ? ` — ${r.vehicle_type}` : ''}`;
 
 export interface DriverRow {
   id: number;
   name: string;
+  /** Empty when the driver was saved without one. */
   email: string;
   phone: string | null;
   license_no: string | null;
@@ -41,7 +74,7 @@ export interface DriverRow {
   experience_years: number;
   image: string | null;
   is_active: boolean;
-  routes: { id: number; name: string }[];
+  routes: { id: number; name: string; vehicle_type?: string | null; label?: string }[];
 }
 
 export type Months = Record<string, boolean>;
@@ -54,6 +87,7 @@ export interface TransportStudent {
   image: string | null;
   route_id: number | null;
   route: string;
+  vehicle_type?: string | null;
   driver: string;
   monthly: number;
   months: Months;
@@ -70,16 +104,55 @@ export interface MonthStatus {
   paid: number;
   status: 'paid' | 'partial' | 'unpaid';
 }
+/** A month of the academic year as the panel's Monthly Fee Status shows it. */
+export interface YearMonthStatus {
+  key: string;
+  label: string;
+  year: number;
+  amount: number;
+  paid: number;
+  status: 'paid' | 'partial' | 'unpaid' | 'upcoming' | 'not_used';
+  billable: boolean;
+  is_current: boolean;
+}
+
+export interface FeePayment {
+  id: number;
+  amount: number;
+  mode: string;
+  date: string;
+  receipt: string;
+  route: string | null;
+  remark: string | null;
+}
+
 export interface FeeSummary {
-  student: { id: number; name: string; admission_no: string | null; class: string; image: string | null };
-  route: { id: number; name: string } | null;
+  student: {
+    id: number;
+    name: string;
+    admission_no: string | null;
+    class: string;
+    image: string | null;
+    email?: string | null;
+    mobile?: string | null;
+  };
+  route: {
+    id: number;
+    name: string;
+    vehicle_type?: string | null;
+    pickup_time?: string | null;
+    drop_time?: string | null;
+    driver?: string | null;
+  } | null;
   monthly: number;
+  months?: Months;
   months_count: number;
   annual: number;
   paid: number;
   remaining: number;
-  payments: { id: number; amount: number; mode: string; date: string; receipt: string; route: string | null; remark: string | null }[];
+  payments: FeePayment[];
   month_status: MonthStatus[];
+  months_year?: YearMonthStatus[];
 }
 
 // ── Stats + options ──
@@ -87,40 +160,57 @@ export const getTransportStats = async (): Promise<TransportStats> => {
   const { data } = await apiClient.get('/admin/transport/stats');
   return unwrap(data);
 };
-export const getRouteOptions = async (): Promise<{ id: number; route_name: string }[]> => {
+export const getRouteOptions = async (): Promise<RouteOption[]> => {
   const { data } = await apiClient.get('/admin/transport/route-options');
   return unwrap(data)?.routes ?? [];
 };
 
-// ── Routes ──
-export const getRoutes = async (p: { search?: string; driver_id?: number | null; status?: string }): Promise<RouteRow[]> => {
-  const { data } = await apiClient.get('/admin/transport/routes', { params: p });
-  return unwrap(data)?.routes ?? [];
+// ── Route groups (the panel's Routes tab) ──
+export const getRouteGroups = async (
+  p: { search?: string; driver_id?: number | null; status?: string } = {},
+): Promise<{ routes: RouteGroup[]; vehicle_types: string[] }> => {
+  const { data } = await apiClient.get('/admin/transport/route-groups', { params: p });
+  const d = unwrap(data);
+  return { routes: d?.routes ?? [], vehicle_types: d?.vehicle_types ?? [] };
 };
-export interface RoutePayload {
+export const getRouteGroup = async (key: string): Promise<RouteGroup> => {
+  const { data } = await apiClient.get(`/admin/transport/route-groups/${key}`);
+  return unwrap(data);
+};
+export interface RouteGroupPayload {
   route_name: string;
+  vehicle_types: string[];
   pickup_time?: string | null;
   drop_time?: string | null;
   monthly_fee?: number;
   capacity?: number;
   is_active?: boolean;
 }
-export const saveRoute = async (id: number | null, p: RoutePayload) => {
-  const url = id ? `/admin/transport/routes/${id}` : '/admin/transport/routes';
+/** Saves a route; the message says what happened (and any type kept for its students). */
+export const saveRouteGroup = async (
+  key: string | null,
+  p: RouteGroupPayload,
+): Promise<{ key: string; kept: string[]; message: string }> => {
+  const url = key ? `/admin/transport/route-groups/${key}` : '/admin/transport/route-groups';
   const { data } = await apiClient.post(url, p);
-  return unwrap(data);
+  return { ...(unwrap(data) ?? {}), message: data?.message ?? '' };
 };
-export const toggleRoute = async (id: number) => { await apiClient.post(`/admin/transport/routes/${id}/toggle`); };
-export const deleteRoute = async (id: number) => { await apiClient.delete(`/admin/transport/routes/${id}`); };
+export const toggleRouteGroup = async (key: string) => { await apiClient.post(`/admin/transport/route-groups/${key}/toggle`); };
+export const deleteRouteGroup = async (key: string) => { await apiClient.delete(`/admin/transport/route-groups/${key}`); };
 
 // ── Drivers ──
 export const getDrivers = async (p: { search?: string; route_id?: number | null; status?: string }): Promise<{ drivers: DriverRow[]; vehicle_types: string[] }> => {
   const { data } = await apiClient.get('/admin/transport/drivers', { params: p });
   return unwrap(data);
 };
+export const getDriver = async (id: number): Promise<DriverRow> => {
+  const { data } = await apiClient.get(`/admin/transport/drivers/${id}`);
+  return unwrap(data);
+};
 export interface DriverPayload {
   name: string;
-  email: string;
+  /** Optional: a driver without one gets a stand-in address. */
+  email?: string;
   phone?: string | null;
   license_no?: string | null;
   vehicle_no?: string | null;
@@ -134,7 +224,7 @@ export interface DriverPayload {
 const driverForm = (p: DriverPayload) => {
   const form = new FormData();
   form.append('name', p.name);
-  form.append('email', p.email);
+  if (p.email) form.append('email', p.email);
   if (p.phone) form.append('phone', p.phone);
   if (p.license_no) form.append('license_no', p.license_no);
   if (p.vehicle_no) form.append('vehicle_no', p.vehicle_no);
@@ -163,21 +253,18 @@ export const saveStudentMonths = async (p: { student_detail_id: number; transpor
   const { data } = await apiClient.post('/admin/transport/students/months', p);
   return unwrap(data);
 };
-export const removeTransportStudent = async (student_detail_id: number, transportation_id: number) => {
-  await apiClient.delete('/admin/transport/students', { data: { student_detail_id, transportation_id } });
-};
-
 // ── Fees ──
 export const getFeeStudents = async (route_id: number | null, search = ''): Promise<{ id: number; name: string; admission_no: string | null; class: string }[]> => {
   const { data } = await apiClient.get('/admin/transport/fees/students', { params: { route_id: route_id || undefined, search: search || undefined } });
   return unwrap(data)?.students ?? [];
 };
-export const getFeeSummary = async (student_id: number): Promise<FeeSummary> => {
-  const { data } = await apiClient.get('/admin/transport/fees/summary', { params: { student_id } });
+/** A student's transport fee; `route_id` reads it on that route when they ride it. */
+export const getFeeSummary = async (student_id: number, route_id?: number | null): Promise<FeeSummary> => {
+  const { data } = await apiClient.get('/admin/transport/fees/summary', {
+    params: { student_id, route_id: route_id || undefined },
+  });
   return unwrap(data);
 };
-export const recordPayment = async (p: { student_id: number; amount: number; mode: string; date: string; remark?: string }) => {
-  const { data } = await apiClient.post('/admin/transport/fees/payment', p);
-  return unwrap(data);
-};
-export const deletePayment = async (id: number) => { await apiClient.delete(`/admin/transport/fees/payment/${id}`); };
+// The receipt as the panel prints it, behind the admin's token.
+export const adminTransportReceiptUrl = (id: number) =>
+  `${constant.API_BASE_URL}/admin/transport/fees/payment/${id}/pdf`;

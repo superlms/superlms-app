@@ -1,104 +1,129 @@
 import React, { useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
+  Modal,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import moment from 'moment';
+import VectorIcon from '../../components/VectorIcon';
 import { AppDialog } from '../../components/AppDialog';
 import { theme, onThemeChange } from '../../utils/theme';
-import { apiErr } from '../../utils/filePickers';
-import { ApiEvent } from '../../api/calendarApi';
-import { EventType, createEvent, updateEvent } from '../../api/adminContentApi';
+import { apiErr, pickImage, pickPdf } from '../../utils/filePickers';
+import { PickedFile } from '../../api/adminProfileApi';
+import { AdminEvent, EventType, createEvent, updateEvent } from '../../api/adminContentApi';
 import { DocHeader } from '../more/docUi';
+import {
+  DateSheet,
+  FieldLabel,
+  FileChip,
+  FormCard,
+  FormError,
+  Hint,
+  PickerCard,
+  Segment,
+  SubmitButton,
+  SwitchRow,
+  TimeSheet,
+  clock12,
+  isPdfFile,
+  isPdfUrl,
+  withinOneMb,
+} from './adminFormUi';
+import { DEFAULT_EVENT_COLOR, EVENT_COLORS, EVENT_TYPES } from './adminCalendarUi';
 
-// The colour still travels to the API with every event; it is simply no longer
-// used to paint the screens.
-export const EVENT_TYPES: { key: EventType; label: string; color: string }[] = [
-  { key: 'class', label: 'Class', color: '#3b82f6' },
-  { key: 'exam', label: 'Exam', color: '#ef4444' },
-  { key: 'meeting', label: 'Meeting', color: '#f59e0b' },
-  { key: 'event', label: 'Event', color: '#10b981' },
-  { key: 'holiday', label: 'Holiday', color: '#8b5cf6' },
-];
-export const colorFor = (t: string) => EVENT_TYPES.find(e => e.key === t)?.color ?? '#6b7280';
+/**
+ * A new event, or one being edited, as the admin panel's event form has it:
+ * the title, its kind, one of the panel's twelve colours, a description of up
+ * to 3000 characters, an image or PDF of up to 1 MB from the clip in the
+ * header, the day, and a start and an end time unless it runs all day. A new
+ * event starts on the day chosen in the calendar, as a class, in blue.
+ */
 
-const hhmm = (t?: string | null) => (t ? t.slice(0, 5) : '');
-const pad = (n: number) => String(n).padStart(2, '0');
-const todayStr = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
+const TYPES = EVENT_TYPES.map(t => ({ key: t.key, label: t.label }));
 
 const AdminCalendarFormScreen = ({ navigation, route }: any) => {
-  const item: ApiEvent | undefined = route?.params?.item;
-  const presetDate: string | undefined = route?.params?.presetDate;
+  const item: AdminEvent | undefined = route?.params?.item;
   const isEdit = !!item;
+  const insets = useSafeAreaInsets();
 
   const [title, setTitle] = useState(item?.title ?? '');
   const [desc, setDesc] = useState(item?.description ?? '');
-  const [date, setDate] = useState(item?.date ?? presetDate ?? todayStr());
+  const [date, setDate] = useState<string>(item?.date ?? route?.params?.date ?? moment().format('YYYY-MM-DD'));
   const [type, setType] = useState<EventType>(
-    (EVENT_TYPES.find(t => t.key === item?.event_type)?.key ?? 'event') as EventType,
+    (TYPES.find(t => t.key === item?.event_type)?.key ?? (isEdit ? 'event' : 'class')) as EventType,
   );
-  const [allDay, setAllDay] = useState(item ? !!item.is_all_day : true);
-  const [start, setStart] = useState(hhmm(item?.start_time));
-  const [end, setEnd] = useState(hhmm(item?.end_time));
-  const [focused, setFocused] = useState<string | null>(null);
+  const [color, setColor] = useState(item?.color || DEFAULT_EVENT_COLOR);
+  const [allDay, setAllDay] = useState(item ? !!item.is_all_day : false);
+  const [start, setStart] = useState(item?.start_time ?? '');
+  const [end, setEnd] = useState(item?.end_time ?? '');
+  const [file, setFile] = useState<PickedFile | null>(null);
+
+  const [dateOpen, setDateOpen] = useState(false);
+  const [timeOpen, setTimeOpen] = useState<'start' | 'end' | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
+  const [saved, setSaved] = useState<AdminEvent | null>(null);
 
-  const titleRef = useRef<TextInput>(null);
   const descRef = useRef<TextInput>(null);
 
-  const validTime = (t: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t);
+  const attach = async (kind: 'image' | 'pdf') => {
+    setPickerOpen(false);
+    const f = kind === 'image' ? await pickImage() : await pickPdf();
+    if (f && withinOneMb(f)) {
+      setFile(f);
+      setError('');
+    }
+  };
 
   const save = async () => {
     if (!title.trim()) {
       setError('Enter a title for the event.');
       return;
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      setError('The date must be written as YYYY-MM-DD.');
+    if (!allDay && (!start || !end)) {
+      setError(!start ? 'Pick a start time, or make it an all-day event.' : 'Pick an end time, or make it an all-day event.');
       return;
-    }
-    if (!allDay) {
-      if (start && !validTime(start)) {
-        setError('Start time must be HH:mm on a 24-hour clock.');
-        return;
-      }
-      if (end && !validTime(end)) {
-        setError('End time must be HH:mm on a 24-hour clock.');
-        return;
-      }
     }
 
     setError('');
     setSaving(true);
+    const payload = {
+      title: title.trim(),
+      description: desc.trim() || null,
+      date,
+      is_all_day: allDay,
+      start_time: allDay ? null : start,
+      end_time: allDay ? null : end,
+      event_type: type,
+      color,
+      attachment: file,
+    };
     try {
-      const payload = {
-        title: title.trim(),
-        description: desc.trim() || null,
+      const res = isEdit ? await updateEvent(item!.id, payload) : await createEvent(payload);
+      // The event as saved, for the page it goes back to.
+      setSaved({
+        ...(item ?? ({} as AdminEvent)),
+        id: item?.id ?? res?.id,
+        title: payload.title,
+        description: payload.description,
         date,
         is_all_day: allDay,
-        start_time: allDay ? null : start || null,
-        end_time: allDay ? null : end || null,
+        start_time: payload.start_time,
+        end_time: payload.end_time,
         event_type: type,
-        color: colorFor(type),
-      };
-      if (isEdit) await updateEvent(item!.id, payload);
-      else await createEvent(payload);
-      setSuccessMsg(
-        isEdit ? 'The event has been updated.' : 'The event has been added to the calendar.',
-      );
+        color,
+        attachment: item?.attachment ?? null,
+        is_completed: false,
+      } as AdminEvent);
     } catch (e) {
       setError(apiErr(e, 'Could not save event.'));
     } finally {
@@ -107,174 +132,194 @@ const AdminCalendarFormScreen = ({ navigation, route }: any) => {
   };
 
   const closeSuccess = () => {
-    setSuccessMsg('');
-    navigation.goBack();
+    const done = saved;
+    setSaved(null);
+    if (isEdit && done) navigation.popTo('AdminCalendarDetail', { item: done });
+    else navigation.goBack();
   };
+
+  const newIsPdf = file ? isPdfFile(file) : false;
+  const hasAttachment = !!file || !!item?.attachment;
 
   return (
     <View style={s.root}>
+      {/* The clip in the header attaches an image or a PDF */}
       <DocHeader
         title={isEdit ? 'Edit Event' : 'New Event'}
         onBackPress={() => navigation.goBack()}
+        rightIcon="attach"
+        onRightPress={() => setPickerOpen(true)}
       />
 
-      <KeyboardAvoidingView
-        style={s.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Title card — tap anywhere on it to type */}
-          <Pressable
-            style={[s.field, focused === 'title' && s.fieldFocused]}
-            onPress={() => titleRef.current?.focus()}
-          >
-            <Text style={s.fieldLabel}>Title</Text>
-            <TextInput
-              ref={titleRef}
-              style={s.fieldInput}
-              placeholder="What is happening?"
-              placeholderTextColor={theme.colors.textMuted}
-              value={title}
-              onChangeText={t => { setTitle(t); setError(''); }}
-              onFocus={() => setFocused('title')}
-              onBlur={() => setFocused(null)}
-              multiline
-              submitBehavior="submit"
-              textAlignVertical="top"
-              returnKeyType="next"
-              onSubmitEditing={() => descRef.current?.focus()}
-            />
-          </Pressable>
+          <FormCard
+            label="Title"
+            value={title}
+            onChangeText={t => {
+              setTitle(t);
+              setError('');
+            }}
+            placeholder="e.g. Annual Sports Day"
+            multiline
+            maxLength={255}
+            returnKeyType="next"
+            onSubmitEditing={() => descRef.current?.focus()}
+          />
 
-          {/* Description card */}
-          <Pressable
-            style={[s.field, focused === 'desc' && s.fieldFocused]}
-            onPress={() => descRef.current?.focus()}
-          >
-            <Text style={s.fieldLabel}>Description</Text>
-            <TextInput
-              ref={descRef}
-              style={[s.fieldInput, s.fieldInputMulti]}
-              placeholder="Optional"
-              placeholderTextColor={theme.colors.textMuted}
-              value={desc}
-              onChangeText={setDesc}
-              onFocus={() => setFocused('desc')}
-              onBlur={() => setFocused(null)}
-              multiline
-              textAlignVertical="top"
-            />
-          </Pressable>
-
-          {/* Date card */}
-          <View style={[s.field, focused === 'date' && s.fieldFocused]}>
-            <Text style={s.fieldLabel}>Date</Text>
-            <TextInput
-              style={s.fieldInput}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={theme.colors.textMuted}
-              value={date}
-              onChangeText={t => { setDate(t); setError(''); }}
-              onFocus={() => setFocused('date')}
-              onBlur={() => setFocused(null)}
-              keyboardType="numbers-and-punctuation"
-            />
+          <View>
+            <FieldLabel>Event type</FieldLabel>
+            <Segment options={TYPES} value={type} onChange={k => setType(k as EventType)} />
           </View>
 
-          {/* Type */}
+          {/* The panel's twelve colours */}
           <View>
-            <Text style={s.sectionLabel}>Type</Text>
-            <View style={s.segment}>
-              {EVENT_TYPES.map(t => {
-                const active = type === t.key;
+            <FieldLabel>Colour</FieldLabel>
+            <View style={s.swatches}>
+              {EVENT_COLORS.map(c => {
+                const on = c.toLowerCase() === color.toLowerCase();
                 return (
                   <TouchableOpacity
-                    key={t.key}
+                    key={c}
                     activeOpacity={0.7}
-                    onPress={() => setType(t.key)}
-                    style={[s.segmentItem, active && s.segmentItemActive]}
+                    onPress={() => setColor(c)}
+                    style={[s.swatchRing, on && { borderColor: c }]}
                   >
-                    <Text
-                      style={[s.segmentText, active && s.segmentTextActive]}
-                      numberOfLines={1}
-                    >
-                      {t.label}
-                    </Text>
+                    <View style={[s.swatch, { backgroundColor: c }]}>
+                      {on && <VectorIcon iconSet="Ionicons" iconName="checkmark" size={15} color="#FFFFFF" />}
+                    </View>
                   </TouchableOpacity>
                 );
               })}
             </View>
           </View>
 
-          {/* All day */}
-          <View style={s.switchRow}>
-            <Text style={s.switchLabel}>All day</Text>
-            <Switch
-              value={allDay}
-              onValueChange={setAllDay}
-              trackColor={{ true: theme.colors.primary, false: theme.colors.border }}
-              thumbColor={theme.colors.white}
-            />
-          </View>
+          <FormCard
+            label="Description"
+            inputRef={descRef}
+            value={desc}
+            onChangeText={setDesc}
+            placeholder="Optional notes..."
+            multiline
+            minHeight={100}
+            maxLength={3000}
+          />
 
-          {/* Times, only when it is not an all-day event */}
+          <PickerCard
+            label="Date"
+            value={moment(date).format('ddd, D MMM YYYY')}
+            icon="calendar-outline"
+            onPress={() => setDateOpen(true)}
+          />
+
+          <SwitchRow
+            label="All day event"
+            value={allDay}
+            onValueChange={v => {
+              setAllDay(v);
+              setError('');
+            }}
+          />
+
+          {/* Times, only when it doesn't run all day */}
           {!allDay && (
             <View style={s.timeRow}>
-              <View style={[s.field, s.flex, focused === 'start' && s.fieldFocused]}>
-                <Text style={s.fieldLabel}>Start</Text>
-                <TextInput
-                  style={s.fieldInput}
-                  placeholder="09:00"
-                  placeholderTextColor={theme.colors.textMuted}
-                  value={start}
-                  onChangeText={t => { setStart(t); setError(''); }}
-                  onFocus={() => setFocused('start')}
-                  onBlur={() => setFocused(null)}
-                  keyboardType="numbers-and-punctuation"
-                />
-              </View>
-              <View style={[s.field, s.flex, focused === 'end' && s.fieldFocused]}>
-                <Text style={s.fieldLabel}>End</Text>
-                <TextInput
-                  style={s.fieldInput}
-                  placeholder="10:00"
-                  placeholderTextColor={theme.colors.textMuted}
-                  value={end}
-                  onChangeText={t => { setEnd(t); setError(''); }}
-                  onFocus={() => setFocused('end')}
-                  onBlur={() => setFocused(null)}
-                  keyboardType="numbers-and-punctuation"
-                />
-              </View>
+              <PickerCard
+                label="Start time"
+                value={start ? clock12(start) : null}
+                placeholder="Select"
+                icon="time-outline"
+                onPress={() => setTimeOpen('start')}
+                style={s.flex}
+              />
+              <PickerCard
+                label="End time"
+                value={end ? clock12(end) : null}
+                placeholder="Select"
+                icon="time-outline"
+                onPress={() => setTimeOpen('end')}
+                style={s.flex}
+              />
             </View>
           )}
 
-          {!!error && <Text style={s.errorText}>{error}</Text>}
+          {/* The file: the new one, or what is on the event already */}
+          {hasAttachment ? (
+            <View style={s.group}>
+              <View style={s.chips}>
+                {file ? (
+                  <FileChip kind={newIsPdf ? 'pdf' : 'image'} onRemove={() => setFile(null)} />
+                ) : (
+                  <FileChip
+                    kind={isPdfUrl(item!.attachment!) ? 'pdf' : 'image'}
+                    onPress={() => Linking.openURL(item!.attachment!)}
+                  />
+                )}
+              </View>
+              <Hint>
+                {file && item?.attachment
+                  ? 'This replaces the file on the event when it is saved.'
+                  : 'Image or PDF · max 1 MB. The clip at the top adds or replaces it.'}
+              </Hint>
+            </View>
+          ) : (
+            <Hint>Optional: attach an image or a PDF (max 1 MB) with the clip icon at the top.</Hint>
+          )}
 
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={save}
-            style={[s.submitBtn, saving && s.submitBtnBusy]}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator color={theme.colors.white} size="small" />
-            ) : (
-              <Text style={s.submitText}>{isEdit ? 'Update Event' : 'Create Event'}</Text>
-            )}
-          </TouchableOpacity>
+          <FormError>{error}</FormError>
+
+          <SubmitButton label={isEdit ? 'Update Event' : 'Create Event'} busy={saving} onPress={save} />
         </ScrollView>
       </KeyboardAvoidingView>
 
+      <DateSheet
+        visible={dateOpen}
+        value={date}
+        title="Event date"
+        onPick={d => setDate(d)}
+        onClose={() => setDateOpen(false)}
+      />
+
+      <TimeSheet
+        visible={!!timeOpen}
+        value={timeOpen === 'end' ? end || start : start}
+        title={timeOpen === 'end' ? 'End time' : 'Start time'}
+        onPick={t => {
+          if (timeOpen === 'end') setEnd(t);
+          else setStart(t);
+          setError('');
+        }}
+        onClose={() => setTimeOpen(null)}
+      />
+
+      {/* Attachment kind */}
+      <Modal transparent visible={pickerOpen} animationType="fade" onRequestClose={() => setPickerOpen(false)}>
+        <View style={s.sheetWrap}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setPickerOpen(false)} />
+          <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
+            <View style={s.sheetHandle} />
+            <Text style={s.sheetTitle}>Attach a file</Text>
+            <TouchableOpacity style={[s.sheetRow, s.sheetRowDivider]} activeOpacity={0.6} onPress={() => attach('image')}>
+              <VectorIcon iconSet="Feather" iconName="image" size={18} color={theme.colors.textSecondary} />
+              <Text style={s.sheetRowText}>Image</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.sheetRow} activeOpacity={0.6} onPress={() => attach('pdf')}>
+              <VectorIcon iconSet="Feather" iconName="file-text" size={18} color={theme.colors.textSecondary} />
+              <Text style={s.sheetRowText}>PDF</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Saved */}
       <AppDialog
-        visible={!!successMsg}
+        visible={!!saved}
         title={isEdit ? 'Event updated' : 'Event created'}
-        message={successMsg}
+        message={isEdit ? 'The event has been updated.' : 'The event has been added to the calendar.'}
         actions={[{ text: 'Done', onPress: closeSuccess }]}
         onRequestClose={closeSuccess}
       />
@@ -284,73 +329,56 @@ const AdminCalendarFormScreen = ({ navigation, route }: any) => {
 
 export default AdminCalendarFormScreen;
 
+const SWATCH = 30;
+
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
   flex: { flex: 1 },
   scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 14 },
-
-  // Input cards — label inside, borderless input underneath
-  field: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.card,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  fieldFocused: { borderColor: theme.colors.primary },
-  fieldLabel: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted },
-  fieldInput: {
-    fontSize: 15,
-    color: theme.colors.textPrimary,
-    paddingHorizontal: 0,
-    paddingVertical: 4,
-    marginTop: 2,
-  },
-  fieldInputMulti: { minHeight: 100 },
-
-  // Type segment
-  sectionLabel: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted, marginBottom: 8 },
-  segment: {
-    flexDirection: 'row',
-    padding: 3,
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.background,
-  },
-  segmentItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 2,
-    borderRadius: theme.radius.sm,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  segmentItemActive: { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-  segmentText: { fontSize: 12, fontWeight: '500', color: theme.colors.textSecondary },
-  segmentTextActive: { color: theme.colors.primary, fontWeight: '600' },
-
-  // All day
-  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  switchLabel: { fontSize: 15, color: theme.colors.textPrimary },
-
+  group: { gap: 8 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   timeRow: { flexDirection: 'row', gap: 12 },
-  errorText: { fontSize: 13, color: theme.colors.danger, lineHeight: 18 },
 
-  // Submit
-  submitBtn: {
-    height: 48,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.primary,
+  // Colour swatches, the chosen one ringed and ticked
+  swatches: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  swatchRing: {
+    width: SWATCH + 8,
+    height: SWATCH + 8,
+    borderRadius: (SWATCH + 8) / 2,
+    borderWidth: 2,
+    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
   },
-  submitBtnBusy: { opacity: 0.7 },
-  submitText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
+  swatch: {
+    width: SWATCH,
+    height: SWATCH,
+    borderRadius: SWATCH / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Attachment sheet
+  sheetWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.35)' },
+  sheet: {
+    backgroundColor: theme.colors.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.border,
+    marginBottom: 14,
+  },
+  sheetTitle: { fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 4 },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
+  sheetRowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  sheetRowText: { flex: 1, fontSize: 15, color: theme.colors.textPrimary },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

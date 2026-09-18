@@ -24,7 +24,6 @@ import AdminAnalyticsScreen from '../screens/admin/AdminAnalyticsScreen';
 import AdminTimetableScreen from '../screens/admin/AdminTimetableScreen';
 import AdminArrangementScreen from '../screens/admin/AdminArrangementScreen';
 import AdminHomeworkScreen from '../screens/admin/AdminHomeworkScreen';
-import AdminTransportScreen from '../screens/admin/AdminTransportScreen';
 import AdminCreditScreen from '../screens/admin/AdminCreditScreen';
 import AdminAdmitCardScreen from '../screens/admin/AdminAdmitCardScreen';
 import AdminReportCardScreen from '../screens/admin/AdminReportCardScreen';
@@ -36,6 +35,7 @@ import {
   AdminStandardStack,
   AdminAnnouncementStack,
   AdminCalendarStack,
+  AdminTransportStack,
   AdminEnquiriesStack,
   AdminSyllabusStack,
   AdminContentStack,
@@ -347,7 +347,7 @@ const AdminDrawerNavigator = () => {
       <Drawer.Screen name="PanelHome" component={AdminTabNavigator} />
       <Drawer.Screen name="AdminAnalytics" component={AdminAnalyticsScreen} />
       <Drawer.Screen name="AdminStandard" component={AdminStandardStack} />
-      <Drawer.Screen name="AdminTransport" component={AdminTransportScreen} />
+      <Drawer.Screen name="AdminTransport" component={AdminTransportStack} />
       <Drawer.Screen name="AdminHomework" component={AdminHomeworkScreen} />
       <Drawer.Screen name="AdminTimetable" component={AdminTimetableScreen} />
       <Drawer.Screen name="AdminArrangement" component={AdminArrangementScreen} />

@@ -16,6 +16,7 @@ import { transportReceiptUrl, type TransportPayment } from '../../api/transportA
  *
  * Route params:
  *   payment – the payment from the list
+ *   url     – where its receipt is, when not the student's own (the admin app's)
  */
 
 const TITLE = 'Receipt';
@@ -60,6 +61,7 @@ const PageSkeleton = ({ width }: { width: number }) => (
 
 const TransportReceiptScreen = ({ navigation, route }: any) => {
   const payment: TransportPayment = route.params.payment;
+  const url: string = route.params.url ?? transportReceiptUrl(payment.id);
   const { width: pageWidth } = useWindowDimensions();
 
   const [headers, setHeaders] = useState<Record<string, string> | null>(null);
@@ -82,7 +84,7 @@ const TransportReceiptScreen = ({ navigation, route }: any) => {
     setSaving(true);
     const fileName = `Transport-Receipt-${String(payment.receipt_number).replace(/[\\/:*?"<>|\s]+/g, '-')}.pdf`;
     try {
-      await downloadPdf(transportReceiptUrl(payment.id), fileName);
+      await downloadPdf(url, fileName);
       if (Platform.OS === 'android') AppAlert.alert('Downloaded', `${fileName} is saved in Downloads.`);
     } catch (e: any) {
       console.log('[transportReceipt] Error:', e?.message);
@@ -109,7 +111,7 @@ const TransportReceiptScreen = ({ navigation, route }: any) => {
       />
       {headers ? (
         <PdfSheet
-          uri={transportReceiptUrl(payment.id)}
+          uri={url}
           headers={headers}
           skeleton={<PageSkeleton width={pageWidth} />}
           errorText="Couldn’t open this receipt. Check your connection and try again."

@@ -21,8 +21,19 @@ import AdminAnnouncementFormScreen from '../screens/admin/AdminAnnouncementFormS
 import AdminCalendarScreen from '../screens/admin/AdminCalendarScreen';
 import AdminCalendarDetailScreen from '../screens/admin/AdminCalendarDetailScreen';
 import AdminCalendarFormScreen from '../screens/admin/AdminCalendarFormScreen';
-import AdminCalendarMonthScreen from '../screens/admin/AdminCalendarMonthScreen';
-import AdminCalendarDayScreen from '../screens/admin/AdminCalendarDayScreen';
+import AdminCalendarYearScreen from '../screens/admin/AdminCalendarYearScreen';
+// Transportation
+import AdminTransportScreen from '../screens/admin/AdminTransportScreen';
+import AdminTransportRoutesScreen from '../screens/admin/AdminTransportRoutesScreen';
+import AdminTransportRouteScreen from '../screens/admin/AdminTransportRouteScreen';
+import AdminTransportRouteFormScreen from '../screens/admin/AdminTransportRouteFormScreen';
+import AdminTransportDriversScreen from '../screens/admin/AdminTransportDriversScreen';
+import AdminTransportDriverScreen from '../screens/admin/AdminTransportDriverScreen';
+import AdminTransportDriverFormScreen from '../screens/admin/AdminTransportDriverFormScreen';
+import AdminTransportStudentsScreen from '../screens/admin/AdminTransportStudentsScreen';
+import AdminTransportStudentFeeScreen from '../screens/admin/AdminTransportStudentFeeScreen';
+import AdminTransportMonthsScreen from '../screens/admin/AdminTransportMonthsScreen';
+import TransportReceiptScreen from '../screens/transport/TransportReceiptScreen';
 // Enquiries
 import AdminEnquiriesScreen from '../screens/admin/AdminEnquiriesScreen';
 import AdminEnquiryDetailScreen from '../screens/admin/AdminEnquiryDetailScreen';
@@ -106,8 +117,25 @@ export const AdminCalendarStack = () => (
     <Stack.Screen name="AdminCalendarHome" component={AdminCalendarScreen} />
     <Stack.Screen name="AdminCalendarDetail" component={AdminCalendarDetailScreen} />
     <Stack.Screen name="AdminCalendarForm" component={AdminCalendarFormScreen} />
-    <Stack.Screen name="AdminCalendarMonth" component={AdminCalendarMonthScreen} />
-    <Stack.Screen name="AdminCalendarDay" component={AdminCalendarDayScreen} />
+    <Stack.Screen name="AdminCalendarYear" component={AdminCalendarYearScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminTransportStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminTransportHome" component={AdminTransportScreen} />
+    <Stack.Screen name="AdminTransportRoutes" component={AdminTransportRoutesScreen} />
+    <Stack.Screen name="AdminTransportRoute" component={AdminTransportRouteScreen} />
+    <Stack.Screen name="AdminTransportRouteForm" component={AdminTransportRouteFormScreen} />
+    <Stack.Screen name="AdminTransportDrivers" component={AdminTransportDriversScreen} />
+    <Stack.Screen name="AdminTransportDriver" component={AdminTransportDriverScreen} />
+    <Stack.Screen name="AdminTransportDriverForm" component={AdminTransportDriverFormScreen} />
+    {/* Transport Students and Fee Summary are one page, told apart by name */}
+    <Stack.Screen name="AdminTransportStudents" component={AdminTransportStudentsScreen} />
+    <Stack.Screen name="AdminTransportFees" component={AdminTransportStudentsScreen} />
+    <Stack.Screen name="AdminTransportStudentFee" component={AdminTransportStudentFeeScreen} />
+    <Stack.Screen name="AdminTransportMonths" component={AdminTransportMonthsScreen} />
+    <Stack.Screen name="AdminTransportReceipt" component={TransportReceiptScreen} />
   </Stack.Navigator>
 );
 
