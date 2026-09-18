@@ -47,12 +47,15 @@ export const TopicLine = ({
   muted,
   right,
   onPress,
+  divider,
 }: {
   label: string;
   name: string;
   muted?: boolean;
   right?: React.ReactNode;
   onPress?: () => void;
+  /** A hairline under the topic, to set it off from the next one. */
+  divider?: boolean;
 }) => {
   const body = (
     <>
@@ -61,12 +64,13 @@ export const TopicLine = ({
       {right}
     </>
   );
+  const style = [s.topic, divider && s.topicDivider];
   return onPress ? (
-    <TouchableOpacity style={s.topic} activeOpacity={0.6} onPress={onPress}>
+    <TouchableOpacity style={style} activeOpacity={0.6} onPress={onPress}>
       {body}
     </TouchableOpacity>
   ) : (
-    <View style={s.topic}>{body}</View>
+    <View style={style}>{body}</View>
   );
 };
 
@@ -366,6 +370,7 @@ const __mk_s = () => StyleSheet.create({
   topics: { marginLeft: NO_COL + GAP, paddingBottom: 12 },
   topicsInline: { fontSize: 14, lineHeight: 22, color: theme.colors.textSecondary },
   topic: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 7 },
+  topicDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
   topicNo: { width: 34, fontSize: 13, lineHeight: 20, color: theme.colors.textMuted },
   topicName: { flex: 1, fontSize: 14, lineHeight: 20, color: theme.colors.textPrimary },
   topicMuted: { color: theme.colors.textSecondary },

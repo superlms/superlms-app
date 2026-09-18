@@ -12,9 +12,10 @@ import { OutlineScreen, TopicLine, comboChapters, comboClass } from '../subjects
 import { MaterialMarks, hasMaterial, materialSummary } from './contentUi';
 
 /**
- * One subject's study material, laid out like its syllabus. A student opens a
- * topic to read it; a teacher (arriving with a class-and-subject pair) opens a
- * topic to add material to it.
+ * One subject's study material, laid out like its syllabus, a hairline between
+ * topics. A topic with material opens to be read — for a teacher (arriving with
+ * a class-and-subject pair) with an edit button in the header; a teacher opens
+ * an empty topic straight onto adding its material.
  */
 const ContentDetailScreen = ({ navigation, route }: any) => {
   const combo: TeacherCombo | undefined = route?.params?.combo;
@@ -23,10 +24,11 @@ const ContentDetailScreen = ({ navigation, route }: any) => {
   const teacher = !!combo;
 
   const openTopic = (chapter: SyllabusChapter, topic: SyllabusTopic) =>
-    navigation.navigate(teacher ? 'EditTopicContent' : 'ViewContent', {
+    navigation.navigate(hasMaterial(topic) ? 'ViewContent' : 'EditTopicContent', {
       topic,
       chapterName: chapter.name,
       subjectName,
+      canEdit: teacher,
     });
 
   return (
@@ -60,6 +62,7 @@ const ContentDetailScreen = ({ navigation, route }: any) => {
               label={`${number}.${i + 1}`}
               name={topic.name}
               muted={!teacher && !ready}
+              divider={i < chapter.topics.length - 1}
               onPress={teacher || ready ? () => openTopic(chapter, topic) : undefined}
               right={
                 ready ? (

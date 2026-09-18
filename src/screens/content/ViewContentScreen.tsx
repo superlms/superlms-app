@@ -20,10 +20,13 @@ const TITLE = 'Topic';
 
 /**
  * A topic's study material, read as a document: where it sits, its name, then
- * the image, the notes, and any link or PDF as plain rows underneath.
+ * the image, the notes, and any link or PDF as plain rows underneath. A teacher
+ * gets an edit button in the header, which opens the topic's editor; a student
+ * only reads.
  */
 const ViewContentScreen = ({ navigation, route }: any) => {
   const topic: SyllabusTopic | undefined = route.params?.topic;
+  const canEdit: boolean = !!route.params?.canEdit && !!topic;
   const chapterName = quietCaps(route.params?.chapterName);
   const subjectName: string = route.params?.subjectName ?? '';
   const topicName = quietCaps(topic?.name ?? route.params?.topicName);
@@ -49,7 +52,23 @@ const ViewContentScreen = ({ navigation, route }: any) => {
 
   return (
     <View style={s.root}>
-      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+      <DocHeader
+        title={TITLE}
+        onBackPress={() => navigation.goBack()}
+        rightIcon={canEdit ? 'create-outline' : undefined}
+        onRightPress={
+          canEdit
+            ? () =>
+                navigation.navigate('EditTopicContent', {
+                  topic,
+                  chapterName: route.params?.chapterName,
+                  subjectName,
+                  canEdit: true,
+                  fromView: true,
+                })
+            : undefined
+        }
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}

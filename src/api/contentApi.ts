@@ -202,6 +202,9 @@ export interface TopicContentPayload {
   order?: number;
   image?: ContentFile | null;
   pdf?: ContentFile | null;
+  /** Take the topic's image or PDF off (update only). */
+  removeImage?: boolean;
+  removePdf?: boolean;
 }
 
 const appendFile = (fd: FormData, field: string, file?: ContentFile | null) => {
@@ -256,6 +259,8 @@ export const updateTopicContent = async (
     if (payload.order != null) fd.append('order', String(payload.order));
     appendFile(fd, 'image', payload.image);
     appendFile(fd, 'pdf', payload.pdf);
+    if (payload.removeImage) fd.append('remove_image', '1');
+    if (payload.removePdf) fd.append('remove_pdf', '1');
     const { data } = await apiClient.post(`/content/topic/${topicId}`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
@@ -266,6 +271,8 @@ export const updateTopicContent = async (
     topic_content: payload.content,
     link: payload.link,
     order: payload.order,
+    ...(payload.removeImage ? { remove_image: true } : {}),
+    ...(payload.removePdf ? { remove_pdf: true } : {}),
   });
   return mapTopic(unwrap(data));
 };
