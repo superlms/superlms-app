@@ -21,6 +21,7 @@ export type NotifCategory =
   | 'Subjects'
   | 'Profile'
   | 'Contact School'
+  | 'Transport'
   | 'General';
 
 // Icon (Ionicons) + colours per category — shared by the inbox list and banner.
@@ -44,6 +45,7 @@ export const CATEGORY_CONFIG: Record<
   Subjects: { icon: 'albums-outline', color: '#4F46E5', bg: '#E0E7FF' },
   Profile: { icon: 'person-outline', color: '#2563EB', bg: '#DBEAFE' },
   'Contact School': { icon: 'call-outline', color: '#0EA5E9', bg: '#E0F2FE' },
+  Transport: { icon: 'bus-outline', color: '#D97706', bg: '#FEF3C7' },
   General: { icon: 'notifications-outline', color: '#2563EB', bg: '#DBEAFE' },
 };
 
@@ -90,6 +92,12 @@ export type NotificationType =
   | 'datesheet_issued'
   | 'exam_syllabus_updated'
   | 'query_replied'
+  | 'fee_overdue'
+  | 'transport_updated'
+  | 'syllabus_updated'
+  | 'admit_card_issued'
+  | 'seating_published'
+  | 'report_card_issued'
   | (string & {});
 
 export const CATALOG: Record<string, CatalogEntry> = {
@@ -213,6 +221,40 @@ export const CATALOG: Record<string, CatalogEntry> = {
     category: 'Contact School',
     buildTitle: () => 'Reply from School',
     buildBody: () => 'The school replied to your query.',
+  },
+
+  // ── A student's pushes ─────────────────────────────────────────────────────
+  // As with the teacher's, the backend sends the title and a body with the
+  // details; these show only if it ever doesn't.
+  fee_overdue: {
+    category: 'Fee',
+    buildTitle: () => 'Fee Overdue',
+    buildBody: () => 'An installment of your fee is overdue. Please pay it as soon as possible.',
+  },
+  transport_updated: {
+    category: 'Transport',
+    buildTitle: () => 'Bus Timing Changed',
+    buildBody: () => 'Your bus timings have changed.',
+  },
+  syllabus_updated: {
+    category: 'Subjects',
+    buildTitle: () => 'Syllabus Updated',
+    buildBody: () => 'Your syllabus has changed.',
+  },
+  admit_card_issued: {
+    category: 'Exam',
+    buildTitle: () => 'Admit Card Issued',
+    buildBody: () => 'Your admit card has been issued.',
+  },
+  seating_published: {
+    category: 'Exam',
+    buildTitle: () => 'Seating Plan Published',
+    buildBody: () => 'Your exam seat is ready.',
+  },
+  report_card_issued: {
+    category: 'Exam',
+    buildTitle: () => 'Report Card Issued',
+    buildBody: () => 'Your report card has been issued.',
   },
 };
 
