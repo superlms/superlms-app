@@ -79,7 +79,11 @@ const AppInner = () => {
               // Open any notification tapped before the navigator was ready.
               flushPendingNavigation();
             }}
-            onStateChange={recheckRoute}
+            onStateChange={() => {
+              recheckRoute();
+              // A notification tapped on a cold start opens once the splash has gone.
+              flushPendingNavigation();
+            }}
           >
             <AppNavigator />
           </NavigationContainer>

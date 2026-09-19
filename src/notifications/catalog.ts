@@ -17,6 +17,10 @@ export type NotifCategory =
   | 'Announcement'
   | 'Homework'
   | 'Leave'
+  | 'Timetable'
+  | 'Subjects'
+  | 'Profile'
+  | 'Contact School'
   | 'General';
 
 // Icon (Ionicons) + colours per category — shared by the inbox list and banner.
@@ -36,6 +40,10 @@ export const CATEGORY_CONFIG: Record<
   Announcement: { icon: 'megaphone-outline', color: '#0EA5E9', bg: '#E0F2FE' },
   Homework: { icon: 'create-outline', color: '#7C3AED', bg: '#EDE9FE' },
   Leave: { icon: 'person-remove-outline', color: '#DC2626', bg: '#FEE2E2' },
+  Timetable: { icon: 'time-outline', color: '#0D9488', bg: '#CCFBF1' },
+  Subjects: { icon: 'albums-outline', color: '#4F46E5', bg: '#E0E7FF' },
+  Profile: { icon: 'person-outline', color: '#2563EB', bg: '#DBEAFE' },
+  'Contact School': { icon: 'call-outline', color: '#0EA5E9', bg: '#E0F2FE' },
   General: { icon: 'notifications-outline', color: '#2563EB', bg: '#DBEAFE' },
 };
 
@@ -74,6 +82,14 @@ export type NotificationType =
   | 'general'
   | 'promo'
   | 'chat_message'
+  | 'profile_updated'
+  | 'timetable_changed'
+  | 'subject_assigned'
+  | 'chapter_updated'
+  | 'exam_updated'
+  | 'datesheet_issued'
+  | 'exam_syllabus_updated'
+  | 'query_replied'
   | (string & {});
 
 export const CATALOG: Record<string, CatalogEntry> = {
@@ -153,6 +169,50 @@ export const CATALOG: Record<string, CatalogEntry> = {
     category: 'General',
     buildTitle: () => 'New message',
     buildBody: () => 'You have a new chat message.',
+  },
+
+  // ── A teacher's pushes ─────────────────────────────────────────────────────
+  // The backend sends each one's title and a body with what changed; these are
+  // only what shows if it ever doesn't.
+  profile_updated: {
+    category: 'Profile',
+    buildTitle: () => 'Profile Updated',
+    buildBody: () => 'The school updated your profile.',
+  },
+  timetable_changed: {
+    category: 'Timetable',
+    buildTitle: () => 'Timetable Changed',
+    buildBody: () => 'Your timetable has changed.',
+  },
+  subject_assigned: {
+    category: 'Subjects',
+    buildTitle: () => 'New Subject Assigned',
+    buildBody: () => 'A new subject has been assigned to you.',
+  },
+  chapter_updated: {
+    category: 'Subjects',
+    buildTitle: () => 'Chapters Updated',
+    buildBody: () => 'The school changed the chapters of your subject.',
+  },
+  exam_updated: {
+    category: 'Exam',
+    buildTitle: () => 'Exam Updated',
+    buildBody: () => 'An exam has been updated.',
+  },
+  datesheet_issued: {
+    category: 'Exam',
+    buildTitle: () => 'Date Sheet Issued',
+    buildBody: () => 'A date sheet has been issued.',
+  },
+  exam_syllabus_updated: {
+    category: 'Exam',
+    buildTitle: () => 'Exam Syllabus Updated',
+    buildBody: () => 'An exam syllabus has changed.',
+  },
+  query_replied: {
+    category: 'Contact School',
+    buildTitle: () => 'Reply from School',
+    buildBody: () => 'The school replied to your query.',
   },
 };
 
