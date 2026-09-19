@@ -57,8 +57,9 @@ import MarkAttendanceReviewScreen from '../screens/markAttendance/MarkAttendance
 import AttendanceAnalyticsScreen from '../screens/attendance/AttendanceAnalytics';
 import SyllabusDetailScreen from '../screens/syllabus/SyllabusDetailScreen';
 import ContentDetailScreen from '../screens/content/ContentDetailScreen';
-import ManageQuizScreen from '../screens/quiz/ManageQuizScreen';
-import AttemptQuizScreen from '../screens/quiz/AttemptQuizScreen';
+import AssignmentDetailScreen from '../screens/assignments/AssignmentDetailScreen';
+import AssignmentFormScreen from '../screens/assignments/AssignmentFormScreen';
+import AssignmentSubmissionScreen from '../screens/assignments/AssignmentSubmissionScreen';
 import NotificationScreen from '../screens/notification/NotificationScreen';
 import BookReaderScreen from '../screens/books/BookReaderScreen';
 import PayAmountScreen from '../screens/fees/PayAmountScreen';
@@ -174,9 +175,10 @@ const AppNavigator = () => {
       <Stack.Screen name="MarkAttendanceReview" component={MarkAttendanceReviewScreen} />
       <Stack.Screen name="AttendanceAnalytics" component={AttendanceAnalyticsScreen} />
 
-      {/* Quiz */}
-      <Stack.Screen name="ManageQuiz" component={ManageQuizScreen} />
-      <Stack.Screen name="AttemptQuiz" component={AttemptQuizScreen} />
+      {/* Assignments — one open, setting or editing one, and what a student sent */}
+      <Stack.Screen name="AssignmentDetail" component={AssignmentDetailScreen} />
+      <Stack.Screen name="AssignmentForm" component={AssignmentFormScreen} />
+      <Stack.Screen name="AssignmentSubmission" component={AssignmentSubmissionScreen} />
 
       {/* Notifications */}
       <Stack.Screen name="Notifications" component={NotificationScreen} />

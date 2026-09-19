@@ -43,8 +43,7 @@ import TeacherSubjectsScreen from '../screens/subjects/TeacherSubjectsScreen';
 import StudentTimetableScreen from '../screens/timetable/StudentTimetableScreen';
 import TeacherTImetableScreen from '../screens/timetable/TeacherTImetableScreen';
 import ExamMainScreen from '../screens/exam/ExamMainScreen';
-import TeacherQuizScreen from '../screens/quiz/TeacherQuizScreen';
-import StudentQuizScreen from '../screens/quiz/StudentQuizScreen';
+import { StudentAssignmentsScreen, TeacherAssignmentsScreen } from '../screens/assignments/AssignmentsScreen';
 import StudentHomeworkScreen from '../screens/homework/StudentHomeworkScreen';
 import TeacherHomeworkScreen from '../screens/homework/TeacherHomeworkScreen';
 import TeacherContentScreen from '../screens/content/TeacherContentScreen';
@@ -459,7 +458,7 @@ const DrawerNavigator = ({ route }: any) => {
       />
       <Drawer.Screen
         name="Quiz"
-        component={role === 'teacher' ? TeacherQuizScreen : StudentQuizScreen}
+        component={role === 'teacher' ? TeacherAssignmentsScreen : StudentAssignmentsScreen}
         initialParams={{ title: 'Assignments' }}
       />
       <Drawer.Screen
