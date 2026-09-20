@@ -121,7 +121,8 @@ export interface StudentPayload {
   image?: PickedFile | null;
 }
 
-const studentForm = (p: StudentPayload) => {
+/** The multipart body both the admin's and the class teacher's form send. */
+export const studentForm = (p: StudentPayload) => {
   const form = new FormData();
   const append = (k: string, v: any) => {
     if (v === undefined || v === null || v === '') return;

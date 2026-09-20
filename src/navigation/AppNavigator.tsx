@@ -70,6 +70,8 @@ import TransportRouteScreen from '../screens/transport/TransportRouteScreen';
 import TransportFeesScreen from '../screens/transport/TransportFeesScreen';
 import TransportPaymentsScreen from '../screens/transport/TransportPaymentsScreen';
 import TransportReceiptScreen from '../screens/transport/TransportReceiptScreen';
+import TeacherStudentsScreen from '../screens/teacherStudents/TeacherStudentsScreen';
+import TeacherStudentFormScreen from '../screens/teacherStudents/TeacherStudentFormScreen';
 import AdminProfileScreen from '../screens/admin/AdminProfileScreen';
 import PanelDrawerNavigator from './PanelDrawerNavigator';
 import AdminDrawerNavigator from './AdminDrawerNavigator';
@@ -96,6 +98,9 @@ const AppNavigator = () => {
       <Stack.Screen name="TeacherProfile" component={TeacherProfileScreen} />
 
       {/* More */}
+      {/* A class teacher's own students, from the teacher's More screen */}
+      <Stack.Screen name="TeacherStudents" component={TeacherStudentsScreen} />
+      <Stack.Screen name="TeacherStudentForm" component={TeacherStudentFormScreen} />
       <Stack.Screen name="AboutAppMore" component={AboutAppScreen} />
       <Stack.Screen name="SchoolInfoMore" component={SchoolInfoScreen} />
       <Stack.Screen

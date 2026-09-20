@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { DocHeader } from './docUi';
 import { MenuRow, menuStyles } from './menuUi';
+import { getStoredRole } from '../../api/authApi';
 import { theme, onThemeChange } from '../../utils/theme';
 
 /**
  * "More" hub — the read-only info screens (About App, School Info, policies),
  * as a plain list like Exams: each entry an icon, its name and a few words on
- * what it holds (kept to one line).
+ * what it holds (kept to one line). A teacher opens on Students, where a class
+ * teacher keeps their own class.
  */
 
 interface MoreItem {
@@ -17,6 +19,14 @@ interface MoreItem {
   icon: string;
   route: string;
 }
+
+// A teacher's own class, above everything else.
+const TEACHER_ITEM: MoreItem = {
+  title: 'Students',
+  description: 'Your class · add, edit, remove',
+  icon: 'people-outline',
+  route: 'TeacherStudents',
+};
 
 const ITEMS: MoreItem[] = [
   {
@@ -59,19 +69,32 @@ const ITEMS: MoreItem[] = [
 
 const MoreScreen = () => {
   const navigation = useNavigation<any>();
+  const [isTeacher, setIsTeacher] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    getStoredRole().then(r => {
+      if (live) setIsTeacher(r === 'teacher');
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const items = isTeacher ? [TEACHER_ITEM, ...ITEMS] : ITEMS;
 
   return (
     <View style={s.root}>
       <DocHeader title="More" onBackPress={() => navigation.goBack()} />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={menuStyles.list}>
-        {ITEMS.map((item, i) => (
+        {items.map((item, i) => (
           <MenuRow
             key={item.route}
             icon={item.icon}
             title={item.title}
             description={item.description}
             onPress={() => navigation.navigate(item.route)}
-            isLast={i === ITEMS.length - 1}
+            isLast={i === items.length - 1}
           />
         ))}
       </ScrollView>
