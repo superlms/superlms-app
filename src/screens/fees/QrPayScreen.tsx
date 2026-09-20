@@ -31,19 +31,19 @@ import {
   submitQrPayment,
 } from '../../api/feeApi';
 import { AmountField, inr } from './feesUi';
-import { FeeButton, openUpiApp, saveQrToPhone } from './qrUi';
+import { FeeButton, QrImage, openUpiApp, saveQrToPhone } from './qrUi';
 
 const TITLE = 'Pay on School QR';
 
 /**
  * Paying a fee on the school's own UPI QR, then telling the school.
  *
- *   1. Pay — the QR (tap to see it full screen), the UPI ID to copy, a button
- *      that opens a UPI app with the amount filled in, and one that saves the
- *      QR to the phone for a UPI app's "scan from gallery".
- *   2. Tell the school — which fee, how much, the day it was paid, and the UTR
- *      or a screenshot (or both). It then waits for the school to check it
- *      against its bank account; the receipt comes once they approve it.
+ *   Pay the school  — the QR (tap to see it full screen), the UPI ID to copy,
+ *      a button that opens a UPI app with the amount filled in, and one that
+ *      saves the QR for a UPI app's "scan from gallery".
+ *   Tell the school — which fee, how much, the day it was paid, and the UTR
+ *      or a screenshot. The school checks it against its bank account; the
+ *      receipt comes once they approve it.
  *
  * Route params (all optional):
  *   qr              – the school's QR, as the Fees screen loaded it
@@ -234,28 +234,21 @@ const QrPayScreen = ({ navigation, route }: any) => {
       <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          {/* ── 1. Pay ─────────────────────────────────────────────────────── */}
+          {/* ── Pay ─────────────────────────────────────────────────────── */}
           <Card flush>
-            <CardHead icon="qr-code-outline" title="1 · Pay the school" sub={qr.payee_name || 'On its UPI QR'} />
+            <CardHead icon="qr-code-outline" title="Pay the school" sub={qr.payee_name || 'On its UPI QR'} />
             {!!qr.image_url && (
-              <TouchableOpacity
-                style={s.qrWrap}
-                activeOpacity={0.8}
+              <QrImage
+                url={qr.image_url}
                 onPress={() => navigation.navigate('FeeImage', { uri: qr.image_url, title: 'School QR' })}
-              >
-                <Image source={{ uri: qr.image_url }} style={s.qr} resizeMode="contain" />
-                <Text style={s.qrHint}>Tap to enlarge · scan it from another phone</Text>
-              </TouchableOpacity>
+              />
             )}
 
             {!!qr.upi_id && (
               <View style={s.upiRow}>
-                <View style={s.flex}>
-                  <Text style={s.upiLabel}>UPI ID</Text>
-                  <Text style={s.upiId} selectable numberOfLines={1}>
-                    {qr.upi_id}
-                  </Text>
-                </View>
+                <Text style={s.upiId} selectable numberOfLines={1}>
+                  {qr.upi_id}
+                </Text>
                 <TouchableOpacity style={s.copy} onPress={onCopyUpi} hitSlop={8} activeOpacity={0.6}>
                   <VectorIcon iconSet="Ionicons" iconName="copy-outline" size={15} color={theme.colors.primary} />
                   <Text style={s.copyText}>Copy</Text>
@@ -275,26 +268,12 @@ const QrPayScreen = ({ navigation, route }: any) => {
                 </View>
               )}
             </View>
-            <Text style={s.tip}>
-              {qr.upi_id
-                ? 'On this phone? Open your UPI app from here, or save the QR and pick it with "scan from gallery".'
-                : 'On this phone? Save the QR and pick it in your UPI app with "scan from gallery".'}
-            </Text>
-            {!!qr.instructions && (
-              <View style={s.instructions}>
-                <VectorIcon iconSet="Ionicons" iconName="information-circle-outline" size={16} color={theme.colors.textSecondary} />
-                <Text style={s.instructionsText}>{qr.instructions}</Text>
-              </View>
-            )}
+            {!!qr.instructions && <Text style={s.tip}>{qr.instructions}</Text>}
           </Card>
 
-          {/* ── 2. Tell the school ─────────────────────────────────────────── */}
+          {/* ── Tell the school ─────────────────────────────────────────── */}
           <Card flush>
-            <CardHead
-              icon="paper-plane-outline"
-              title="2 · Tell the school"
-              sub="Once you have paid, send the UTR or a screenshot"
-            />
+            <CardHead icon="paper-plane-outline" title="Tell the school" sub="The UTR, or a screenshot" />
 
             {hasTransport && (
               <View style={s.segment}>
@@ -370,7 +349,7 @@ const QrPayScreen = ({ navigation, route }: any) => {
                 onBlur={() => setFocused(null)}
               />
             </Pressable>
-            <Text style={s.hint}>In your UPI app, open this payment — it is the 12-digit UPI Ref No., UTR or Transaction ID.</Text>
+            <Text style={s.hint}>The 12-digit UPI Ref No. on the payment in your UPI app.</Text>
 
             {shot ? (
               <View style={s.shot}>
@@ -392,13 +371,13 @@ const QrPayScreen = ({ navigation, route }: any) => {
                 <VectorIcon iconSet="Ionicons" iconName="image-outline" size={20} color={theme.colors.primary} />
                 <View style={s.flex}>
                   <Text style={s.attachTitle}>Attach a screenshot</Text>
-                  <Text style={s.attachSub}>Of the payment in your UPI app · optional with a UTR</Text>
+                  <Text style={s.attachSub}>Not needed with a UTR</Text>
                 </View>
               </TouchableOpacity>
             )}
 
             <Pressable style={[s.field, focused === 'note' && s.fieldFocused]} onPress={() => noteRef.current?.focus()}>
-              <Text style={s.fieldLabel}>Note for the school (optional)</Text>
+              <Text style={s.fieldLabel}>Note (optional)</Text>
               <TextInput
                 ref={noteRef}
                 style={s.fieldInput}
@@ -416,7 +395,7 @@ const QrPayScreen = ({ navigation, route }: any) => {
             <View style={s.send}>
               <FeeButton label={sending ? 'Sending…' : 'Send to school'} icon="paper-plane" busy={sending} onPress={onSend} />
             </View>
-            <Note>The school checks it against its bank account. Your receipt shows in Fees once they approve it.</Note>
+            <Note>The school checks it; your receipt then shows in Fees.</Note>
           </Card>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -441,42 +420,22 @@ const __mk_s = () => StyleSheet.create({
   skWrap: { padding: 16, gap: 12 },
   mono: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', letterSpacing: 0.5 },
 
-  // QR
-  qrWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 4 },
-  qr: {
-    width: 216,
-    height: 216,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.border,
-  },
-  qrHint: { fontSize: 12, color: theme.colors.textMuted, marginTop: 8 },
+  // The QR itself is qrUi's; here only the UPI ID and the two ways out
   upiRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginTop: 12,
+    marginTop: 10,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 9,
     borderRadius: 12,
     backgroundColor: theme.colors.background,
   },
-  upiLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5, color: theme.colors.textMuted },
-  upiId: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginTop: 1 },
+  upiId: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary },
   copy: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   copyText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
-  payRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  payRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
   tip: { fontSize: 12, color: theme.colors.textMuted, lineHeight: 17, marginTop: 10 },
-  instructions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: theme.colors.background,
-  },
-  instructionsText: { flex: 1, fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19 },
 
   // Form
   segment: {

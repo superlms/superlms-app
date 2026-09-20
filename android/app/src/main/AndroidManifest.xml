@@ -20,6 +20,12 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:mimeType="application/pdf" />
         </intent>
+        <!-- Fees on the school's UPI QR: without this the phone's UPI apps are
+             invisible to the app and openURL("upi://pay?...") finds nothing -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" />
+        </intent>
     </queries>
 
     <application

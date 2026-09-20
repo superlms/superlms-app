@@ -580,7 +580,9 @@ const FeesScreen = ({ navigation }: any) => {
 
       const amount = inst ? inst.payable : a?.totals.remaining ?? 0;
       const opened = await openUpiApp(school, amount > 0 ? amount : undefined, `School fee${inst ? ` ${inst.label}` : ''}`);
-      if (!opened) {
+      // Nothing to open when the school gave only a QR and no UPI ID — the
+      // next screen carries the QR itself, so say nothing then.
+      if (!opened && school.upi_id) {
         AppAlert.alert(
           'No UPI app found',
           'Save the QR from this screen and scan it from your gallery in any UPI app, or pay from another phone. Then send the UTR or a screenshot here.',
