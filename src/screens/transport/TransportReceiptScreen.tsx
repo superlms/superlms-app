@@ -10,13 +10,15 @@ import { authHeader, downloadPdf } from '../../api/pdfDownload';
 import { transportReceiptUrl, type TransportPayment } from '../../api/transportApi';
 
 /**
- * One transport fee payment's receipt, as the school issues it: the sheet
+ * One fee payment's receipt, as the school issues it: the sheet
  * itself, full screen, to pinch or double-tap to zoom — the viewer Report Card
  * and Admit Card use — with Download in the header to keep a copy.
  *
  * Route params:
- *   payment – the payment from the list
- *   url     – where its receipt is, when not the student's own (the admin app's)
+ *   payment    – the payment from the list
+ *   url        – where its receipt is, when not the student's own transport one
+ *                (the admin app's, or a student's academic fee receipt)
+ *   namePrefix – what the downloaded file is called before the receipt number
  */
 
 const TITLE = 'Receipt';
@@ -62,6 +64,7 @@ const PageSkeleton = ({ width }: { width: number }) => (
 const TransportReceiptScreen = ({ navigation, route }: any) => {
   const payment: TransportPayment = route.params.payment;
   const url: string = route.params.url ?? transportReceiptUrl(payment.id);
+  const namePrefix: string = route.params.namePrefix ?? 'Transport-Receipt';
   const { width: pageWidth } = useWindowDimensions();
 
   const [headers, setHeaders] = useState<Record<string, string> | null>(null);
@@ -82,7 +85,7 @@ const TransportReceiptScreen = ({ navigation, route }: any) => {
   const download = async () => {
     if (saving) return;
     setSaving(true);
-    const fileName = `Transport-Receipt-${String(payment.receipt_number).replace(/[\\/:*?"<>|\s]+/g, '-')}.pdf`;
+    const fileName = `${namePrefix}-${String(payment.receipt_number).replace(/[\\/:*?"<>|\s]+/g, '-')}.pdf`;
     try {
       await downloadPdf(url, fileName);
       if (Platform.OS === 'android') AppAlert.alert('Downloaded', `${fileName} is saved in Downloads.`);

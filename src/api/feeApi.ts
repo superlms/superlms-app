@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import constant from '../utils/constant';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type FeeType = 'academic' | 'transport';
@@ -207,6 +208,11 @@ export const getFeePaymentStatus = async (
   );
   return data?.data ?? data;
 };
+
+// GET /fees/receipt/{id}/pdf — one of the student's academic fee receipts,
+// as the school issues it. The transport ones are in transportApi.
+export const feeReceiptUrl = (id: number) =>
+  `${constant.API_BASE_URL}/fees/receipt/${id}/pdf`;
 
 // ─── Paying on the school's own UPI QR ───────────────────────────────────────
 // The money goes straight to the school; the student then reports it (UTR

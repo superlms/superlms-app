@@ -26,10 +26,12 @@ import {
   Installment,
   PaymentRow,
   TransportFees,
+  feeReceiptUrl,
   getFeeDashboard,
   getFeePenalties,
   getFeeQr,
 } from '../../api/feeApi';
+import { transportReceiptUrl } from '../../api/transportApi';
 import { AmountRows, InstallmentRow, MonthLine, ReceiptRow, inr } from './feesUi';
 import { FeeButton, PayOptions, QrImage, QrRequestRow, openUpiApp } from './qrUi';
 
@@ -54,10 +56,6 @@ const TITLE = 'Fees';
 type Tab = 'overview' | 'academic' | 'transport' | 'penalties';
 
 const day = (iso?: string | null) => (iso ? moment(iso).format('D MMM') : '');
-
-// The school issues a receipt sheet for a transport payment; an academic one
-// is the receipt number on the row.
-const hasReceipt = (p: PaymentRow) => p.fee_type === 'transport';
 
 interface Pay {
   qr: FeeQr | null;
@@ -311,7 +309,7 @@ const Overview = ({
                 key={`${p.fee_type}-${p.id}`}
                 p={p}
                 showType
-                onOpen={hasReceipt(p) ? () => onOpenReceipt(p) : undefined}
+                onOpen={() => onOpenReceipt(p)}
                 isLast={i === list.length - 1}
               />
             ))
@@ -322,7 +320,15 @@ const Overview = ({
 };
 
 // ── Academic ─────────────────────────────────────────────────────────────────
-const Academic = ({ a, pay }: { a: AcademicFees; pay: Pay }) => {
+const Academic = ({
+  a,
+  pay,
+  onOpenReceipt,
+}: {
+  a: AcademicFees;
+  pay: Pay;
+  onOpenReceipt: (p: PaymentRow) => void;
+}) => {
   const t = a.totals;
   const pct = t.net_due > 0 ? Math.round((t.paid / t.net_due) * 100) : 100;
   const next = a.upcoming.find(i => i.status !== 'paid' && i.payable > 0);
@@ -386,7 +392,9 @@ const Academic = ({ a, pay }: { a: AcademicFees; pay: Pay }) => {
         {a.paid.length === 0 ? (
           <Note>No academic payments yet.</Note>
         ) : (
-          a.paid.map((p, i) => <ReceiptRow key={p.id} p={p} isLast={i === a.paid.length - 1} />)
+          a.paid.map((p, i) => (
+            <ReceiptRow key={p.id} p={p} onOpen={() => onOpenReceipt(p)} isLast={i === a.paid.length - 1} />
+          ))
         )}
       </Card>
     </>
@@ -595,9 +603,16 @@ const FeesScreen = ({ navigation }: any) => {
 
   const openImage = (uri: string, title: string) => navigation.navigate('FeeImage', { uri, title });
 
-  // The receipt the school issues for a transport payment, in the PDF viewer.
-  const openReceipt = (p: PaymentRow) =>
-    navigation.navigate('TransportReceipt', { payment: { id: p.id, receipt_number: p.receipt_number } });
+  // The receipt the school issues for a payment — academic or transport —
+  // in the PDF viewer.
+  const openReceipt = (p: PaymentRow) => {
+    const transport = p.fee_type === 'transport';
+    navigation.navigate('TransportReceipt', {
+      payment: { id: p.id, receipt_number: p.receipt_number },
+      url: transport ? transportReceiptUrl(p.id) : feeReceiptUrl(p.id),
+      namePrefix: transport ? 'Transport-Receipt' : 'Fee-Receipt',
+    });
+  };
 
   // Transport only once there is a route to show.
   const tabs: { key: Tab; label: string }[] = [
@@ -614,7 +629,7 @@ const FeesScreen = ({ navigation }: any) => {
     if (!dashboard) return null;
     if (current === 'academic') {
       return a ? (
-        <Academic a={a} pay={pay} />
+        <Academic a={a} pay={pay} onOpenReceipt={openReceipt} />
       ) : (
         <Card flush>
           <CardHead icon="school-outline" title="No academic fees" />
