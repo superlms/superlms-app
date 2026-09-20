@@ -3,26 +3,19 @@ import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react
 import VectorIcon from '../../components/VectorIcon';
 import { HeaderIconButton } from '../../components/Header';
 import { Skeleton } from '../../components/Skeleton';
-import { AppAlert, AppDialog } from '../../components/AppDialog';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { DocHeader, DocNoData } from '../more/docUi';
-import {
-  StudentRow,
-  TeacherClass,
-  deleteStudent,
-  getMyClasses,
-  getStudents,
-} from '../../api/teacherStudentApi';
+import { StudentRow, TeacherClass, getMyClasses, getStudents } from '../../api/teacherStudentApi';
 
 /**
  * A class teacher's own students, in the More screen — the admin panel's
  * Students module for the class they are class teacher of, drawn as Subjects
  * is: a count, then a row per student with their photo, their name and their
- * numbers. The header's + adds one, a row opens it to edit, and the bin on
- * the row removes it.
+ * numbers, in name order. The header's + adds one and a row opens it to edit,
+ * where it can also be removed.
  *
  * A teacher who is class teacher of no class sees that, and adds no one.
  */
@@ -36,7 +29,7 @@ const classOf = (s: { class?: string | null; section?: string | null }) =>
   [s.class, s.section].filter(Boolean).join(' · ');
 
 // ── One student ──────────────────────────────────────────────────────────────
-//   (photo)  Aarav Sharma                                  [bin]  >
+//   (photo)  Aarav Sharma                                          >
 //            Roll 12 · Adm 2026-0007
 const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
   const [failed, setFailed] = useState(false);
@@ -56,13 +49,11 @@ const Row = ({
   student,
   meta,
   onOpen,
-  onRemove,
   isLast,
 }: {
   student: StudentRow;
   meta: string;
   onOpen: () => void;
-  onRemove: () => void;
   isLast: boolean;
 }) => (
   <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onOpen}>
@@ -80,10 +71,6 @@ const Row = ({
     </View>
 
     {!student.is_active && <Text style={s.off}>OFF</Text>}
-
-    <TouchableOpacity style={s.remove} hitSlop={8} activeOpacity={0.6} onPress={onRemove}>
-      <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={17} color={theme.colors.danger} />
-    </TouchableOpacity>
 
     <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />
   </TouchableOpacity>
@@ -113,16 +100,21 @@ const TeacherStudentsScreen = ({ navigation }: any) => {
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // The student the bin was tapped on, waiting to be confirmed.
-  const [removing, setRemoving] = useState<StudentRow | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [mine, list] = await Promise.all([getMyClasses(), getStudents({ per_page: 200 })]);
+      const [mine, list] = await Promise.all([
+        getMyClasses(),
+        getStudents({ per_page: 200, sort: 'name_asc' }),
+      ]);
       setClasses(mine);
-      setStudents(list.students ?? []);
+      // A to Z, whatever order the school's own list came back in.
+      setStudents(
+        [...(list.students ?? [])].sort((a, b) =>
+          (a.full_name ?? '').localeCompare(b.full_name ?? '', undefined, { sensitivity: 'base' }),
+        ),
+      );
     } catch (e: any) {
       setError(apiErr(e, 'Could not load your students.'));
       setClasses([]);
@@ -140,20 +132,6 @@ const TeacherStudentsScreen = ({ navigation }: any) => {
   const oneClass = (classes?.length ?? 0) === 1;
 
   const add = () => navigation.navigate('TeacherStudentForm', { classes });
-
-  const remove = async () => {
-    if (!removing || busy) return;
-    setBusy(true);
-    try {
-      await deleteStudent(removing.id);
-      setStudents(prev => prev.filter(x => x.id !== removing.id));
-      setRemoving(null);
-    } catch (e: any) {
-      AppAlert.alert('Could not remove', apiErr(e, 'Please try again.'));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const body = () => {
     if (loading && students.length === 0 && !refreshing) return <ListSkeleton />;
@@ -213,7 +191,6 @@ const TeacherStudentsScreen = ({ navigation }: any) => {
               .filter(Boolean)
               .join(' · ')}
             onOpen={() => navigation.navigate('TeacherStudentForm', { id: item.id, classes })}
-            onRemove={() => setRemoving(item)}
             isLast={index === students.length - 1}
           />
         )}
@@ -229,21 +206,6 @@ const TeacherStudentsScreen = ({ navigation }: any) => {
         rightSlot={isClassTeacher ? <HeaderIconButton icon="add" onPress={add} /> : undefined}
       />
       {body()}
-
-      <AppDialog
-        visible={!!removing}
-        title="Remove this student?"
-        message={
-          removing
-            ? `${removing.full_name} and their login will be deleted. This cannot be undone.`
-            : ''
-        }
-        actions={[
-          { text: 'Cancel', style: 'cancel', onPress: () => setRemoving(null) },
-          { text: 'Remove', style: 'destructive', onPress: remove, loading: busy },
-        ]}
-        onRequestClose={() => setRemoving(null)}
-      />
     </View>
   );
 };
@@ -268,7 +230,6 @@ const __mk_s = () => StyleSheet.create({
   name: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   meta: { fontSize: 13, color: theme.colors.textSecondary },
   off: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: theme.colors.textMuted },
-  remove: { padding: 2 },
 
   // Loading
   skCount: { paddingTop: 13, paddingBottom: 3 },

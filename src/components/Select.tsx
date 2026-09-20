@@ -22,6 +22,8 @@ interface Props {
   options: SelectOption[];
   onChange: (value: string | number) => void;
   disabled?: boolean;
+  /** The box outlined only, with no fill — for forms drawn that way. */
+  plain?: boolean;
 }
 
 // Labelled dropdown: a pressable box that opens a modal list. Replaces the chip
@@ -33,6 +35,7 @@ const Select = ({
   options,
   onChange,
   disabled,
+  plain,
 }: Props) => {
   const [open, setOpen] = useState(false);
   const selected = options.find(o => o.value === value);
@@ -41,7 +44,7 @@ const Select = ({
     <View style={{ marginTop: 12 }}>
       {!!label && <Text style={styles.label}>{label}</Text>}
       <TouchableOpacity
-        style={[styles.box, disabled && styles.boxDisabled]}
+        style={[styles.box, plain && styles.boxPlain, disabled && styles.boxDisabled]}
         activeOpacity={0.7}
         disabled={disabled}
         onPress={() => setOpen(true)}
@@ -101,6 +104,7 @@ const __mk_styles = () =>
       paddingVertical: 11,
       backgroundColor: theme.colors.background,
     },
+    boxPlain: { backgroundColor: 'transparent' },
     boxDisabled: { opacity: 0.5 },
     value: { flex: 1, fontSize: 14, color: theme.colors.textPrimary, marginRight: 8 },
     placeholder: { color: theme.colors.textMuted },

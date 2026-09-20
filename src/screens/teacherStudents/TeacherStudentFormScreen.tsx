@@ -17,12 +17,13 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr, pickImage, takePhoto } from '../../utils/filePickers';
 import { PickedFile } from '../../api/adminProfileApi';
 import { DocHeader } from '../more/docUi';
-import { Field, ToggleRow } from '../admin/AdminStandardScreen';
+import { FormField, FormPair, FormSection, FormToggle } from './studentFormUi';
 import {
   StudentLookups,
   StudentPayload,
   TeacherClass,
   createStudent,
+  deleteStudent,
   getMyClasses,
   getStudent,
   getStudentLookups,
@@ -31,9 +32,13 @@ import {
 
 /**
  * Adding or editing one student of the class a teacher is class teacher of —
- * the admin panel's Students form, field for field, with the class and section
- * fixed to their own (a picker only when they are class teacher of more than
- * one). The photo is taken with the camera or picked from the gallery.
+ * the admin panel's Students form, field for field, in blocks: the photo, the
+ * student, their family, the school's numbers, where they live and the bus.
+ *
+ * The class is not asked for. A class teacher has one, and the student goes
+ * into it; the line under the photo says which. The photo is taken with the
+ * camera there and then, or picked from the gallery. Editing also offers to
+ * remove the student.
  *
  * Route params: id (edit), classes (what the list already knows they own).
  */
@@ -53,8 +58,8 @@ const emptyForm: StudentPayload = {
   is_active: true, transportation_required: false, route_id: null, image: null,
 };
 
-const classLabel = (c: TeacherClass) => [c.class, c.section].filter(Boolean).join(' · ');
-const classKey = (standardId: number, sectionId: number | null) => `${standardId}-${sectionId ?? 0}`;
+const classLabel = (c?: TeacherClass | null) =>
+  c ? [c.class, c.section].filter(Boolean).join(' · ') : '';
 
 const TeacherStudentFormScreen = ({ navigation, route }: any) => {
   const editId: number | undefined = route?.params?.id;
@@ -62,42 +67,42 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
   const [form, setForm] = useState<StudentPayload>(emptyForm);
   const [classes, setClasses] = useState<TeacherClass[]>(route?.params?.classes ?? []);
   const [lookups, setLookups] = useState<StudentLookups | null>(null);
-  const [sections, setSections] = useState<StudentLookups['sections']>([]);
   const [photo, setPhoto] = useState<PickedFile | null>(null);
   const [savedPhoto, setSavedPhoto] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const set = (k: keyof StudentPayload, v: any) => setForm(prev => ({ ...prev, [k]: v }));
 
-  // A class teacher of one class has nothing to choose — it is filled in.
-  const only = classes.length === 1 ? classes[0] : null;
-  // Class teacher of a whole class rather than one section of it: the section
-  // is theirs to pick. Otherwise it is fixed, and the server would refuse it.
-  const ownsWholeClass = classes.some(c => c.standard_id === form.standard_id && c.section_id === null);
+  // The class the student belongs to: the teacher's own, and for a teacher of
+  // more than one, the first — the class is never asked for here.
+  const own = classes[0] ?? null;
 
   useEffect(() => {
     getStudentLookups().then(setLookups).catch(() => {});
     if (!route?.params?.classes) getMyClasses().then(setClasses).catch(() => {});
   }, [route?.params?.classes]);
 
-  // The sections of whichever class is picked, for a teacher who owns a whole
-  // class rather than one section of it.
-  const loadSections = useCallback(async (standardId: number) => {
+  /** Their class, and its first section when the whole class is theirs. */
+  const fillClass = useCallback(async (c: TeacherClass) => {
+    setForm(prev => ({ ...prev, standard_id: c.standard_id, section_id: c.section_id ?? 0 }));
+    if (c.section_id) return;
     try {
-      const lk = await getStudentLookups(standardId);
-      setSections(lk.sections);
+      const lk = await getStudentLookups(c.standard_id);
+      const first = lk.sections[0];
+      if (first) setForm(prev => ({ ...prev, section_id: first.id }));
     } catch {
-      setSections([]);
+      // The save will ask for it again if it never arrives.
     }
   }, []);
 
   useEffect(() => {
-    if (editId || !only) return;
-    setForm(prev => ({ ...prev, standard_id: only.standard_id, section_id: only.section_id ?? 0 }));
-    if (!only.section_id) loadSections(only.standard_id);
-  }, [editId, only, loadSections]);
+    if (editId || !own) return;
+    fillClass(own);
+  }, [editId, own, fillClass]);
 
   useEffect(() => {
     if (!editId) return;
@@ -118,7 +123,6 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
           route_id: d.route_id ?? null, image: null,
         });
         setSavedPhoto(d.image ?? null);
-        if (d.standard_id) loadSections(d.standard_id);
       } catch (e) {
         AppAlert.alert('Error', apiErr(e, 'Could not load this student.'));
         navigation.goBack();
@@ -126,15 +130,7 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
         setLoading(false);
       }
     })();
-  }, [editId, navigation, loadSections]);
-
-  const onPickClass = (key: string) => {
-    const picked = classes.find(c => classKey(c.standard_id, c.section_id) === key);
-    if (!picked) return;
-    set('standard_id', picked.standard_id);
-    set('section_id', picked.section_id ?? 0);
-    if (!picked.section_id) loadSections(picked.standard_id);
-  };
+  }, [editId, navigation]);
 
   // The photo: the camera, or the gallery.
   const choose = async (from: 'camera' | 'gallery') => {
@@ -148,10 +144,12 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
   const save = async () => {
     if (
       !form.name.trim() || !form.email.trim() || !form.mobile.trim() ||
-      !form.gender || !form.standard_id || !form.section_id ||
-      !form.father_name.trim() || !form.dob
+      !form.gender || !form.dob || !form.father_name.trim()
     ) {
-      return AppAlert.alert('Required', 'Name, email, mobile, date of birth, gender, class, section and father name are needed.');
+      return AppAlert.alert('Something is missing', 'Name, email, mobile, date of birth, gender and father’s name are needed.');
+    }
+    if (!form.standard_id || !form.section_id) {
+      return AppAlert.alert('No class', 'Your class could not be read. Pull the list to refresh and try again.');
     }
     setSaving(true);
     try {
@@ -170,6 +168,20 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
     }
   };
 
+  const remove = async () => {
+    if (!editId || removing) return;
+    setRemoving(true);
+    try {
+      await deleteStudent(editId);
+      setConfirming(false);
+      navigation.goBack();
+    } catch (e) {
+      AppAlert.alert('Could not remove', apiErr(e, 'Please try again.'));
+    } finally {
+      setRemoving(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={s.root}>
@@ -182,6 +194,7 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
   }
 
   const shown = photo?.uri ?? savedPhoto;
+  const inClass = classLabel(editId ? classes.find(c => c.standard_id === form.standard_id) ?? own : own);
 
   return (
     <View style={s.root}>
@@ -189,88 +202,103 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-          {/* Photo — taken here, or from the gallery */}
-          <TouchableOpacity style={s.photoRow} activeOpacity={0.8} onPress={() => setAsking(true)}>
-            {shown ? (
-              <Image source={{ uri: shown }} style={s.photo} />
-            ) : (
-              <View style={[s.photo, s.photoEmpty]}>
-                <VectorIcon iconSet="Ionicons" iconName="person-outline" size={24} color={theme.colors.textMuted} />
+          {/* The photo, and the class the student goes into */}
+          <View style={s.photoBlock}>
+            <TouchableOpacity activeOpacity={0.8} onPress={() => setAsking(true)}>
+              {shown ? (
+                <Image source={{ uri: shown }} style={s.photo} />
+              ) : (
+                <View style={[s.photo, s.photoEmpty]}>
+                  <VectorIcon iconSet="Ionicons" iconName="person" size={34} color={theme.colors.textMuted} />
+                </View>
+              )}
+              <View style={s.camera}>
+                <VectorIcon iconSet="Ionicons" iconName="camera" size={15} color={theme.colors.white} />
               </View>
-            )}
-            <View style={s.flex}>
-              <Text style={s.photoTitle}>{shown ? 'Change photo' : 'Add a photo'}</Text>
-              <Text style={s.photoSub}>Take one with the camera, or pick from the gallery</Text>
-            </View>
-            <VectorIcon iconSet="Ionicons" iconName="camera-outline" size={20} color={theme.colors.primary} />
-          </TouchableOpacity>
+            </TouchableOpacity>
 
-          {/* The class — theirs, and fixed unless they own more than one */}
-          {only && only.section_id ? (
-            <View style={s.classBox}>
-              <Text style={s.classLabel}>Class</Text>
-              <Text style={s.classValue}>{classLabel(only)}</Text>
-            </View>
-          ) : (
-            <Select
-              label="Class"
-              placeholder="Select class"
-              value={form.standard_id ? classKey(form.standard_id, form.section_id || null) : null}
-              options={classes.map(c => ({ label: classLabel(c), value: classKey(c.standard_id, c.section_id) }))}
-              onChange={v => onPickClass(String(v))}
-            />
-          )}
-          {/* A whole class is theirs section by section; one section is fixed */}
-          {ownsWholeClass && (
-            <Select
-              label="Section"
-              placeholder={form.standard_id ? 'Select section' : 'Select a class first'}
-              value={form.section_id || null}
-              options={sections.map(x => ({ label: x.name, value: x.id }))}
-              onChange={v => set('section_id', Number(v))}
-              disabled={!form.standard_id}
-            />
-          )}
+            <TouchableOpacity onPress={() => setAsking(true)} hitSlop={8} activeOpacity={0.6}>
+              <Text style={s.photoText}>{shown ? 'Change photo' : 'Add a photo'}</Text>
+            </TouchableOpacity>
+            {!!inClass && <Text style={s.inClass}>{inClass}</Text>}
+          </View>
 
-          <Field label="Full Name" value={form.name} onChangeText={(v: string) => set('name', v)} placeholder="Student name" />
-          <Field label="Email" value={form.email} onChangeText={(v: string) => set('email', v)} placeholder="email@example.com" keyboardType="email-address" autoCapitalize="none" />
-          <Field label="Mobile" value={form.mobile} onChangeText={(v: string) => set('mobile', v)} placeholder="10-digit" keyboardType="number-pad" />
-          <Field label="Date of Birth" value={form.dob} onChangeText={(v: string) => set('dob', v)} placeholder="YYYY-MM-DD" />
+          <FormSection title="Student" first />
+          <FormField label="Full Name" value={form.name} onChangeText={(v: string) => set('name', v)} placeholder="Student name" />
+          <FormField label="Email" value={form.email} onChangeText={(v: string) => set('email', v)} placeholder="email@example.com" keyboardType="email-address" autoCapitalize="none" hint="Their login is emailed here." />
+          <FormPair>
+            <FormField half label="Mobile" value={form.mobile} onChangeText={(v: string) => set('mobile', v)} placeholder="10-digit" keyboardType="number-pad" maxLength={10} />
+            <FormField half label="Date of Birth" value={form.dob} onChangeText={(v: string) => set('dob', v)} placeholder="YYYY-MM-DD" />
+          </FormPair>
+          <View style={s.select}>
+            <Select plain label="Gender" placeholder="Select gender" value={form.gender || null} options={GENDERS} onChange={v => set('gender', v)} />
+          </View>
 
-          <Select label="Gender" placeholder="Select gender" value={form.gender || null} options={GENDERS} onChange={v => set('gender', v)} />
+          <FormSection title="Family" />
+          <FormField label="Father’s Name" value={form.father_name} onChangeText={(v: string) => set('father_name', v)} placeholder="Father’s name" />
+          <FormField label="Mother’s Name" value={form.mother_name} onChangeText={(v: string) => set('mother_name', v)} placeholder="Optional" />
 
-          <Field label="Father Name" value={form.father_name} onChangeText={(v: string) => set('father_name', v)} placeholder="Father's name" />
-          <Field label="Mother Name" value={form.mother_name} onChangeText={(v: string) => set('mother_name', v)} placeholder="Optional" />
-          <Field label="Date of Admission" value={form.date_of_admission} onChangeText={(v: string) => set('date_of_admission', v)} placeholder="YYYY-MM-DD (optional)" />
-          <Field label="Religion" value={form.religion} onChangeText={(v: string) => set('religion', v)} placeholder="Optional" />
-          <Field label="Aadhar No" value={form.aadhar_no} onChangeText={(v: string) => set('aadhar_no', v)} placeholder="12 digits (optional)" keyboardType="number-pad" />
-          <Field label="Apaar ID" value={form.appar_id} onChangeText={(v: string) => set('appar_id', v)} placeholder="Optional" />
-          <Field label="Registration Number" value={form.registration_number} onChangeText={(v: string) => set('registration_number', v)} placeholder="Optional" />
-          <Field label="State" value={form.state} onChangeText={(v: string) => set('state', v)} placeholder="Optional" />
-          <Field label="City" value={form.city} onChangeText={(v: string) => set('city', v)} placeholder="Optional" />
-          <Field label="Pincode" value={form.pincode} onChangeText={(v: string) => set('pincode', v)} placeholder="6 digits (optional)" keyboardType="number-pad" />
-          <Field label="Local Address" value={form.local_address} onChangeText={(v: string) => set('local_address', v)} placeholder="Optional" multiline />
-          <Field label="Permanent Address" value={form.permanent_address} onChangeText={(v: string) => set('permanent_address', v)} placeholder="Optional" multiline />
+          <FormSection title="School" />
+          <FormField label="Date of Admission" value={form.date_of_admission} onChangeText={(v: string) => set('date_of_admission', v)} placeholder="YYYY-MM-DD (optional)" />
+          <FormPair>
+            <FormField half label="Religion" value={form.religion} onChangeText={(v: string) => set('religion', v)} placeholder="Optional" />
+            <FormField half label="Aadhaar No." value={form.aadhar_no} onChangeText={(v: string) => set('aadhar_no', v)} placeholder="12 digits" keyboardType="number-pad" maxLength={12} />
+          </FormPair>
+          <FormPair>
+            <FormField half label="Apaar ID" value={form.appar_id} onChangeText={(v: string) => set('appar_id', v)} placeholder="Optional" />
+            <FormField half label="Registration No." value={form.registration_number} onChangeText={(v: string) => set('registration_number', v)} placeholder="Optional" />
+          </FormPair>
 
-          <ToggleRow label="Transport Required" value={form.transportation_required} onValueChange={(v: boolean) => set('transportation_required', v)} />
+          <FormSection title="Address" />
+          <FormPair>
+            <FormField half label="City" value={form.city} onChangeText={(v: string) => set('city', v)} placeholder="Optional" />
+            <FormField half label="State" value={form.state} onChangeText={(v: string) => set('state', v)} placeholder="Optional" />
+          </FormPair>
+          <FormField label="Pincode" value={form.pincode} onChangeText={(v: string) => set('pincode', v)} placeholder="6 digits (optional)" keyboardType="number-pad" maxLength={6} />
+          <FormField label="Local Address" value={form.local_address} onChangeText={(v: string) => set('local_address', v)} placeholder="Optional" multiline />
+          <FormField label="Permanent Address" value={form.permanent_address} onChangeText={(v: string) => set('permanent_address', v)} placeholder="Optional" multiline />
+
+          <FormSection title="Transport & Access" />
+          <FormToggle
+            label="Takes the bus"
+            note={form.transportation_required ? 'Billed on the route below' : 'No transport fee'}
+            value={!!form.transportation_required}
+            onValueChange={(v: boolean) => set('transportation_required', v)}
+          />
           {form.transportation_required && (
-            <Select
-              label="Route"
-              placeholder="Select route"
-              value={form.route_id ?? null}
-              options={(lookups?.routes ?? []).map(rt => ({ label: rt.route_name, value: rt.id }))}
-              onChange={v => set('route_id', Number(v))}
-            />
+            <View style={s.select}>
+              <Select
+                plain
+                label="Route"
+                placeholder="Select route"
+                value={form.route_id ?? null}
+                options={(lookups?.routes ?? []).map(rt => ({ label: rt.route_name, value: rt.id }))}
+                onChange={v => set('route_id', Number(v))}
+              />
+            </View>
           )}
-          <ToggleRow label="Active" value={form.is_active} onValueChange={(v: boolean) => set('is_active', v)} />
+          <FormToggle
+            label="Active"
+            note={form.is_active ? 'Can sign in to the app' : 'Signed out of the app'}
+            value={!!form.is_active}
+            onValueChange={(v: boolean) => set('is_active', v)}
+          />
 
-          <TouchableOpacity style={[s.saveBtn, saving && s.saveBtnIdle]} onPress={save} disabled={saving} activeOpacity={0.9}>
+          <TouchableOpacity style={[s.saveBtn, saving && s.idle]} onPress={save} disabled={saving} activeOpacity={0.9}>
             {saving ? (
               <ActivityIndicator color={theme.colors.white} />
             ) : (
               <Text style={s.saveText}>{editId ? 'Save changes' : 'Add student'}</Text>
             )}
           </TouchableOpacity>
+
+          {!!editId && (
+            <TouchableOpacity style={s.removeBtn} onPress={() => setConfirming(true)} activeOpacity={0.7}>
+              <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={16} color={theme.colors.danger} />
+              <Text style={s.removeText}>Remove student</Text>
+            </TouchableOpacity>
+          )}
+
           <View style={s.tail} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -286,6 +314,17 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
         ]}
         onRequestClose={() => setAsking(false)}
       />
+
+      <AppDialog
+        visible={confirming}
+        title="Remove this student?"
+        message={`${form.name || 'This student'} and their login will be deleted. This cannot be undone.`}
+        actions={[
+          { text: 'Cancel', style: 'cancel', onPress: () => setConfirming(false) },
+          { text: 'Remove', style: 'destructive', onPress: remove, loading: removing },
+        ]}
+        onRequestClose={() => setConfirming(false)}
+      />
     </View>
   );
 };
@@ -296,46 +335,60 @@ const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
   flex: { flex: 1 },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll: { paddingHorizontal: 20, paddingTop: 12 },
-  tail: { height: 40 },
+  scroll: { paddingHorizontal: 20, paddingTop: 8 },
+  tail: { height: 48 },
 
-  // Photo
-  photoRow: {
-    flexDirection: 'row',
+  // Photo, and the class it belongs to
+  photoBlock: { alignItems: 'center', paddingTop: 12, paddingBottom: 4 },
+  photo: { width: 88, height: 88, borderRadius: 44, backgroundColor: theme.colors.background },
+  photoEmpty: {
     alignItems: 'center',
-    gap: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: theme.radius.md,
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
-  photo: { width: 48, height: 48, borderRadius: 24, backgroundColor: theme.colors.background },
-  photoEmpty: { alignItems: 'center', justifyContent: 'center' },
-  photoTitle: { fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary },
-  photoSub: { fontSize: 12, color: theme.colors.textMuted, marginTop: 2 },
-
-  // The class, where it cannot be changed
-  classBox: {
-    marginTop: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.background,
+  camera: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: theme.colors.card,
   },
-  classLabel: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted },
-  classValue: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginTop: 2 },
+  photoText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary, marginTop: 10 },
+  inClass: { fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
+
+  // Select sits in the fields' rhythm
+  select: { marginTop: 12 },
 
   saveBtn: {
-    marginTop: 22,
+    marginTop: 28,
     height: 50,
-    borderRadius: theme.radius.md,
+    borderRadius: 12,
     backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  saveBtnIdle: { opacity: 0.7 },
+  idle: { opacity: 0.7 },
   saveText: { fontSize: 15, fontWeight: '700', color: theme.colors.white },
+
+  removeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 12,
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.danger + '55',
+  },
+  removeText: { fontSize: 14, fontWeight: '600', color: theme.colors.danger },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.
