@@ -111,15 +111,18 @@ export const AmountRows = ({
   </View>
 );
 
-//   RCPT-2026-0142                                     ₹ 12,000
+//   RCPT-2026-0142                                     ₹ 12,000  [↓]
 //   Academic · UPI · 12 Sep 2026
+// The icon after the amount opens the receipt, where the school issues one.
 export const ReceiptRow = ({
   p,
   showType,
+  onOpen,
   isLast,
 }: {
   p: PaymentRow;
   showType?: boolean;
+  onOpen?: () => void;
   isLast: boolean;
 }) => (
   <View style={[s.row, !isLast && s.rowDivider]}>
@@ -139,6 +142,11 @@ export const ReceiptRow = ({
       </Text>
     </View>
     <Text style={s.rowAmount}>{inr(p.amount)}</Text>
+    {!!onOpen && (
+      <TouchableOpacity style={s.receipt} onPress={onOpen} hitSlop={10} activeOpacity={0.6}>
+        <VectorIcon iconSet="Ionicons" iconName="download-outline" size={18} color={theme.colors.primary} />
+      </TouchableOpacity>
+    )}
   </View>
 );
 
@@ -290,6 +298,7 @@ const __mk_s = () => StyleSheet.create({
   rowTitle: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   rowMeta: { fontSize: 12, color: theme.colors.textMuted },
   rowRight: { alignItems: 'flex-end', gap: 3 },
+  receipt: { marginLeft: 2, padding: 2 },
   rowAmount: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary },
   status: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: theme.colors.textMuted },
 

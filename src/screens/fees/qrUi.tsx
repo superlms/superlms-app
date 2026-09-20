@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import moment from 'moment';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import VectorIcon from '../../components/VectorIcon';
@@ -56,6 +56,27 @@ export const FeeButton = ({
     )}
   </TouchableOpacity>
 );
+
+/**
+ * The school's QR itself, big enough to scan from another phone — the Fees
+ * overview and the pay screen show the same one. Tapping it opens it full
+ * screen.
+ */
+export const QrImage = ({ url, onPress }: { url: string; onPress?: () => void }) => {
+  const body = (
+    <>
+      <Image source={{ uri: url }} style={s.qr} resizeMode="contain" />
+      <Text style={s.qrHint}>Tap to enlarge · scan it from another phone</Text>
+    </>
+  );
+  return onPress ? (
+    <TouchableOpacity style={s.qrWrap} activeOpacity={0.8} onPress={onPress}>
+      {body}
+    </TouchableOpacity>
+  ) : (
+    <View style={s.qrWrap}>{body}</View>
+  );
+};
 
 /**
  * How this student can pay: on the school's QR when it takes fees there, and
@@ -204,6 +225,18 @@ const __mk_s = () => StyleSheet.create({
   btnTextCompact: { fontSize: 14 },
 
   payOptions: { gap: 10, paddingTop: 6, paddingBottom: 8 },
+
+  // The school's QR
+  qrWrap: { alignItems: 'center', paddingTop: 8, paddingBottom: 4 },
+  qr: {
+    width: 216,
+    height: 216,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.border,
+  },
+  qrHint: { fontSize: 12, color: theme.colors.textMuted, marginTop: 8 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

@@ -1,7 +1,8 @@
 import React, { useCallback, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import moment from 'moment';
 import AppRefreshControl from '../../components/AppRefreshControl';
+import { AppAlert } from '../../components/AppDialog';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import { DocHeader, DocNoData } from '../more/docUi';
@@ -23,24 +24,24 @@ import {
   FeePenalties,
   FeeQr,
   Installment,
+  PaymentRow,
   TransportFees,
   getFeeDashboard,
   getFeePenalties,
   getFeeQr,
 } from '../../api/feeApi';
-import type { TransportPayment } from '../../api/transportApi';
 import { AmountRows, InstallmentRow, MonthLine, ReceiptRow, inr } from './feesUi';
-import { TransportPayments } from './TransportPayments';
-import { PayOptions, QrRequestRow } from './qrUi';
+import { FeeButton, PayOptions, QrImage, QrRequestRow, openUpiApp } from './qrUi';
 
 /**
  * A student's fees, in the dashboards' way: white cards on the page's grey,
  * each with a small accent icon, and four headline figures to open on.
  *
- *   Overview   what is left, what is paid, the next installment, and what
- *              is with the school to check; how to pay; paid by fee; the
- *              installments ahead; payments sent on the school's QR; and the
- *              latest receipts.
+ *   Overview   what is left, what is paid, the next installment, and the
+ *              transport fee (the late fee, without a route); the school's
+ *              QR to pay on; paid by fee; the fee structure and the transport
+ *              month by month; every installment; payments sent on the
+ *              school's QR; and the latest receipts.
  *   Academic / Transport / Penalties — each fee in full.
  *
  * Paying: on the school's own UPI QR when it takes fees there (the student
@@ -54,12 +55,18 @@ type Tab = 'overview' | 'academic' | 'transport' | 'penalties';
 
 const day = (iso?: string | null) => (iso ? moment(iso).format('D MMM') : '');
 
+// The school issues a receipt sheet for a transport payment; an academic one
+// is the receipt number on the row.
+const hasReceipt = (p: PaymentRow) => p.fee_type === 'transport';
+
 interface Pay {
   qr: FeeQr | null;
   academic: (inst?: Installment) => void;
   transport: () => void;
   academicOnline: (inst?: Installment) => void;
   transportOnline: () => void;
+  /** The UPI apps on the school's QR, then the screen that reports it. */
+  onQrApp: (inst?: Installment) => void;
 }
 
 // ── Overview ─────────────────────────────────────────────────────────────────
@@ -68,22 +75,28 @@ const Overview = ({
   pay,
   penalties,
   go,
-  onOpenShot,
+  onOpenImage,
+  onOpenReceipt,
 }: {
   data: FeeDashboard;
   pay: Pay;
   penalties: FeePenalties | null;
   go: (t: Tab) => () => void;
-  onOpenShot: (uri: string) => void;
+  onOpenImage: (uri: string, title: string) => void;
+  onOpenReceipt: (p: PaymentRow) => void;
 }) => {
   const [allSent, setAllSent] = useState(false);
   const sm = data.summary;
   const a = data.academic;
   const tr = data.transport;
-  const unpaid = (a?.upcoming ?? []).filter(i => i.status !== 'paid' && i.payable > 0);
+  const at = a?.totals;
+  const installments = a?.upcoming ?? [];
+  const unpaid = installments.filter(i => i.status !== 'paid' && i.payable > 0);
   const next = unpaid[0];
   const overdue = unpaid.some(i => i.status === 'overdue');
   const payments = data.overall_payments ?? [];
+  // The months the school bills — the rest of the year isn't on this route.
+  const months = (tr?.schedule ?? []).filter(m => m.status !== 'no_transport');
   const qr = pay.qr?.qr ?? null;
   const sent = pay.qr?.requests ?? [];
   const pending = pay.qr?.pending_count ?? 0;
@@ -113,7 +126,19 @@ const Overview = ({
       low: next?.status === 'overdue',
       onPress: next ? () => pay.academic(next) : undefined,
     },
-    qr || sent.length > 0
+    tr
+      ? {
+          icon: 'bus-outline',
+          label: 'Transport',
+          value: inr(tr.totals.remaining),
+          note:
+            tr.totals.remaining > 0
+              ? `${inr(tr.totals.paid)} paid of ${inr(tr.totals.annual_fee)}`
+              : `Paid in full · ${inr(tr.totals.annual_fee)}`,
+          low: tr.totals.remaining > 0,
+          onPress: go('transport'),
+        }
+      : qr || sent.length > 0
       ? {
           icon: 'time-outline',
           label: 'With the school',
@@ -141,7 +166,7 @@ const Overview = ({
       {!!a?.academic_year && <PageLine text={`Academic year ${a.academic_year}`} />}
       <KpiGrid items={kpis} />
 
-      {/* How to pay */}
+      {/* How to pay — the school's QR, there to scan */}
       {sm.remaining > 0 && (
         <Card flush>
           <CardHead
@@ -149,20 +174,33 @@ const Overview = ({
             title="Pay fees"
             sub={qr ? 'On the school’s UPI QR — straight to the school' : 'UPI, card or net banking'}
           />
-          {!!qr && (
-            <View style={s.qrLine}>
-              {!!qr.image_url && <Image source={{ uri: qr.image_url }} style={s.qrThumb} resizeMode="contain" />}
+          {qr ? (
+            <>
+              {!!qr.image_url && <QrImage url={qr.image_url} onPress={() => onOpenImage(qr.image_url!, 'School QR')} />}
+              <View style={s.payBtns}>
+                <FeeButton label="Pay on school QR" icon="qr-code-outline" onPress={() => pay.onQrApp(next)} />
+                {!!pay.qr?.gateway_ready && (
+                  <FeeButton
+                    outline
+                    label="Pay online"
+                    icon="card-outline"
+                    onPress={() => pay.academicOnline(next)}
+                  />
+                )}
+              </View>
               <Text style={s.qrText}>
-                Pay on the QR, then send the UTR or a screenshot. The school checks it and your receipt shows here.
+                Your UPI apps open on the school’s QR. After paying, send the UTR or a screenshot — the payment
+                isn’t counted until the school has it.
               </Text>
-            </View>
+            </>
+          ) : (
+            <PayOptions
+              qr={null}
+              gatewayReady
+              onQr={() => pay.academic(next)}
+              onOnline={() => pay.academicOnline(next)}
+            />
           )}
-          <PayOptions
-            qr={qr}
-            gatewayReady={!!pay.qr?.gateway_ready}
-            onQr={() => pay.academic(next)}
-            onOnline={() => pay.academicOnline(next)}
-          />
         </Card>
       )}
 
@@ -187,12 +225,54 @@ const Overview = ({
         </Card>
       )}
 
-      {/* Installments ahead */}
-      {unpaid.length > 0 && (
+      {/* The fee structure, and where it stands */}
+      {!!at && a.structures.length > 0 && (
         <Card>
-          <CardHead icon="receipt-outline" title="Installments" sub="Academic fee" action="All" onAction={go('academic')} />
-          {unpaid.slice(0, 3).map((it, i, list) => (
-            <InstallmentRow key={it.serial} item={it} onPay={pay.academic} isLast={i === list.length - 1} />
+          <CardHead
+            icon="list-outline"
+            title="Fee structure"
+            sub={a.academic_year ? `Academic fee · year ${a.academic_year}` : 'Academic fee'}
+            action="Details"
+            onAction={go('academic')}
+          />
+          <AmountRows
+            rows={[
+              ...a.structures.map(it => ({ label: it.fee_name, value: inr(it.amount) })),
+              ...(at.concession > 0 ? [{ label: 'Concession', value: `− ${inr(at.concession)}` }] : []),
+              { label: 'Payable', value: inr(at.net_due), total: true },
+              { label: 'Paid', value: inr(at.paid) },
+              { label: 'Remaining', value: inr(at.remaining), total: true, danger: at.remaining > 0 },
+            ]}
+          />
+        </Card>
+      )}
+
+      {/* The transport fee, month by month — only for a student on a route */}
+      {!!tr && months.length > 0 && (
+        <Card>
+          <CardHead
+            icon="bus-outline"
+            title="Transport, month by month"
+            sub={`${inr(tr.totals.monthly_fee)} a month · ${tr.route.route_name}`}
+            action="Details"
+            onAction={go('transport')}
+          />
+          {months.map((m, i) => (
+            <MonthLine key={m.key} m={m} isLast={i === months.length - 1} />
+          ))}
+        </Card>
+      )}
+
+      {/* Every installment of the year */}
+      {installments.length > 0 && (
+        <Card>
+          <CardHead
+            icon="receipt-outline"
+            title="Installments"
+            sub={`Academic fee · ${installments.length} this year`}
+          />
+          {installments.map((it, i) => (
+            <InstallmentRow key={it.serial} item={it} onPay={pay.academic} isLast={i === installments.length - 1} />
           ))}
         </Card>
       )}
@@ -211,7 +291,7 @@ const Overview = ({
             <QrRequestRow
               key={r.id}
               r={r}
-              onPress={r.screenshot_url ? () => onOpenShot(r.screenshot_url!) : undefined}
+              onPress={r.screenshot_url ? () => onOpenImage(r.screenshot_url!, 'Screenshot') : undefined}
               isLast={i === shownSent.length - 1}
             />
           ))}
@@ -227,7 +307,13 @@ const Overview = ({
           payments
             .slice(0, 5)
             .map((p, i, list) => (
-              <ReceiptRow key={`${p.fee_type}-${p.id}`} p={p} showType isLast={i === list.length - 1} />
+              <ReceiptRow
+                key={`${p.fee_type}-${p.id}`}
+                p={p}
+                showType
+                onOpen={hasReceipt(p) ? () => onOpenReceipt(p) : undefined}
+                isLast={i === list.length - 1}
+              />
             ))
         )}
       </Card>
@@ -308,21 +394,17 @@ const Academic = ({ a, pay }: { a: AcademicFees; pay: Pay }) => {
 };
 
 // ── Transport ────────────────────────────────────────────────────────────────
-const Transport = ({ tr, pay }: { tr: TransportFees; pay: Pay }) => {
+const Transport = ({
+  tr,
+  pay,
+  onOpenReceipt,
+}: {
+  tr: TransportFees;
+  pay: Pay;
+  onOpenReceipt: (p: PaymentRow) => void;
+}) => {
   const t = tr.totals;
   const pct = t.annual_fee > 0 ? Math.round((t.paid / t.annual_fee) * 100) : 100;
-  // The payments arrive newest first; the serial counts from the first one.
-  const payments: TransportPayment[] = tr.paid.map((p, i) => ({
-    id: p.id,
-    serial: p.serial ?? tr.paid.length - i,
-    amount: p.amount,
-    date: p.date ?? p.payment_date,
-    day: p.day ?? null,
-    submitted_by: p.submitted_by ?? '—',
-    type: p.type ?? '—',
-    mode: p.mode ?? p.payment_mode,
-    receipt_number: p.receipt_number,
-  }));
 
   return (
     <>
@@ -358,8 +440,18 @@ const Transport = ({ tr, pay }: { tr: TransportFees; pay: Pay }) => {
       </Card>
 
       <Card>
-        <CardHead icon="document-text-outline" title="Payments" />
-        <TransportPayments payments={payments} />
+        <CardHead
+          icon="document-text-outline"
+          title="Payments"
+          sub={tr.paid.length ? `Last on ${day(tr.paid[0]?.payment_date)}` : null}
+        />
+        {tr.paid.length === 0 ? (
+          <Note>No transport payments yet.</Note>
+        ) : (
+          tr.paid.map((p, i) => (
+            <ReceiptRow key={p.id} p={p} onOpen={() => onOpenReceipt(p)} isLast={i === tr.paid.length - 1} />
+          ))
+        )}
       </Card>
     </>
   );
@@ -467,6 +559,30 @@ const FeesScreen = ({ navigation }: any) => {
     [qr, a, tr, navigation],
   );
 
+  /**
+   * Pay on the school QR: the phone's UPI apps open on the school's UPI ID
+   * with the amount filled in, and the screen that reports the payment comes
+   * up behind them — nothing is sent, and nothing counts as paid, until the
+   * UTR or a screenshot goes with it.
+   */
+  const payOnQrApp = useCallback(
+    async (inst?: Installment) => {
+      const school = qr?.qr;
+      if (!school) return academicOnline(inst);
+
+      const amount = inst ? inst.payable : a?.totals.remaining ?? 0;
+      const opened = await openUpiApp(school, amount > 0 ? amount : undefined, `School fee${inst ? ` ${inst.label}` : ''}`);
+      if (!opened) {
+        AppAlert.alert(
+          'No UPI app found',
+          'Save the QR from this screen and scan it from your gallery in any UPI app, or pay from another phone. Then send the UTR or a screenshot here.',
+        );
+      }
+      onQr('academic', inst);
+    },
+    [qr, a, academicOnline, onQr],
+  );
+
   // With the school's QR on, a row's Pay goes there; without, to online as before.
   const pay: Pay = {
     qr,
@@ -474,9 +590,14 @@ const FeesScreen = ({ navigation }: any) => {
     transport: () => (qr?.qr ? onQr('transport') : navigation.navigate('TransportPay')),
     academicOnline,
     transportOnline: () => navigation.navigate('TransportPay'),
+    onQrApp: payOnQrApp,
   };
 
-  const openShot = (uri: string) => navigation.navigate('FeeImage', { uri, title: 'Screenshot' });
+  const openImage = (uri: string, title: string) => navigation.navigate('FeeImage', { uri, title });
+
+  // The receipt the school issues for a transport payment, in the PDF viewer.
+  const openReceipt = (p: PaymentRow) =>
+    navigation.navigate('TransportReceipt', { payment: { id: p.id, receipt_number: p.receipt_number } });
 
   // Transport only once there is a route to show.
   const tabs: { key: Tab; label: string }[] = [
@@ -501,8 +622,17 @@ const FeesScreen = ({ navigation }: any) => {
         </Card>
       );
     }
-    if (current === 'transport' && tr) return <Transport tr={tr} pay={pay} />;
-    return <Overview data={dashboard} pay={pay} penalties={penalties} go={go} onOpenShot={openShot} />;
+    if (current === 'transport' && tr) return <Transport tr={tr} pay={pay} onOpenReceipt={openReceipt} />;
+    return (
+      <Overview
+        data={dashboard}
+        pay={pay}
+        penalties={penalties}
+        go={go}
+        onOpenImage={openImage}
+        onOpenReceipt={openReceipt}
+      />
+    );
   })();
 
   return (
@@ -537,16 +667,8 @@ const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   scroll: { flexGrow: 1, paddingBottom: 32 },
 
-  qrLine: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 6, paddingBottom: 12 },
-  qrThumb: {
-    width: 56,
-    height: 56,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.border,
-  },
-  qrText: { flex: 1, fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19 },
+  payBtns: { gap: 10, paddingTop: 12 },
+  qrText: { fontSize: 12, color: theme.colors.textMuted, lineHeight: 18, marginTop: 10 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.
