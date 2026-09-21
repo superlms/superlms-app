@@ -57,9 +57,12 @@ const AdminSyllabusScreen = ({ navigation }: any) => {
 
   const toggle = (id: number) => setExpanded(p => (p.includes(id) ? p.filter(x => x !== id) : [...p, id]));
 
-  const addChapters = () => {
+  // The header +: the subject's chapters open as one editable set — add several
+  // at once, rename or reorder the ones already there, remove any — as the admin
+  // web's chapter modal does.
+  const manageChapters = () => {
     if (!sel.subjectId) return AppAlert.alert('Select subject', 'Pick a class and subject first.');
-    navigation.navigate('AdminSyllabusChapterForm', { sel });
+    navigation.navigate('AdminSyllabusChapterForm', { sel, chapters });
   };
   const editChapter = (c: SyllabusChapter) => navigation.navigate('AdminSyllabusChapterForm', { chapter: c });
   const addTopics = (chapterId: number, chapterName: string) => navigation.navigate('AdminSyllabusTopicForm', { chapterId, chapterName });
@@ -89,6 +92,8 @@ const AdminSyllabusScreen = ({ navigation }: any) => {
       <Header
         title="Syllabus"
         onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
+        rightIcon="add"
+        onRightPress={manageChapters}
       />
 
       <View style={st.statRow}>
@@ -112,7 +117,7 @@ const AdminSyllabusScreen = ({ navigation }: any) => {
         <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
           {!sel.subjectId && <Text style={st.empty}>Select a class and subject to view chapters.</Text>}
-          {sel.subjectId && chapters.length === 0 && <Text style={st.empty}>No chapters yet. Tap + to add.</Text>}
+          {sel.subjectId && chapters.length === 0 && <Text style={st.empty}>No chapters yet. Tap + above to add.</Text>}
           {chapters.map(c => {
             const open = expanded.includes(c.id);
             return (
@@ -143,14 +148,8 @@ const AdminSyllabusScreen = ({ navigation }: any) => {
               </View>
             );
           })}
-          <View style={{ height: 90 }} />
+          <View style={{ height: 24 }} />
         </ScrollView>
-      )}
-
-      {!!sel.subjectId && (
-        <TouchableOpacity style={st.fab} onPress={addChapters} activeOpacity={0.9}>
-          <VectorIcon iconSet="Ionicons" iconName="add" size={28} color="#fff" />
-        </TouchableOpacity>
       )}
     </View>
   );
@@ -181,6 +180,4 @@ const st = StyleSheet.create({
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.primary },
   topicName: { flex: 1, fontSize: 13, color: theme.colors.textSecondary },
   actSm: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background },
-
-  fab: { position: 'absolute', right: 18, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
 });

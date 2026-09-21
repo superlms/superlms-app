@@ -8,6 +8,10 @@ export interface CurriculumSelection {
   standardId: number | null;
   sectionId: number | null;
   subjectId: number | null;
+  /** Names of what is picked, for screens that show the selection back. */
+  standardName?: string;
+  sectionName?: string;
+  subjectName?: string;
 }
 
 interface Props {
@@ -28,8 +32,17 @@ const AdminCurriculumFilter = ({ onChange }: Props) => {
     getAcademicLookups().then(r => setClasses(r.classes)).catch(() => setClasses([]));
   }, []);
 
-  const emit = (s: number | null, sec: number | null, sub: number | null) =>
-    onChange({ standardId: s, sectionId: sec, subjectId: sub });
+  const emit = (s: number | null, sec: number | null, sub: number | null) => {
+    const std = classes.find(c => c.id === s);
+    onChange({
+      standardId: s,
+      sectionId: sec,
+      subjectId: sub,
+      standardName: std?.name,
+      sectionName: (std?.sections ?? []).find(x => x.id === sec)?.name,
+      subjectName: subjects.find(x => x.id === sub)?.name,
+    });
+  };
 
   const loadSubjects = async (s: number, sec: number | null) => {
     try {
