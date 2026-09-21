@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
+  Image,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -11,14 +12,14 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
-import Header from '../../components/Header';
-import ListRow from '../../components/ListRow';
 import Select from '../../components/Select';
+import { Skeleton } from '../../components/Skeleton';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
-import { theme } from '../../utils/theme';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { saveCsvFile } from '../../api/pdfDownload';
+import { DocHeader, DocNoData } from '../more/docUi';
 import {
   StudentRow,
   StudentStats,
@@ -28,6 +29,14 @@ import {
   getStudentLookups,
 } from '../../api/adminStudentApi';
 import { AppAlert } from '../../components/AppDialog';
+
+/**
+ * Every student of the school — the admin panel's Students module, drawn as the
+ * app draws its own lists: a count, then a row per student with their photo,
+ * their name and their class and numbers under it, on a plain page. The header
+ * holds the filters, the export and the + that adds one; a row opens the
+ * student.
+ */
 
 const GENDER_OPTS = [
   { label: 'All Genders', value: '' },
@@ -51,10 +60,82 @@ const csvCell = (v: any) => {
   return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 };
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+// ── One student ──────────────────────────────────────────────────────────────
+//   (photo)  Aarav Sharma                                          >
+//            Class 5 · A · Roll 12 · Adm 2026-0007
+const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
+  const [failed, setFailed] = useState(false);
+
+  if (uri && !failed) {
+    return <Image source={{ uri }} style={s.photo} onError={() => setFailed(true)} />;
+  }
+  return (
+    <View style={[s.photo, s.initialBox]}>
+      <Text style={s.initial}>{(name || 'S').charAt(0).toUpperCase()}</Text>
+    </View>
+  );
+};
+
+const Row = ({ student, onOpen, isLast }: { student: StudentRow; onOpen: () => void; isLast: boolean }) => {
+  const meta = [
+    [student.class, student.section].filter(Boolean).join(' · '),
+    student.roll_no ? `Roll ${student.roll_no}` : null,
+    student.admission_no ? `Adm ${student.admission_no}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onOpen}>
+      <Avatar uri={student.image} name={student.full_name} />
+      <View style={s.body}>
+        <Text style={s.name} numberOfLines={1}>{student.full_name}</Text>
+        {!!meta && <Text style={s.meta} numberOfLines={1}>{meta}</Text>}
+      </View>
+      {!student.is_active && <Text style={s.off}>OFF</Text>}
+      <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />
+    </TouchableOpacity>
+  );
+};
+
+const ListSkeleton = () => (
+  <View style={s.list}>
+    <View style={s.skCount}><Skeleton width={90} height={12} /></View>
+    {Array.from({ length: 7 }, (_, i) => (
+      <View key={i} style={[s.row, i < 6 && s.rowDivider]}>
+        <Skeleton width={34} height={34} radius={17} />
+        <View style={s.skBody}>
+          <Skeleton width="45%" height={14} />
+          <Skeleton width="60%" height={12} />
+        </View>
+        <Skeleton width={8} height={13} />
+      </View>
+    ))}
+  </View>
+);
+
+// A plain header action — an icon and nothing behind it.
+const HeadBtn = ({ icon, onPress, badge, busy }: { icon: string; onPress: () => void; badge?: number; busy?: boolean }) => (
+  <TouchableOpacity style={s.headBtn} onPress={onPress} activeOpacity={0.6} disabled={busy} hitSlop={6}>
+    {busy ? (
+      <ActivityIndicator size="small" color={theme.colors.primary} />
+    ) : (
+      <VectorIcon iconSet="Ionicons" iconName={icon} size={19} color={theme.colors.textPrimary} />
+    )}
+    {!!badge && (
+      <View style={s.headDot}><Text style={s.headDotText}>{badge}</Text></View>
+    )}
+  </TouchableOpacity>
+);
+
+// ── Screen ───────────────────────────────────────────────────────────────────
 const AdminStudentsScreen = ({ navigation }: any) => {
   const [rows, setRows] = useState<StudentRow[]>([]);
   const [stats, setStats] = useState<StudentStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [lookups, setLookups] = useState<StudentLookups | null>(null);
 
   const [search, setSearch] = useState('');
@@ -83,13 +164,14 @@ const AdminStudentsScreen = ({ navigation }: any) => {
   );
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setError(null);
     try {
       const res = await getStudents(buildFilters({ per_page: 200 }));
       setRows(res.students);
       setStats(res.stats);
     } catch (e) {
-      AppAlert.alert('Error', apiErr(e, 'Could not load students.'));
+      setError(apiErr(e, 'Could not load the students.'));
+      setRows([]);
     } finally {
       setLoading(false);
     }
@@ -102,6 +184,7 @@ const AdminStudentsScreen = ({ navigation }: any) => {
 
   const activeFilterCount =
     (fClass ? 1 : 0) + (fSection ? 1 : 0) + (fGender ? 1 : 0) + (fStatus ? 1 : 0);
+  const narrowed = activeFilterCount > 0 || !!search.trim();
 
   const clearFilters = () => {
     setFClass(0);
@@ -149,73 +232,91 @@ const AdminStudentsScreen = ({ navigation }: any) => {
     }
   };
 
+  // "128 students · 120 active", or what the filters left of them.
+  const countLine = narrowed
+    ? `${rows.length} of ${plural(stats?.total ?? rows.length, 'student')}`
+    : `${plural(stats?.total ?? rows.length, 'student')}${stats ? ` · ${stats.active} active` : ''}`;
+
+  const body = () => {
+    if (loading && rows.length === 0 && !refreshing) return <ListSkeleton />;
+
+    if (error && rows.length === 0) {
+      return (
+        <View style={s.centered}>
+          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
+          <Text style={s.errorText}>{error}</Text>
+          <TouchableOpacity onPress={load} hitSlop={10}>
+            <Text style={s.link}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return (
+      <FlatList
+        data={rows}
+        keyExtractor={i => String(i.id)}
+        contentContainerStyle={[s.list, rows.length === 0 && s.listEmpty]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListHeaderComponent={rows.length > 0 ? <Text style={s.count}>{countLine}</Text> : null}
+        ListEmptyComponent={
+          <DocNoData
+            icon={narrowed ? 'search-outline' : 'person-add-outline'}
+            title={narrowed ? 'No students found' : 'No students yet'}
+            subtitle={
+              narrowed
+                ? 'Nothing matches this search and these filters. Clear them to see everyone.'
+                : 'Add the school’s students with + at the top.'
+            }
+          />
+        }
+        renderItem={({ item, index }) => (
+          <Row
+            student={item}
+            onOpen={() => navigation.navigate('AdminStudentDetail', { id: item.id })}
+            isLast={index === rows.length - 1}
+          />
+        )}
+      />
+    );
+  };
+
   return (
     <View style={s.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.card} />
-      <Header
+      <DocHeader
         title="Students"
         onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
         rightSlot={
           <View style={s.headActions}>
-            <TouchableOpacity style={s.headBtn} onPress={() => setFilterOpen(true)} activeOpacity={0.8}>
-              <VectorIcon iconSet="Ionicons" iconName="filter" size={18} color={theme.colors.primary} />
-              {activeFilterCount > 0 && <View style={s.headDot}><Text style={s.headDotText}>{activeFilterCount}</Text></View>}
-            </TouchableOpacity>
-            <TouchableOpacity style={s.headBtn} onPress={doExport} activeOpacity={0.8} disabled={exporting}>
-              {exporting
-                ? <ActivityIndicator size="small" color={theme.colors.primary} />
-                : <VectorIcon iconSet="Ionicons" iconName="download-outline" size={18} color={theme.colors.primary} />}
-            </TouchableOpacity>
+            <HeadBtn icon="options-outline" onPress={() => setFilterOpen(true)} badge={activeFilterCount} />
+            <HeadBtn icon="download-outline" onPress={doExport} busy={exporting} />
+            <HeadBtn icon="add" onPress={() => navigation.navigate('AdminStudentForm')} />
           </View>
         }
       />
 
-      <View style={s.statRow}>
-        {[
-          { label: 'Total', value: stats?.total, color: '#6366F1' },
-          { label: 'Active', value: stats?.active, color: '#22C55E' },
-          { label: 'This Year', value: stats?.this_year, color: '#0EA5E9' },
-        ].map(c => (
-          <View key={c.label} style={[s.statCard, { backgroundColor: c.color + '14' }]}>
-            <Text style={[s.statVal, { color: c.color }]}>{c.value ?? '—'}</Text>
-            <Text style={s.statLbl}>{c.label}</Text>
-          </View>
-        ))}
+      <View style={s.searchWrap}>
+        <View style={s.searchRow}>
+          <VectorIcon iconSet="Ionicons" iconName="search" size={16} color={theme.colors.textMuted} />
+          <TextInput
+            style={s.searchInput}
+            placeholder="Search name, admission, roll, phone"
+            placeholderTextColor={theme.colors.textMuted}
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+          />
+          {!!search && (
+            <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
+              <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={theme.colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
-      <View style={s.searchRow}>
-        <VectorIcon iconSet="Ionicons" iconName="search" size={16} color={theme.colors.textMuted} />
-        <TextInput style={s.searchInput} placeholder="Search name, admission, roll, phone"
-          placeholderTextColor={theme.colors.textMuted} value={search} onChangeText={setSearch} returnKeyType="search" />
-        {!!search && <TouchableOpacity onPress={() => setSearch('')}><VectorIcon iconSet="Ionicons" iconName="close-circle" size={16} color={theme.colors.textMuted} /></TouchableOpacity>}
-      </View>
-
-      {loading && !refreshing ? (
-        <View style={s.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>
-      ) : (
-        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-          {rows.length === 0 && <Text style={s.empty}>No students found.</Text>}
-          {rows.map(r => (
-            <ListRow
-              key={r.id}
-              color={r.is_active ? '#6366F1' : '#EF4444'}
-              title={r.full_name}
-              subtitle={`${r.class ?? '—'}${r.section ? ` · ${r.section}` : ''}${r.roll_no ? ` · Roll ${r.roll_no}` : ''}`}
-              metaIcon="id-card-outline"
-              meta={r.admission_no ? `Adm ${r.admission_no}` : undefined}
-              tag={r.is_active ? 'Active' : 'Inactive'}
-              tagColor={r.is_active ? '#22C55E' : '#EF4444'}
-              onPress={() => navigation.navigate('AdminStudentDetail', { id: r.id })}
-            />
-          ))}
-          <View style={{ height: 90 }} />
-        </ScrollView>
-      )}
-
-      <TouchableOpacity style={s.fab} onPress={() => navigation.navigate('AdminStudentForm')} activeOpacity={0.9}>
-        <VectorIcon iconSet="Ionicons" iconName="add" size={28} color="#fff" />
-      </TouchableOpacity>
+      {body()}
 
       {/* Filter popup (top-right). Plain overlay — not a Modal — so the Select
           dropdowns (which use their own Modal) never nest inside a Modal. */}
@@ -253,39 +354,46 @@ const AdminStudentsScreen = ({ navigation }: any) => {
 
 export default AdminStudentsScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  loader: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 40 },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
 
-  headActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
-  headDot: { position: 'absolute', top: -2, right: -2, minWidth: 15, height: 15, paddingHorizontal: 3, borderRadius: 8, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
-  headDotText: { fontSize: 9, fontWeight: '800', color: '#fff' },
+  // Header actions
+  headActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  headDot: { position: 'absolute', top: 0, right: -1, minWidth: 14, height: 14, paddingHorizontal: 3, borderRadius: 7, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
+  headDotText: { fontSize: 9, fontWeight: '800', color: theme.colors.white },
 
-  statRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12 },
-  statCard: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
-  statVal: { fontSize: 20, fontWeight: '900' },
-  statLbl: { fontSize: 11, color: theme.colors.textSecondary, fontWeight: '600', marginTop: 2 },
+  // Search
+  searchWrap: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 44, paddingHorizontal: 14, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md },
+  searchInput: { flex: 1, fontSize: 15, color: theme.colors.textPrimary, padding: 0 },
 
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 12, paddingHorizontal: 12, height: 42, borderRadius: 12, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
-  searchInput: { flex: 1, fontSize: 14, color: theme.colors.textPrimary, paddingVertical: 0 },
+  // List
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
+  listEmpty: { flexGrow: 1 },
+  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
 
-  scroll: { paddingHorizontal: 16, paddingTop: 10 },
-  empty: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', marginTop: 40 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  photo: { width: 34, height: 34, borderRadius: 17, backgroundColor: theme.colors.background },
+  initialBox: { alignItems: 'center', justifyContent: 'center' },
+  initial: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
+  body: { flex: 1, gap: 3 },
+  name: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  meta: { fontSize: 13, color: theme.colors.textSecondary },
+  off: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: theme.colors.textMuted },
 
-  // Compact card — tap opens the detail screen.
-  card: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.card, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 8, borderWidth: 1, borderColor: theme.colors.border },
-  avatar: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  avatarImg: { width: 38, height: 38, borderRadius: 12 },
-  avatarInit: { fontSize: 16, fontWeight: '900', color: '#6366F1' },
-  cardTitle: { fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary },
-  cardSub: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
-  inactiveTag: { backgroundColor: '#FEE2E2', borderRadius: theme.radius.full, paddingHorizontal: 8, paddingVertical: 3 },
-  inactiveTagText: { fontSize: 10, fontWeight: '800', color: theme.colors.danger },
+  // Loading
+  skCount: { paddingTop: 13, paddingBottom: 3 },
+  skBody: { flex: 1, gap: 8 },
 
-  fab: { position: 'absolute', right: 18, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+  // Error
+  centered: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
+  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  link: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 
-  filterOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'flex-end', justifyContent: 'flex-start', paddingTop: 66, paddingRight: 12 },
+  // Filters
+  filterOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'flex-end', justifyContent: 'flex-start', paddingTop: 56, paddingRight: 12 },
   filterCard: { width: '86%', maxWidth: 360, maxHeight: '80%', backgroundColor: theme.colors.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: theme.colors.border, elevation: 8, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
   filterHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
   filterTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.textPrimary },
@@ -294,5 +402,9 @@ const s = StyleSheet.create({
   fbtnGhost: { backgroundColor: theme.colors.border },
   fbtnGhostText: { fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary },
   fbtnPrimary: { backgroundColor: theme.colors.primary },
-  fbtnPrimaryText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  fbtnPrimaryText: { fontSize: 14, fontWeight: '700', color: theme.colors.white },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });
