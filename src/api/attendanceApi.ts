@@ -59,11 +59,15 @@ export interface AttendanceStudent {
 
 export interface AttendanceClass {
   assignment_id: number;
+  /** Every section of the class the teacher has, in the order assigned. */
+  assignment_ids?: number[];
   class_info: {
     standard_id: number;
     standard_name: string | null;
     section_id: number | null;
+    /** "A" — or "A, B" when the teacher has several sections of the class. */
     section_name: string | null;
+    section_ids?: number[];
     class_display: string;
   };
   total_students: number;

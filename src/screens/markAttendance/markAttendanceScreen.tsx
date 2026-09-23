@@ -63,11 +63,19 @@ const mapStatus = (a: AttendanceStudent['attendance']): AttendanceStatus | null 
   }
 };
 
+// The section's last letter, to tell sections apart in one list: "A" of
+// "Section A", "B" of "5B".
+const sectionLetter = (section?: string | null) => {
+  const t = String(section ?? '').trim();
+  return t ? t.slice(-1).toUpperCase() : '';
+};
+
 const toMarkStudent = (st: AttendanceStudent): MarkStudent => ({
   id: st.student_id,
   rollNo: String(st.roll_no ?? ''),
   admissionNo: String(st.admission_no ?? ''),
-  name: st.full_name,
+  // Aarav Sharma (A)
+  name: sectionLetter(st.section_name) ? `${st.full_name} (${sectionLetter(st.section_name)})` : st.full_name,
   photo: st.photo ?? null,
   status: mapStatus(st.attendance),
 });
