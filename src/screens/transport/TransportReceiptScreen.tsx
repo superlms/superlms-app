@@ -19,6 +19,7 @@ import { transportReceiptUrl, type TransportPayment } from '../../api/transportA
  *   url        – where its receipt is, when not the student's own transport one
  *                (the admin app's, or a student's academic fee receipt)
  *   namePrefix – what the downloaded file is called before the receipt number
+ *   title      – the header, when it is not a receipt (the Ledger's statement)
  */
 
 const TITLE = 'Receipt';
@@ -65,6 +66,7 @@ const TransportReceiptScreen = ({ navigation, route }: any) => {
   const payment: TransportPayment = route.params.payment;
   const url: string = route.params.url ?? transportReceiptUrl(payment.id);
   const namePrefix: string = route.params.namePrefix ?? 'Transport-Receipt';
+  const title: string = route.params.title ?? TITLE;
   const { width: pageWidth } = useWindowDimensions();
 
   const [headers, setHeaders] = useState<Record<string, string> | null>(null);
@@ -100,7 +102,7 @@ const TransportReceiptScreen = ({ navigation, route }: any) => {
   return (
     <View style={s.root}>
       <DocHeader
-        title={TITLE}
+        title={title}
         onBackPress={() => navigation.goBack()}
         rightSlot={
           saving ? (

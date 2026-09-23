@@ -34,6 +34,8 @@ import AdminTransportStudentsScreen from '../screens/admin/AdminTransportStudent
 import AdminTransportStudentFeeScreen from '../screens/admin/AdminTransportStudentFeeScreen';
 import AdminTransportMonthsScreen from '../screens/admin/AdminTransportMonthsScreen';
 import TransportReceiptScreen from '../screens/transport/TransportReceiptScreen';
+import AdminLedgerScreen from '../screens/admin/AdminLedgerScreen';
+import AdminLedgerFormScreen from '../screens/admin/AdminLedgerFormScreen';
 // Enquiries
 import AdminEnquiriesScreen from '../screens/admin/AdminEnquiriesScreen';
 import AdminEnquiryDetailScreen from '../screens/admin/AdminEnquiryDetailScreen';
@@ -136,6 +138,15 @@ export const AdminTransportStack = () => (
     <Stack.Screen name="AdminTransportStudentFee" component={AdminTransportStudentFeeScreen} />
     <Stack.Screen name="AdminTransportMonths" component={AdminTransportMonthsScreen} />
     <Stack.Screen name="AdminTransportReceipt" component={TransportReceiptScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminLedgerStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminLedgerHome" component={AdminLedgerScreen} />
+    <Stack.Screen name="AdminLedgerForm" component={AdminLedgerFormScreen} />
+    {/* The statement PDF, in the receipt viewer */}
+    <Stack.Screen name="AdminLedgerStatement" component={TransportReceiptScreen} />
   </Stack.Navigator>
 );
 
