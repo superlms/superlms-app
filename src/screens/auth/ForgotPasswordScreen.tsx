@@ -173,7 +173,12 @@ const ForgotPasswordScreen = () => {
     );
   };
 
-  const [email, setEmail] = useState<string>(route.params?.email ?? '');
+  // What they sign in with: an admission number, a username or an email.
+  const [identifier, setIdentifier] = useState<string>(
+    route.params?.identifier ?? route.params?.email ?? '',
+  );
+  // Where the school sent the code, half hidden — the server says it.
+  const [sentTo, setSentTo] = useState<string>('');
   const [otp, setOtp] = useState('');
   const [userId, setUserId] = useState<string | number>('');
   // This reset's OTP request — only its own code is accepted.
@@ -184,7 +189,7 @@ const ForgotPasswordScreen = () => {
 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [emailFocused, setEmailFocused] = useState(false);
+  const [identifierFocused, setIdentifierFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [confirmFocused, setConfirmFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -285,50 +290,51 @@ const ForgotPasswordScreen = () => {
                 descYRef.current = e.nativeEvent.layout.y;
               }}
             >
-              Enter your registered email address to reset your account
-              password.
+              Enter your admission number, username or email. The code goes to
+              the address your school has for you.
             </Text>
-            <Text style={styles.label}>Email Address</Text>
+            <Text style={styles.label}>Admission Number, Username or Email</Text>
             <TextInput
-              placeholder="name@school.com"
+              placeholder="2026DMO650015, meera.sharma or you@school.com"
               placeholderTextColor={theme.colors.textMuted}
               style={[
                 styles.input,
-                (emailFocused || !!email) && styles.inputActive,
+                (identifierFocused || !!identifier) && styles.inputActive,
               ]}
-              value={email}
+              value={identifier}
               onChangeText={t => {
-                setEmail(t);
+                setIdentifier(t);
                 setError('');
               }}
               onFocus={() => {
-                setEmailFocused(true);
+                setIdentifierFocused(true);
                 scrollFormIntoView();
               }}
-              onBlur={() => setEmailFocused(false)}
-              keyboardType="email-address"
+              onBlur={() => setIdentifierFocused(false)}
               autoCapitalize="none"
+              autoCorrect={false}
             />
             <TouchableOpacity
               style={[
                 styles.button,
-                (loading || !email.trim()) && styles.buttonDisabled,
+                (loading || !identifier.trim()) && styles.buttonDisabled,
               ]}
-              disabled={loading || !email.trim()}
+              disabled={loading || !identifier.trim()}
               onPress={async () => {
                 setLoading(true);
                 setError('');
                 try {
                   console.log('[ForgotPassword] ➡️ Request:', {
-                    email: email.trim(),
+                    identifier: identifier.trim(),
                   });
-                  const res = await forgotPassword(email.trim());
+                  const res = await forgotPassword(identifier.trim());
                   console.log(
                     '[ForgotPassword] ✅ Response:',
                     JSON.stringify(res, null, 2),
                   );
                   setUserId(res.user_id);
                   setOtpToken(res.otp_token);
+                  setSentTo(res.email ?? '');
                   setTimer(120);
                   setStep(2);
                 } catch (e: any) {
@@ -367,7 +373,7 @@ const ForgotPasswordScreen = () => {
                 descYRef.current = e.nativeEvent.layout.y;
               }}
             >
-              Enter the 6-digit code sent to {email || 'your registered email'}.
+              Enter the 6-digit code sent to {sentTo || 'your registered email'}.
             </Text>
             <OtpBoxes
               boxWidth={otpBoxWidth}
@@ -386,19 +392,20 @@ const ForgotPasswordScreen = () => {
                 onPress={async () => {
                   try {
                     console.log('[ResendOTP] ➡️ Request:', {
-                      email,
+                      identifier,
                       user_id: userId,
                     });
                     // If the user_id was lost (e.g. after a reload), request
                     // a fresh OTP through forgot-password instead of letting
                     // resend-otp fail with "user id field is required".
                     if (!userId) {
-                      const res = await forgotPassword(email.trim());
+                      const res = await forgotPassword(identifier.trim());
                       setUserId(res.user_id);
                       setOtpToken(res.otp_token);
+                      setSentTo(res.email ?? sentTo);
                     } else {
                       const res = await resendOtp(
-                        email.trim(),
+                        identifier.trim(),
                         userId,
                         otpToken,
                       );

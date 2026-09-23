@@ -156,9 +156,9 @@ const LoginScreen = () => {
           </Text>
 
           {/* Identifier */}
-          <Text style={styles.label}>Email or Admission Number</Text>
+          <Text style={styles.label}>Admission Number, Username or Email</Text>
           <TextInput
-            placeholder="you@school.com or 2026DMO650015"
+            placeholder="2026DMO650015, meera.sharma or you@school.com"
             placeholderTextColor={theme.colors.textMuted}
             style={[styles.input, (identifierFocused || !!identifier) && styles.inputActive]}
             value={identifier}
@@ -219,7 +219,12 @@ const LoginScreen = () => {
 
           <TouchableOpacity
             style={styles.forgotWrap}
-            onPress={() => navigation.navigate('ForgotPassword')}
+            onPress={() =>
+              // Whatever they typed here carries over to the reset.
+              navigation.navigate('ForgotPassword', {
+                identifier: identifier.trim() || undefined,
+              })
+            }
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >

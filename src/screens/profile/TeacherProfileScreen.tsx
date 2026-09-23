@@ -67,11 +67,14 @@ const classTeacherOf = (classes?: any[]) => {
 };
 
 // Every field the school can fill, in page order: professional ID first, then
-// personal, then address, and the classes they are class teacher of last. Name
-// and email sit at the top, so they aren't repeated. A field with nothing in it
+// personal, then address, and the classes they are class teacher of last. The
+// username — what they sign in with — comes first of all. Name and email sit at
+// the top, so they aren't repeated. A field with nothing in it
 // is left out, and appears once the school fills it in. The loading skeleton
 // draws one row per entry.
 const ROWS: [string, (d: TeacherProfile) => any][] = [
+  // What they sign in with — an email may be shared, this is theirs alone.
+  ['Username', d => d.personal_info.username],
   ['Employee ID', d => d.professional_info.employee_id],
   ['Mobile', d => d.personal_info.mobile_number],
   ['Phone', d => unlessSame(d.personal_info.phone, d.personal_info.mobile_number)],

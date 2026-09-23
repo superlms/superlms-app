@@ -289,18 +289,24 @@ export const accountsLogin = async (
 };
 
 // ─── Forgot Password ──────────────────────────────────────────────────────────
+// Identified as at login — a student's admission number, a teacher's username,
+// a school account's email — and the code goes to the address the school has
+// for it, which comes back half hidden (ra****ta@gmail.com) to be shown.
+//
 // Every OTP request gets its own otp_token; pass it back to verifyOtp,
 // resendOtp and changePassword — only this request's code is accepted there, so
 // the same account asking for codes on another phone doesn't get in the way.
 export const forgotPassword = async (
-  email: string,
+  identifier: string,
 ): Promise<{
   user_id: number | string;
   otp_token?: string;
+  /** Where the code went, said as ra****ta@gmail.com. */
+  email?: string;
   message: string;
 }> => {
   const form = new FormData();
-  form.append('email', email);
+  form.append('identifier', identifier);
 
   const { data } = await apiClient.post('/forgot-password', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -311,13 +317,14 @@ export const forgotPassword = async (
   // Response shape: { success, status_code, message, data: { user_id, otp_token } }
   const user_id = data?.data?.user_id ?? data?.user_id;
   const otp_token = data?.data?.otp_token ?? data?.otp_token;
+  const email = data?.data?.email ?? data?.email;
   const message = data?.message ?? 'OTP sent successfully.';
 
   if (!user_id) {
     throw new Error('No user_id in response: ' + JSON.stringify(data));
   }
 
-  return { user_id, otp_token, message };
+  return { user_id, otp_token, email, message };
 };
 
 // ─── Verify OTP ───────────────────────────────────────────────────────────────
@@ -351,12 +358,13 @@ export const verifyOtp = async (
 
 // ─── Resend OTP ───────────────────────────────────────────────────────────────
 export const resendOtp = async (
-  email: string,
+  identifier: string,
   user_id: string | number,
   otp_token?: string,
-): Promise<{ success: boolean; otp_token?: string; message: string }> => {
+): Promise<{ success: boolean; otp_token?: string; email?: string; message: string }> => {
   const form = new FormData();
-  form.append('email', email);
+  // The account is found by user_id; this only keeps the older shape.
+  form.append('email', identifier);
   form.append('user_id', String(user_id));
   if (otp_token) {
     form.append('otp_token', otp_token);
@@ -371,6 +379,7 @@ export const resendOtp = async (
   return {
     success: data?.success ?? data?.status ?? false,
     otp_token: data?.data?.otp_token ?? otp_token,
+    email: data?.data?.email ?? data?.email,
     message: data?.message ?? 'OTP resent successfully.',
   };
 };

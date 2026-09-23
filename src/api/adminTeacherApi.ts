@@ -14,6 +14,8 @@ export interface TeacherRow {
   user_id: number;
   name?: string | null;
   email?: string | null;
+  /** What they sign in with — an email may be shared, this is theirs alone. */
+  username?: string | null;
   phone?: string | null;
   gender?: string | null;
   employee_id?: string | null;
@@ -65,6 +67,7 @@ export const getTeacher = async (id: number): Promise<TeacherDetail> => {
 export interface TeacherPayload {
   name: string;
   email: string;
+  username: string;
   mobile: string;
   dob: string;
   gender: string;
@@ -88,6 +91,7 @@ const teacherForm = (p: TeacherPayload) => {
   };
   append('name', p.name);
   append('email', p.email);
+  append('username', p.username);
   append('mobile', p.mobile);
   append('dob', p.dob);
   append('gender', p.gender);
@@ -111,6 +115,27 @@ export const createTeacher = async (p: TeacherPayload): Promise<TeacherRow> => {
 
 export const updateTeacher = async (id: number, p: TeacherPayload): Promise<TeacherRow> => {
   const { data } = await apiClient.post(`/admin/teachers/${id}`, teacherForm(p), MULTIPART);
+  return unwrap(data);
+};
+
+export interface UsernameCheck {
+  username: string;
+  available: boolean;
+  /** What is wrong with it, in words — empty when it is free and well formed. */
+  problems: string[];
+  /** The rules every username follows. */
+  rules: string[];
+  /** Free usernames near a taken one, or one made from the name. */
+  suggestions: string[];
+}
+
+/** Whether a username is free, for the form to say while it is typed. */
+export const checkTeacherUsername = async (params: {
+  username?: string;
+  name?: string;
+  ignore_user_id?: number;
+}): Promise<UsernameCheck> => {
+  const { data } = await apiClient.get('/admin/teachers/username-check', { params });
   return unwrap(data);
 };
 

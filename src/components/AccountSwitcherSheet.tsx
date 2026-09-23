@@ -291,7 +291,7 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
   const onSubmitAdd = async () => {
     const id = identifier.trim();
     if (!id) {
-      setAddError('Please enter your email or admission number.');
+      setAddError('Please enter your admission number, username or email.');
       return;
     }
     if (!password) {
@@ -315,7 +315,7 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
     } catch (err: any) {
       const msg = messageOf(err, 'Could not add the account. Please check your credentials.');
       setAddError(msg);
-      // A wrong email or admission number gets no reset offer — only a wrong
+      // A wrong admission number, username or email gets no reset offer — only a wrong
       // password ("The provided password is incorrect."), whatever the status.
       setWrongPassword(/password/i.test(String(msg)) && /incorrect|invalid|wrong/i.test(String(msg)));
     } finally {
@@ -364,8 +364,8 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
     onClose();
     navigation.navigate('ForgotPassword', {
       addAccountIdentifier: id,
-      // The reset goes by email, so an email typed here fills it in.
-      email: id.includes('@') ? id : undefined,
+      // The reset takes the same identifier, so whatever was typed carries over.
+      identifier: id || undefined,
     });
   };
 
@@ -609,10 +609,11 @@ const AddBody = (p: AddBodyProps) => {
 
   return (
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.addContent} showsVerticalScrollIndicator={false}>
-      {/* Identifier — role is auto-detected (admission number = student, email = staff) */}
-      <Text style={s.label}>Email or admission number</Text>
+      {/* Identifier — the role is worked out from it: admission number for a
+          student, username for a teacher, email for the school's own staff */}
+      <Text style={s.label}>Admission number, username or email</Text>
       <TextInput
-        placeholder="you@school.com or 2026DMO650015"
+        placeholder="2026DMO650015, meera.sharma or you@school.com"
         placeholderTextColor={theme.colors.textMuted}
         value={p.identifier}
         onChangeText={p.setIdentifier}
