@@ -10,13 +10,13 @@ import {
   createDrawerNavigator,
   DrawerContentScrollView,
 } from '@react-navigation/drawer';
-import { CommonActions } from '@react-navigation/native';
 import { theme, onThemeChange } from '../utils/theme';
 import VectorIcon from '../components/VectorIcon';
 import { DrawerShadeBridge } from './drawerShade';
 import { AppDialog, AppAlert } from '../components/AppDialog';
 import AccountsDashboardScreen from '../screens/accounts/AccountsDashboardScreen';
-import { AccountsUser, getStoredUser, logout } from '../api/authApi';
+import { AccountsUser, getStoredUser } from '../api/authApi';
+import { logoutCurrentAccount } from '../utils/logoutAccount';
 
 const Drawer = createDrawerNavigator();
 
@@ -82,15 +82,8 @@ const PanelDrawerNavigator = () => {
 
     const doLogout = async () => {
       setLogoutVisible(false);
-      const rootNav = navigation.getParent?.() ?? navigation;
-      try {
-        await logout();
-      } catch (e) {
-        console.log('[Panel logout] Error:', e);
-      }
-      rootNav.dispatch(
-        CommonActions.reset({ index: 0, routes: [{ name: 'Login' }] }),
-      );
+      // Only this account logs out; another signed in on the phone opens next.
+      await logoutCurrentAccount(navigation.getParent?.() ?? navigation);
     };
 
     return (

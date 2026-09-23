@@ -13,7 +13,6 @@ import {
   createDrawerNavigator,
   DrawerContentScrollView,
 } from '@react-navigation/drawer';
-import { CommonActions } from '@react-navigation/native';
 import { BlurView } from '@react-native-community/blur';
 import { theme, onThemeChange } from '../utils/theme';
 import VectorIcon from '../components/VectorIcon';
@@ -47,7 +46,7 @@ import {
   AdminPerformanceStack,
   AdminExamCopyStack,
 } from './adminStacks';
-import { logout } from '../api/authApi';
+import { logoutCurrentAccount } from '../utils/logoutAccount';
 import { useAdminProfile } from '../screens/admin/useAdminProfile';
 import { visibleAdminModules } from '../screens/admin/adminModules';
 
@@ -165,13 +164,8 @@ const AdminDrawerNavigator = () => {
 
     const doLogout = async () => {
       setLogoutVisible(false);
-      const rootNav = navigation.getParent?.() ?? navigation;
-      try {
-        await logout();
-      } catch (e) {
-        console.log('[Admin logout] Error:', e);
-      }
-      rootNav.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Login' }] }));
+      // Only this account logs out; another signed in on the phone opens next.
+      await logoutCurrentAccount(navigation.getParent?.() ?? navigation);
     };
 
     const current = activeKey(state);

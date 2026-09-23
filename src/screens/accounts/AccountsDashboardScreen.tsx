@@ -12,7 +12,8 @@ import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh } from '../../hooks/useRefresh';
 import { theme } from '../../utils/theme';
 import { AccountsDashboard, getAccountsDashboard } from '../../api/accountsApi';
-import { AccountsUser, getStoredUser, logout } from '../../api/authApi';
+import { AccountsUser, getStoredUser } from '../../api/authApi';
+import { logoutCurrentAccount } from '../../utils/logoutAccount';
 import { AppAlert } from '../../components/AppDialog';
 
 const inr = (n: number) => `₹ ${Number(n || 0).toLocaleString('en-IN')}`;
@@ -77,9 +78,8 @@ const AccountsDashboardScreen = ({ navigation }: any) => {
         text: 'Logout',
         style: 'destructive',
         onPress: async () => {
-          await logout();
-          const rootNav = navigation.getParent?.() ?? navigation;
-          rootNav.reset({ index: 0, routes: [{ name: 'Login' }] });
+          // Only this account logs out; another signed in on the phone opens next.
+          await logoutCurrentAccount(navigation.getParent?.() ?? navigation);
         },
       },
     ]);
