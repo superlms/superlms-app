@@ -613,7 +613,7 @@ const AddBody = (p: AddBodyProps) => {
           student, username for a teacher, email for the school's own staff */}
       <Text style={s.label}>Admission number, username or email</Text>
       <TextInput
-        placeholder="2026DMO650015, meera.sharma or you@school.com"
+        placeholder="2026DMO650015, meera@tds or you@school.com"
         placeholderTextColor={theme.colors.textMuted}
         value={p.identifier}
         onChangeText={p.setIdentifier}

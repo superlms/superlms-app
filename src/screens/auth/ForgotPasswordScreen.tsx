@@ -295,7 +295,7 @@ const ForgotPasswordScreen = () => {
             </Text>
             <Text style={styles.label}>Admission Number, Username or Email</Text>
             <TextInput
-              placeholder="2026DMO650015, meera.sharma or you@school.com"
+              placeholder="2026DMO650015, meera@tds or you@school.com"
               placeholderTextColor={theme.colors.textMuted}
               style={[
                 styles.input,

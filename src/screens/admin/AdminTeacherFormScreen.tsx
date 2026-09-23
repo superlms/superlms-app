@@ -109,7 +109,7 @@ const AdminTeacherFormScreen = ({ navigation, route }: any) => {
 
   const onUsername = (v: string) => {
     usernameTyped.current = true;
-    set('username', v.toLowerCase().replace(/[^a-z0-9._]/g, ''));
+    set('username', v.toLowerCase().replace(/[^a-z0-9._@]/g, ''));
   };
 
   const choosePhoto = async () => {
@@ -163,7 +163,7 @@ const AdminTeacherFormScreen = ({ navigation, route }: any) => {
 
           <Field label="Full Name" value={form.name} onChangeText={(v: string) => set('name', v)} placeholder="Teacher name" />
           <Field label="Email" value={form.email} onChangeText={(v: string) => set('email', v)} placeholder="email@example.com" keyboardType="email-address" autoCapitalize="none" />
-          <Field label="Username" value={form.username} onChangeText={onUsername} placeholder="e.g. meera.sharma" autoCapitalize="none" autoCorrect={false} maxLength={30} />
+          <Field label="Username" value={form.username} onChangeText={onUsername} placeholder="e.g. meera@tds" autoCapitalize="none" autoCorrect={false} maxLength={50} />
           <UsernameHint check={check} checking={checking} username={form.username.trim()} onPick={onUsername} />
           <Field label="Mobile" value={form.mobile} onChangeText={(v: string) => set('mobile', v)} placeholder="10-digit" keyboardType="number-pad" />
           <Field label="Date of Birth" value={form.dob} onChangeText={(v: string) => set('dob', v)} placeholder="YYYY-MM-DD" />
