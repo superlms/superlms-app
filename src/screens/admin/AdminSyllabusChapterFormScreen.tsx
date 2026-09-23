@@ -1,21 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
-import Header from '../../components/Header';
-import { theme } from '../../utils/theme';
+import { AppDialog } from '../../components/AppDialog';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
-import { SyllabusChapter, createChapters, deleteChapter, updateChapter } from '../../api/adminSyllabusApi';
-import { AppAlert } from '../../components/AppDialog';
+import { SyllabusChapter, saveChapterSet, updateChapter } from '../../api/adminSyllabusApi';
+import { DocHeader } from '../more/docUi';
+import { FormCard, FormError, Hint, SubmitButton } from './adminFormUi';
 
 interface Row {
   id: number | null;
@@ -38,11 +29,15 @@ const toOrder = (v: string) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
-// Two ways in, as the admin web has them:
-//   • `chapter` — the pencil on a list row: edit that one chapter, description and all.
-//   • `sel` + `chapters` — the + in the Syllabus header: the subject's chapters
-//     load as editable rows, more can be added and any removed, and Save puts
-//     the whole set through at once.
+/**
+ * A subject's chapters, two ways in, as the admin panel has them:
+ *   • `sel` + `chapters` — the + on Syllabus: the panel's chapter manager. The
+ *     subject's chapters come up as rows to rename or reorder, more can be
+ *     added under them and any taken off, and Save puts the whole set through
+ *     at once — a removed chapter's topics go with it.
+ *   • `chapter` — Edit chapter on an open chapter: that one chapter, its
+ *     description and all.
+ */
 const AdminSyllabusChapterFormScreen = ({ navigation, route }: any) => {
   const editing: SyllabusChapter | undefined = route.params?.chapter;
   const sel = route.params?.sel ?? {};
@@ -54,15 +49,19 @@ const AdminSyllabusChapterFormScreen = ({ navigation, route }: any) => {
   );
   const [removed, setRemoved] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [savedMsg, setSavedMsg] = useState('');
 
   const subjectLine = useMemo(
-    () => [sel.standardName, sel.sectionName, sel.subjectName].filter(Boolean).join(' · '),
+    () => [sel.standardName, sel.sectionName ? `Section ${sel.sectionName}` : null, sel.subjectName].filter(Boolean).join(' · '),
     [sel.standardName, sel.sectionName, sel.subjectName],
   );
   const hasSaved = rows.some(r => r.id) || removed.length > 0;
 
-  const setRow = (i: number, patch: Partial<Row>) =>
+  const setRow = (i: number, patch: Partial<Row>) => {
     setRows(rs => rs.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
+    setError('');
+  };
 
   const addRow = () =>
     setRows(rs => [...rs, blankRow(rs.reduce((m, r) => Math.max(m, toOrder(r.order) ?? 0), 0) + 1)]);
@@ -72,15 +71,14 @@ const AdminSyllabusChapterFormScreen = ({ navigation, route }: any) => {
     const row = rows[i];
     if (row?.id) setRemoved(ids => [...ids, row.id!]);
     setRows(rs => rs.filter((_, x) => x !== i));
+    setError('');
   };
 
   const save = async () => {
     const clean = rows.map(r => ({ ...r, name: r.name.trim() }));
     const blank = clean.findIndex(r => !r.name);
-    if (blank >= 0) return AppAlert.alert('Required', `Chapter ${blank + 1}: name is required.`);
-    if (clean.length === 0 && removed.length === 0) {
-      return AppAlert.alert('Required', 'Add at least one chapter.');
-    }
+    if (blank >= 0) return setError(isEdit ? 'Chapter name is required.' : `Chapter ${blank + 1}: Name is required.`);
+    if (!isEdit && clean.length === 0 && removed.length === 0) return setError('Please add at least one chapter.');
 
     setSaving(true);
     try {
@@ -90,133 +88,125 @@ const AdminSyllabusChapterFormScreen = ({ navigation, route }: any) => {
           description: clean[0].description.trim(),
           order: toOrder(clean[0].order) ?? editing!.order,
         });
+        navigation.goBack();
       } else {
-        for (const id of removed) await deleteChapter(id);
-
-        const added = clean.filter(r => !r.id);
-        if (added.length) {
-          await createChapters({
+        setSavedMsg(
+          await saveChapterSet({
             standard_id: sel.standardId,
             section_id: sel.sectionId,
             subject_id: sel.subjectId,
-            chapters: added.map(r => ({ name: r.name, description: r.description.trim(), order: toOrder(r.order) })),
-          });
-        }
-
-        for (const r of clean) {
-          if (!r.id) continue;
-          const was = existing.find(c => c.id === r.id);
-          const same = was && was.name === r.name && (was.order == null ? '' : String(was.order)) === r.order.trim();
-          if (same) continue;
-          await updateChapter(r.id, { name: r.name, description: r.description.trim(), order: toOrder(r.order) });
-        }
+            rows: clean.map(r => ({ id: r.id, name: r.name, order: toOrder(r.order) ?? 1 })),
+            deleted_ids: removed,
+          }),
+        );
       }
-      navigation.goBack();
     } catch (e) {
-      AppAlert.alert('Error', apiErr(e, 'Could not save chapters.'));
+      setError(apiErr(e, 'Could not save chapters.'));
     } finally {
       setSaving(false);
     }
+  };
+
+  const closeSaved = () => {
+    setSavedMsg('');
+    navigation.goBack();
   };
 
   const title = isEdit ? 'Edit Chapter' : hasSaved ? 'Manage Chapters' : 'Add Chapters';
 
   return (
     <View style={s.root}>
-      <Header title={title} onBackPress={() => navigation.goBack()} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-          {!isEdit && !!subjectLine && (
-            <View style={s.contextCard}>
-              <VectorIcon iconSet="Ionicons" iconName="library-outline" size={15} color={theme.colors.primary} />
-              <Text style={s.contextText} numberOfLines={1}>{subjectLine}</Text>
-            </View>
-          )}
-
+      <DocHeader title={title} onBackPress={() => navigation.goBack()} />
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
           {isEdit ? (
-            <View style={s.block}>
-              <TextInput style={s.input} placeholder="Chapter name" placeholderTextColor={theme.colors.textMuted}
-                value={rows[0].name} onChangeText={v => setRow(0, { name: v })} />
-              <TextInput style={[s.input, s.multi]} placeholder="Description (optional)" placeholderTextColor={theme.colors.textMuted}
-                multiline value={rows[0].description} onChangeText={v => setRow(0, { description: v })} />
-              <TextInput style={[s.input, s.gap]} placeholder="Order" placeholderTextColor={theme.colors.textMuted}
-                keyboardType="number-pad" value={rows[0].order} onChangeText={v => setRow(0, { order: v })} />
-            </View>
+            <>
+              <FormCard label="Chapter name" value={rows[0].name} onChangeText={v => setRow(0, { name: v })} placeholder="e.g. Thermodynamics" maxLength={255} />
+              <FormCard
+                label="Description"
+                value={rows[0].description}
+                onChangeText={v => setRow(0, { description: v })}
+                placeholder="Optional"
+                multiline
+                minHeight={80}
+              />
+              <FormCard label="Order" value={rows[0].order} onChangeText={v => setRow(0, { order: v.replace(/\D/g, '') })} keyboardType="number-pad" maxLength={4} />
+            </>
           ) : (
             <>
-              <View style={s.listHead}>
-                <Text style={s.listTitle}>Chapters</Text>
-                <Text style={s.listCount}>{rows.length}</Text>
-              </View>
-
-              {rows.length === 0 && <Text style={s.none}>No chapters yet for this subject.</Text>}
+              {!!subjectLine && <Text style={s.context}>{subjectLine}</Text>}
+              <Text style={s.listTitle}>{`Chapters · ${rows.length}`}</Text>
+              {rows.length === 0 && <Hint>No chapters for this subject — add one below, or save to remove the ones taken off.</Hint>}
 
               {rows.map((r, i) => (
-                <View key={r.id ?? `new-${i}`} style={s.rowLine}>
-                  <View style={[s.badge, r.id ? s.badgeSaved : s.badgeNew]}>
-                    <Text style={[s.badgeText, { color: r.id ? theme.colors.success : theme.colors.primary }]}>
-                      {r.id ? 'Saved' : 'New'}
-                    </Text>
+                <View key={r.id ?? `new-${i}`} style={s.row}>
+                  <View style={s.rowHead}>
+                    <Text style={[s.state, r.id ? s.saved : s.fresh]}>{r.id ? 'Saved' : 'New'}</Text>
+                    <TouchableOpacity onPress={() => removeRow(i)} hitSlop={8} activeOpacity={0.6}>
+                      <VectorIcon iconSet="Ionicons" iconName="close" size={18} color={theme.colors.textMuted} />
+                    </TouchableOpacity>
                   </View>
-                  <TextInput style={[s.input, s.nameInput]} placeholder="Chapter name" placeholderTextColor={theme.colors.textMuted}
-                    value={r.name} onChangeText={v => setRow(i, { name: v })} />
-                  <TextInput style={[s.input, s.orderInput]} placeholder="#" placeholderTextColor={theme.colors.textMuted}
-                    keyboardType="number-pad" value={r.order} onChangeText={v => setRow(i, { order: v })} />
-                  <TouchableOpacity onPress={() => removeRow(i)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                    <VectorIcon iconSet="Ionicons" iconName="close-circle" size={20} color={theme.colors.danger} />
-                  </TouchableOpacity>
+                  <View style={s.pair}>
+                    <FormCard
+                      label={`Chapter ${i + 1}`}
+                      value={r.name}
+                      onChangeText={v => setRow(i, { name: v })}
+                      placeholder="Chapter name"
+                      maxLength={255}
+                      style={s.flex}
+                    />
+                    <FormCard
+                      label="Order"
+                      value={r.order}
+                      onChangeText={v => setRow(i, { order: v.replace(/\D/g, '') })}
+                      keyboardType="number-pad"
+                      maxLength={4}
+                      style={s.order}
+                    />
+                  </View>
                 </View>
               ))}
 
-              <TouchableOpacity style={s.addRow} onPress={addRow} activeOpacity={0.8}>
+              <TouchableOpacity style={s.addRow} onPress={addRow} activeOpacity={0.7}>
                 <VectorIcon iconSet="Ionicons" iconName="add" size={16} color={theme.colors.primary} />
                 <Text style={s.addRowText}>Add another chapter</Text>
               </TouchableOpacity>
 
-              {hasSaved && <Text style={s.note}>Removing a saved chapter also deletes its topics when you save.</Text>}
+              {hasSaved && <Hint>Removing a saved chapter also deletes its topics when you save.</Hint>}
             </>
           )}
+
+          <FormError>{error}</FormError>
+          <SubmitButton label={isEdit ? 'Save changes' : 'Save chapters'} busy={saving} onPress={save} />
         </ScrollView>
-        <View style={s.footer}>
-          <TouchableOpacity style={s.saveBtn} onPress={save} activeOpacity={0.9} disabled={saving}>
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.saveText}>{isEdit ? 'Update Chapter' : 'Save Chapters'}</Text>}
-          </TouchableOpacity>
-        </View>
       </KeyboardAvoidingView>
+
+      <AppDialog visible={!!savedMsg} title="Chapters saved" message={savedMsg.replace(/^Chapters saved!\s*/, '')} actions={[{ text: 'Done', onPress: closeSaved }]} onRequestClose={closeSaved} />
     </View>
   );
 };
 
 export default AdminSyllabusChapterFormScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16 },
-  contextCard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.colors.primaryLight, borderRadius: 12, padding: 12, marginBottom: 12 },
-  contextText: { flex: 1, fontSize: 13, fontWeight: '700', color: theme.colors.textPrimary },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  flex: { flex: 1 },
+  scroll: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 40, gap: 14 },
+  context: { fontSize: 13, color: theme.colors.textSecondary },
+  listTitle: { fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary },
 
-  listHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  listTitle: { fontSize: 13, fontWeight: '800', color: theme.colors.textSecondary },
-  listCount: { fontSize: 11, fontWeight: '800', color: theme.colors.primary, backgroundColor: theme.colors.primaryLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: theme.radius.full },
-  none: { fontSize: 12, color: theme.colors.textMuted, marginBottom: 10 },
+  row: { gap: 6 },
+  rowHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  state: { fontSize: 11, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
+  saved: { color: theme.colors.success },
+  fresh: { color: theme.colors.primary },
+  pair: { flexDirection: 'row', gap: 10 },
+  order: { width: 84 },
 
-  block: { marginBottom: 12, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card },
-  rowLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  badge: { paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
-  badgeSaved: { backgroundColor: theme.colors.success + '14', borderColor: theme.colors.success + '55' },
-  badgeNew: { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primary + '55' },
-  badgeText: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase' },
-  input: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: theme.colors.textPrimary, backgroundColor: theme.colors.card },
-  nameInput: { flex: 1 },
-  orderInput: { width: 54, paddingHorizontal: 8, textAlign: 'center' },
-  multi: { minHeight: 64, textAlignVertical: 'top', marginTop: 8 },
-  gap: { marginTop: 8 },
-
-  addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.primary, borderStyle: 'dashed', marginTop: 4 },
-  addRowText: { fontSize: 13, fontWeight: '700', color: theme.colors.primary },
-  note: { fontSize: 11, color: theme.colors.textMuted, marginTop: 10 },
-
-  footer: { padding: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.card },
-  saveBtn: { height: 52, borderRadius: 14, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
-  saveText: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  addRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 },
+  addRowText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });

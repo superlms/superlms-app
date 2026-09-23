@@ -1,98 +1,187 @@
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
-import Header from '../../components/Header';
-import { theme } from '../../utils/theme';
+import { AppDialog } from '../../components/AppDialog';
+import { theme, onThemeChange } from '../../utils/theme';
+import { quietCaps } from '../../utils/quietCaps';
 import { apiErr } from '../../utils/filePickers';
-import { createTopics, updateTopic } from '../../api/adminSyllabusApi';
-import { AppAlert } from '../../components/AppDialog';
+import { OutlineTopic, saveTopicSet, updateTopic } from '../../api/adminSyllabusApi';
+import { DocHeader } from '../more/docUi';
+import { FormCard, FormError, Hint, SubmitButton } from './adminFormUi';
 
-// Add many topics to a chapter, or edit a single topic.
+interface Row {
+  id: number | null;
+  name: string;
+  order: string;
+}
+
+const toOrder = (v: string) => {
+  const n = parseInt(v.trim(), 10);
+  return Number.isFinite(n) ? n : undefined;
+};
+
+/**
+ * A chapter's topics, two ways in, as the admin panel has them:
+ *   • `chapterId` (+ `topics`) — Topics on an open chapter: the panel's topic
+ *     manager. The chapter's topics come up as rows in their order to rename
+ *     or reorder (one blank row when it has none), more can be added and any
+ *     taken off, and Save puts the whole set through at once.
+ *   • `topic` — the pencil on a topic: rename that one topic.
+ */
 const AdminSyllabusTopicFormScreen = ({ navigation, route }: any) => {
   const editing: { id: number; name: string } | undefined = route.params?.topic;
   const chapterId: number | undefined = route.params?.chapterId;
   const chapterName: string = route.params?.chapterName ?? '';
+  const existing: OutlineTopic[] = route.params?.topics ?? [];
   const isEdit = !!editing;
 
-  const [rows, setRows] = useState<string[]>(isEdit ? [editing!.name] : ['']);
+  const [rows, setRows] = useState<Row[]>(() => {
+    if (isEdit) return [{ id: editing!.id, name: editing!.name, order: '' }];
+    // The panel's order: by their order, then as added; an unset order is its place.
+    const saved = [...existing]
+      .sort((a, b) => (a.order || 0) - (b.order || 0) || a.id - b.id)
+      .map((t, i) => ({ id: t.id, name: t.name, order: String(t.order || i + 1) }));
+    return saved.length ? saved : [{ id: null, name: '', order: '1' }];
+  });
+  const [removed, setRemoved] = useState<number[]>([]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [savedMsg, setSavedMsg] = useState('');
+
+  const hasSaved = rows.some(r => r.id) || removed.length > 0;
+
+  const setRow = (i: number, patch: Partial<Row>) => {
+    setRows(rs => rs.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
+    setError('');
+  };
+
+  const addRow = () =>
+    setRows(rs => [...rs, { id: null, name: '', order: String(rs.reduce((m, r) => Math.max(m, toOrder(r.order) ?? 0), 0) + 1) }]);
+
+  const removeRow = (i: number) => {
+    const row = rows[i];
+    if (row?.id) setRemoved(ids => [...ids, row.id!]);
+    setRows(rs => rs.filter((_, x) => x !== i));
+    setError('');
+  };
 
   const save = async () => {
-    const clean = rows.map(r => r.trim()).filter(Boolean);
-    if (clean.length === 0) return AppAlert.alert('Required', 'Add at least one topic name.');
+    const clean = rows.map(r => ({ ...r, name: r.name.trim() }));
+    const blank = clean.findIndex(r => !r.name);
+    if (isEdit && blank >= 0) return setError('Topic name is required.');
+    if (!isEdit) {
+      if (clean.length === 0 && removed.length === 0) return setError('Please add at least one topic.');
+      if (blank >= 0) return setError(`Topic ${blank + 1}: Name is required.`);
+    }
+
     setSaving(true);
     try {
-      if (isEdit) await updateTopic(editing!.id, clean[0]);
-      else await createTopics({ chapter_id: chapterId!, topics: clean.map(name => ({ name })) });
-      navigation.goBack();
+      if (isEdit) {
+        await updateTopic(editing!.id, clean[0].name);
+        navigation.goBack();
+      } else {
+        setSavedMsg(
+          await saveTopicSet({
+            chapter_id: chapterId!,
+            rows: clean.map(r => ({ id: r.id, name: r.name, order: toOrder(r.order) ?? 1 })),
+            deleted_ids: removed,
+          }),
+        );
+      }
     } catch (e) {
-      AppAlert.alert('Error', apiErr(e, 'Could not save topics.'));
+      setError(apiErr(e, 'Could not save topics.'));
     } finally {
       setSaving(false);
     }
   };
 
+  const closeSaved = () => {
+    setSavedMsg('');
+    navigation.goBack();
+  };
+
+  const title = isEdit ? 'Edit Topic' : hasSaved ? 'Manage Topics' : 'Add Topics';
+
   return (
     <View style={s.root}>
-      <Header title={isEdit ? 'Edit Topic' : 'Add Topics'} onBackPress={() => navigation.goBack()} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-          {!isEdit && !!chapterName && (
-            <View style={s.contextCard}>
-              <VectorIcon iconSet="Ionicons" iconName="book-outline" size={15} color={theme.colors.primary} />
-              <Text style={s.contextText} numberOfLines={1}>{chapterName}</Text>
-            </View>
+      <DocHeader title={title} onBackPress={() => navigation.goBack()} />
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+          {isEdit ? (
+            <FormCard label="Topic name" value={rows[0].name} onChangeText={v => setRow(0, { name: v })} placeholder="e.g. Newton's Laws of Motion" maxLength={255} />
+          ) : (
+            <>
+              {!!chapterName && <Text style={s.context}>{quietCaps(chapterName)}</Text>}
+              <Text style={s.listTitle}>{`Topics · ${rows.length}`}</Text>
+              {rows.length === 0 && <Hint>No topics in this chapter — add one below, or save to remove the ones taken off.</Hint>}
+
+              {rows.map((r, i) => (
+                <View key={r.id ?? `new-${i}`} style={s.row}>
+                  <View style={s.rowHead}>
+                    <Text style={[s.state, r.id ? s.saved : s.fresh]}>{r.id ? 'Saved' : 'New'}</Text>
+                    <TouchableOpacity onPress={() => removeRow(i)} hitSlop={8} activeOpacity={0.6}>
+                      <VectorIcon iconSet="Ionicons" iconName="close" size={18} color={theme.colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={s.pair}>
+                    <FormCard
+                      label={`Topic ${i + 1}`}
+                      value={r.name}
+                      onChangeText={v => setRow(i, { name: v })}
+                      placeholder="Topic name"
+                      maxLength={255}
+                      style={s.flex}
+                    />
+                    <FormCard
+                      label="Order"
+                      value={r.order}
+                      onChangeText={v => setRow(i, { order: v.replace(/\D/g, '') })}
+                      keyboardType="number-pad"
+                      maxLength={4}
+                      style={s.order}
+                    />
+                  </View>
+                </View>
+              ))}
+
+              <TouchableOpacity style={s.addRow} onPress={addRow} activeOpacity={0.7}>
+                <VectorIcon iconSet="Ionicons" iconName="add" size={16} color={theme.colors.primary} />
+                <Text style={s.addRowText}>Add another topic</Text>
+              </TouchableOpacity>
+            </>
           )}
-          {rows.map((r, i) => (
-            <View key={i} style={s.rowLine}>
-              <TextInput style={[s.input, { flex: 1 }]} placeholder={`Topic ${i + 1}`} placeholderTextColor={theme.colors.textMuted}
-                value={r} onChangeText={v => setRows(rs => rs.map((x, idx) => (idx === i ? v : x)))} />
-              {!isEdit && rows.length > 1 && (
-                <TouchableOpacity onPress={() => setRows(rs => rs.filter((_, x) => x !== i))}>
-                  <VectorIcon iconSet="Ionicons" iconName="close-circle" size={20} color={theme.colors.danger} />
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
-          {!isEdit && (
-            <TouchableOpacity style={s.addRow} onPress={() => setRows(r => [...r, ''])} activeOpacity={0.8}>
-              <VectorIcon iconSet="Ionicons" iconName="add" size={16} color={theme.colors.primary} />
-              <Text style={s.addRowText}>Add another topic</Text>
-            </TouchableOpacity>
-          )}
+
+          <FormError>{error}</FormError>
+          <SubmitButton label={isEdit ? 'Save changes' : 'Save topics'} busy={saving} onPress={save} />
         </ScrollView>
-        <View style={s.footer}>
-          <TouchableOpacity style={s.saveBtn} onPress={save} activeOpacity={0.9} disabled={saving}>
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.saveText}>{isEdit ? 'Update Topic' : 'Save Topics'}</Text>}
-          </TouchableOpacity>
-        </View>
       </KeyboardAvoidingView>
+
+      <AppDialog visible={!!savedMsg} title="Topics saved" message={savedMsg.replace(/^Topics saved!\s*/, '')} actions={[{ text: 'Done', onPress: closeSaved }]} onRequestClose={closeSaved} />
     </View>
   );
 };
 
 export default AdminSyllabusTopicFormScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16 },
-  contextCard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.colors.primaryLight, borderRadius: 12, padding: 12, marginBottom: 12 },
-  contextText: { flex: 1, fontSize: 13, fontWeight: '700', color: theme.colors.textPrimary },
-  rowLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  input: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: theme.colors.textPrimary, backgroundColor: theme.colors.card },
-  addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.primary, borderStyle: 'dashed', marginTop: 4 },
-  addRowText: { fontSize: 13, fontWeight: '700', color: theme.colors.primary },
-  footer: { padding: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.card },
-  saveBtn: { height: 52, borderRadius: 14, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
-  saveText: { fontSize: 16, fontWeight: '800', color: '#fff' },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  flex: { flex: 1 },
+  scroll: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 40, gap: 14 },
+  context: { fontSize: 13, color: theme.colors.textSecondary },
+  listTitle: { fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary },
+
+  row: { gap: 6 },
+  rowHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  state: { fontSize: 11, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
+  saved: { color: theme.colors.success },
+  fresh: { color: theme.colors.primary },
+  pair: { flexDirection: 'row', gap: 10 },
+  order: { width: 84 },
+
+  addRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6 },
+  addRowText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });
