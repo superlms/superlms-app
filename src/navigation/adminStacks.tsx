@@ -36,6 +36,24 @@ import AdminTransportMonthsScreen from '../screens/admin/AdminTransportMonthsScr
 import TransportReceiptScreen from '../screens/transport/TransportReceiptScreen';
 import AdminLedgerScreen from '../screens/admin/AdminLedgerScreen';
 import AdminLedgerFormScreen from '../screens/admin/AdminLedgerFormScreen';
+import AdminPayrollScreen from '../screens/admin/AdminPayrollScreen';
+import AdminPayrollEmployeesScreen from '../screens/admin/AdminPayrollEmployeesScreen';
+import AdminPayrollEmployeeScreen from '../screens/admin/AdminPayrollEmployeeScreen';
+import AdminPayrollEmployeeFormScreen from '../screens/admin/AdminPayrollEmployeeFormScreen';
+import AdminPayrollAttendanceScreen from '../screens/admin/AdminPayrollAttendanceScreen';
+import AdminPayrollCalendarScreen from '../screens/admin/AdminPayrollCalendarScreen';
+import AdminPayrollSalaryScreen from '../screens/admin/AdminPayrollSalaryScreen';
+import AdminPayrollPayScreen from '../screens/admin/AdminPayrollPayScreen';
+import AdminPayrollPaymentsScreen from '../screens/admin/AdminPayrollPaymentsScreen';
+// Fees
+import AdminFeesScreen from '../screens/admin/AdminFeesScreen';
+import AdminFeeStudentsScreen from '../screens/admin/AdminFeeStudentsScreen';
+import AdminFeeStudentScreen from '../screens/admin/AdminFeeStudentScreen';
+import AdminFeeCollectScreen from '../screens/admin/AdminFeeCollectScreen';
+import AdminFeePaymentsScreen from '../screens/admin/AdminFeePaymentsScreen';
+import AdminFeeAnalyticsScreen from '../screens/admin/AdminFeeAnalyticsScreen';
+import AdminFeeQrScreen from '../screens/admin/AdminFeeQrScreen';
+import AdminFeeQrReviewScreen from '../screens/admin/AdminFeeQrReviewScreen';
 // Enquiries
 import AdminEnquiriesScreen from '../screens/admin/AdminEnquiriesScreen';
 import AdminEnquiryDetailScreen from '../screens/admin/AdminEnquiryDetailScreen';
@@ -147,6 +165,33 @@ export const AdminLedgerStack = () => (
     <Stack.Screen name="AdminLedgerForm" component={AdminLedgerFormScreen} />
     {/* The statement PDF, in the receipt viewer */}
     <Stack.Screen name="AdminLedgerStatement" component={TransportReceiptScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminPayrollStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminPayrollHome" component={AdminPayrollScreen} />
+    <Stack.Screen name="AdminPayrollEmployees" component={AdminPayrollEmployeesScreen} />
+    <Stack.Screen name="AdminPayrollEmployee" component={AdminPayrollEmployeeScreen} />
+    <Stack.Screen name="AdminPayrollEmployeeForm" component={AdminPayrollEmployeeFormScreen} />
+    <Stack.Screen name="AdminPayrollAttendance" component={AdminPayrollAttendanceScreen} />
+    <Stack.Screen name="AdminPayrollCalendar" component={AdminPayrollCalendarScreen} />
+    <Stack.Screen name="AdminPayrollSalary" component={AdminPayrollSalaryScreen} />
+    <Stack.Screen name="AdminPayrollPay" component={AdminPayrollPayScreen} />
+    <Stack.Screen name="AdminPayrollPayments" component={AdminPayrollPaymentsScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminFeesStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminFeesHome" component={AdminFeesScreen} />
+    <Stack.Screen name="AdminFeeStudents" component={AdminFeeStudentsScreen} />
+    <Stack.Screen name="AdminFeeStudent" component={AdminFeeStudentScreen} />
+    <Stack.Screen name="AdminFeeCollect" component={AdminFeeCollectScreen} />
+    <Stack.Screen name="AdminFeePayments" component={AdminFeePaymentsScreen} />
+    <Stack.Screen name="AdminFeeAnalytics" component={AdminFeeAnalyticsScreen} />
+    <Stack.Screen name="AdminFeeQr" component={AdminFeeQrScreen} />
+    <Stack.Screen name="AdminFeeQrReview" component={AdminFeeQrReviewScreen} />
   </Stack.Navigator>
 );
 

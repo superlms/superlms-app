@@ -36,6 +36,7 @@ import {
   AdminCalendarStack,
   AdminTransportStack,
   AdminLedgerStack,
+  AdminPayrollStack,
   AdminEnquiriesStack,
   AdminSyllabusStack,
   AdminContentStack,
@@ -344,6 +345,7 @@ const AdminDrawerNavigator = () => {
       <Drawer.Screen name="AdminStandard" component={AdminStandardStack} />
       <Drawer.Screen name="AdminTransport" component={AdminTransportStack} />
       <Drawer.Screen name="AdminLedger" component={AdminLedgerStack} />
+      <Drawer.Screen name="AdminPayroll" component={AdminPayrollStack} />
       <Drawer.Screen name="AdminHomework" component={AdminHomeworkScreen} />
       <Drawer.Screen name="AdminTimetable" component={AdminTimetableScreen} />
       <Drawer.Screen name="AdminArrangement" component={AdminArrangementScreen} />

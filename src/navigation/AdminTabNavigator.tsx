@@ -5,8 +5,7 @@ import VectorIcon from '../components/VectorIcon';
 import { theme } from '../utils/theme';
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
 import AdminAttendanceScreen from '../screens/admin/AdminAttendanceScreen';
-import AdminComingSoonScreen from '../screens/admin/AdminComingSoonScreen';
-import { AdminStudentsStack, AdminTeachersStack } from './adminStacks';
+import { AdminFeesStack, AdminStudentsStack, AdminTeachersStack } from './adminStacks';
 import { canAccessAdminModule } from '../screens/admin/adminModules';
 import { useAdminProfile } from '../screens/admin/useAdminProfile';
 
@@ -70,13 +69,7 @@ const AdminTabNavigator = () => {
       {allowed('Students') && <Tab.Screen name="Students" component={AdminStudentsStack} />}
       {allowed('Teachers') && <Tab.Screen name="Teachers" component={AdminTeachersStack} />}
       {allowed('Attendance') && <Tab.Screen name="Attendance" component={AdminAttendanceScreen} />}
-      {allowed('Fees') && (
-        <Tab.Screen
-          name="Fees"
-          component={AdminComingSoonScreen}
-          initialParams={{ title: 'Fees', icon: 'card-outline' }}
-        />
-      )}
+      {allowed('Fees') && <Tab.Screen name="Fees" component={AdminFeesStack} />}
     </Tab.Navigator>
   );
 };

@@ -21,6 +21,7 @@ export const ADMIN_MODULE_TARGETS: Record<string, Target> = {
   attendance: tab('Attendance'),
   transport: { route: 'AdminTransport' },
   ledger: { route: 'AdminLedger' },
+  payroll: { route: 'AdminPayroll' },
   homework: { route: 'AdminHomework' },
   timetable: { route: 'AdminTimetable' },
   arrangement: { route: 'AdminArrangement' },
