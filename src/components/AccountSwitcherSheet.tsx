@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -11,6 +11,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { CommonActions, useNavigation } from '@react-navigation/native';
 import { initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -132,6 +133,8 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
   // A school admin's account waits on the code mailed to them.
   const [otpStep, setOtpStep] = useState<AddAccountOtp | null>(null);
   const [otp, setOtp] = useState('');
+  // Bumped when a code is refused, so the six boxes start empty again.
+  const [otpRound, setOtpRound] = useState(0);
   const [resendIn, setResendIn] = useState(0);
 
   useEffect(() => {
@@ -291,7 +294,7 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
   const onSubmitAdd = async () => {
     const id = identifier.trim();
     if (!id) {
-      setAddError('Please enter your admission number, username or email.');
+      setAddError('Please enter your admission number or username.');
       return;
     }
     if (!password) {
@@ -335,6 +338,7 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
       await saveAdded(await verifyAddAccountOtp(otpStep.userId, otpStep.otpToken, otp));
     } catch (err: any) {
       setOtp('');
+      setOtpRound(n => n + 1);
       setAddError(messageOf(err, 'Could not verify the code. Please try again.'));
     } finally {
       setAdding(false);
@@ -428,7 +432,7 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
               otpStep ? (
                 <OtpBody
                   email={otpStep.email}
-                  otp={otp}
+                  round={otpRound}
                   setOtp={t => {
                     setOtp(t.replace(/\D/g, '').slice(0, 6));
                     setAddError('');
@@ -614,9 +618,9 @@ const AddBody = (p: AddBodyProps) => {
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.addContent} showsVerticalScrollIndicator={false}>
       {/* Identifier — the role is worked out from it: admission number for a
           student, username for a teacher, email for the school's own staff */}
-      <Text style={s.label}>Admission number, username or email</Text>
+      <Text style={s.label}>Admission number or username</Text>
       <TextInput
-        placeholder="2026DMO650015, meera@tds or you@school.com"
+        placeholder="2026DMO650015 or meera@tds"
         placeholderTextColor={theme.colors.textMuted}
         value={p.identifier}
         onChangeText={p.setIdentifier}
@@ -675,10 +679,98 @@ const AddBody = (p: AddBodyProps) => {
   );
 };
 
+// ─── Code boxes ───────────────────────────────────────────────────────────────
+// The Verify OTP screen's six boxes: tap any box and retype just that digit.
+// Typing auto-advances, backspace on an empty box steps back, and pasting a
+// full code from the keyboard fills the row.
+const OtpBoxes = ({
+  boxWidth,
+  rowWidth,
+  onChange,
+}: {
+  boxWidth: number;
+  rowWidth: number;
+  onChange: (code: string) => void;
+}) => {
+  const refs = useRef<(TextInput | null)[]>([]);
+  const [digits, setDigits] = useState<string[]>(Array(6).fill(''));
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+
+  const update = (next: string[]) => {
+    setDigits(next);
+    onChange(next.join(''));
+  };
+
+  const handleChange = (index: number, text: string) => {
+    const typed = text.replace(/\D/g, '');
+    const next = [...digits];
+    if (!typed) {
+      next[index] = '';
+      update(next);
+      return;
+    }
+    if (typed.length > 2) {
+      let i = index;
+      for (const char of typed) {
+        if (i > 5) break;
+        next[i] = char;
+        i += 1;
+      }
+      update(next);
+      refs.current[Math.min(i, 5)]?.focus();
+      return;
+    }
+    next[index] = typed[typed.length - 1];
+    update(next);
+    if (index < 5) {
+      refs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyPress = (index: number, key: string) => {
+    if (key === 'Backspace' && !digits[index] && index > 0) {
+      const next = [...digits];
+      next[index - 1] = '';
+      update(next);
+      refs.current[index - 1]?.focus();
+    }
+  };
+
+  return (
+    <View style={[s.otpContainer, { width: rowWidth }]}>
+      {digits.map((digit, index) => (
+        <TextInput
+          key={index}
+          ref={r => {
+            refs.current[index] = r;
+          }}
+          style={[
+            s.otpBox,
+            { width: boxWidth },
+            (focusedIndex === index || !!digit) && s.otpBoxActive,
+          ]}
+          value={digit}
+          onChangeText={t => handleChange(index, t)}
+          onKeyPress={e => handleKeyPress(index, e.nativeEvent.key)}
+          onFocus={() => setFocusedIndex(index)}
+          onBlur={() => setFocusedIndex(-1)}
+          keyboardType="number-pad"
+          maxLength={6}
+          selectTextOnFocus
+          textContentType="oneTimeCode"
+          autoComplete="sms-otp"
+          autoFocus={index === 0}
+        />
+      ))}
+    </View>
+  );
+};
+
 // ─── Code body (a school admin's account) ─────────────────────────────────────
 interface OtpBodyProps {
   email: string;
-  otp: string;
+  /** Changes when a code is refused, which empties the boxes. */
+  round: number;
   setOtp: (t: string) => void;
   error: string;
   resendIn: number;
@@ -688,25 +780,16 @@ interface OtpBodyProps {
 }
 
 const OtpBody = (p: OtpBodyProps) => {
-  const [focused, setFocused] = useState(false);
+  // Boxes sized as on the Verify OTP screen, so the row always fits.
+  const { width: windowWidth } = useWindowDimensions();
+  const otpGap = theme.spacing.xs;
+  const otpBoxWidth = Math.min(48, Math.floor((windowWidth - theme.spacing.lg * 4 - otpGap * 5) / 6));
+  const otpRowWidth = otpBoxWidth * 6 + otpGap * 5;
 
   return (
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.addContent} showsVerticalScrollIndicator={false}>
       <Text style={s.label}>Enter the 6-digit code sent to {p.email}</Text>
-      <TextInput
-        placeholder="6-digit code"
-        placeholderTextColor={theme.colors.textMuted}
-        value={p.otp}
-        onChangeText={p.setOtp}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        keyboardType="number-pad"
-        autoComplete="one-time-code"
-        textContentType="oneTimeCode"
-        maxLength={6}
-        autoFocus
-        style={[s.field, s.otpField, focused && s.fieldFocused]}
-      />
+      <OtpBoxes key={p.round} boxWidth={otpBoxWidth} rowWidth={otpRowWidth} onChange={p.setOtp} />
 
       {!!p.error && <Text style={s.errorText}>{p.error}</Text>}
 
@@ -858,7 +941,21 @@ const __mk_s = () => StyleSheet.create({
   passField: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 0 },
   passInput: { flex: 1, paddingVertical: 12, fontSize: 15, color: theme.colors.textPrimary },
   fieldFocused: { borderColor: theme.colors.primary },
-  otpField: { marginTop: 10, letterSpacing: 6, fontSize: 18 },
+  // The Verify OTP screen's boxes.
+  otpContainer: { flexDirection: 'row', justifyContent: 'space-between', alignSelf: 'center', marginTop: 10 },
+  otpBox: {
+    width: 44,
+    height: 50,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.sm,
+    textAlign: 'center',
+    fontSize: 18,
+    padding: 0,
+    backgroundColor: theme.colors.surface,
+    color: theme.colors.textPrimary,
+  },
+  otpBoxActive: { borderColor: '#5B7FFF' },
   resendWait: { fontSize: 13, color: theme.colors.textMuted, marginTop: 8 },
 
   errorText: { fontSize: 13, color: theme.colors.danger, lineHeight: 19, marginTop: 12 },
