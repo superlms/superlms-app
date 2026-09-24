@@ -9,6 +9,13 @@ import AdminStudentFormScreen from '../screens/admin/AdminStudentFormScreen';
 import AdminTeachersScreen from '../screens/admin/AdminTeachersScreen';
 import AdminTeacherDetailScreen from '../screens/admin/AdminTeacherDetailScreen';
 import AdminTeacherFormScreen from '../screens/admin/AdminTeacherFormScreen';
+// Attendance
+import AdminAttendanceScreen from '../screens/admin/AdminAttendanceScreen';
+import AdminTeacherAttendanceScreen from '../screens/admin/AdminTeacherAttendanceScreen';
+import AdminStudentAttendanceScreen from '../screens/admin/AdminStudentAttendanceScreen';
+import AdminAttendanceMarkScreen from '../screens/admin/AdminAttendanceMarkScreen';
+import AdminClassTeachersScreen from '../screens/admin/AdminClassTeachersScreen';
+import AdminClassTeacherFormScreen from '../screens/admin/AdminClassTeacherFormScreen';
 // Standard (classes / sections / subjects)
 import AdminStandardScreen from '../screens/admin/AdminStandardScreen';
 import AdminStandardDetailScreen from '../screens/admin/AdminStandardDetailScreen';
@@ -113,6 +120,17 @@ export const AdminTeachersStack = () => (
     <Stack.Screen name="AdminTeachersHome" component={AdminTeachersScreen} />
     <Stack.Screen name="AdminTeacherDetail" component={AdminTeacherDetailScreen} />
     <Stack.Screen name="AdminTeacherForm" component={AdminTeacherFormScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminAttendanceStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminAttendanceHome" component={AdminAttendanceScreen} />
+    <Stack.Screen name="AdminTeacherAttendance" component={AdminTeacherAttendanceScreen} />
+    <Stack.Screen name="AdminStudentAttendance" component={AdminStudentAttendanceScreen} />
+    <Stack.Screen name="AdminAttendanceMark" component={AdminAttendanceMarkScreen} />
+    <Stack.Screen name="AdminClassTeachers" component={AdminClassTeachersScreen} />
+    <Stack.Screen name="AdminClassTeacherForm" component={AdminClassTeacherFormScreen} />
   </Stack.Navigator>
 );
 

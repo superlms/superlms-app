@@ -1,11 +1,17 @@
 import apiClient from './apiClient';
 
-// Attendance module. Mirrors app/Livewire/Admin/Attendance.php over /admin/attendance.
+// Attendance module. Mirrors app/Livewire/Admin/Attendance.php over /admin/attendance,
+// asking with v=2 for the panel's rules as they are now: a day starts blank
+// (Sunday on Holiday), a blank row saves nothing, an unmarked Sunday reads as a
+// holiday, and a person's months are the panel's month cards (April → March).
 
 const unwrap = (data: any) => data?.data ?? data;
+const V = { v: 2 };
 
 export type AttStatus = 'present' | 'absent' | 'half_day' | 'holiday';
-export type RecordStatus = AttStatus | 'not_marked' | 'off';
+/** '' is a row left unmarked. */
+export type MarkStatus = AttStatus | '';
+export type RecordStatus = AttStatus | 'not_marked';
 
 export interface AttClass {
   id: number;
@@ -20,25 +26,25 @@ export interface AttendanceLookups {
   teachers: AttTeacher[];
 }
 
-export interface MarkTeacherRow {
-  teacher_detail_id: number;
+export interface MarkRow {
+  id: number;
   name: string;
+  sub: string;
   image: string | null;
-  status: AttStatus;
+  status: MarkStatus;
   remark: string;
 }
-export interface MarkStudentRow {
-  student_detail_id: number;
-  user_id: number | null;
-  name: string;
-  roll_no?: string | number | null;
-  image: string | null;
-  status: AttStatus;
-  remark: string;
+export interface MarkDay {
+  date: string;
+  rows: MarkRow[];
+  /** The day was already submitted — saving updates it. */
+  existing: boolean;
 }
 
-export interface ByDateRow {
+export interface DayRecord {
+  id: number;
   name: string;
+  email?: string;
   roll_no?: string | number | null;
   image: string | null;
   status: RecordStatus;
@@ -52,49 +58,84 @@ export interface Tally {
   not_marked: number;
   total: number;
 }
-
-export interface CalendarCell {
-  day: number;
+export interface DayRecords {
   date: string;
-  status: RecordStatus;
+  rows: DayRecord[];
+  stats: Tally;
 }
-export interface MonthCalendar {
+
+export interface MonthGrid {
   month: string;
-  weeks: (CalendarCell | null)[][];
-  totals: {
-    total_days: number;
-    working_days: number;
-    present_days: number;
-    absent_days: number;
-    half_days: number;
-    holidays: number;
-    percent: number;
-  };
-}
-export interface YearlySummary {
-  year: number;
-  months: {
-    label: string;
-    present: number;
-    absent: number;
-    half_day: number;
-    holiday: number;
-    working: number;
-    percent: number;
+  title: string;
+  teachers: {
+    id: number;
+    name: string;
+    image: string | null;
+    totals: Record<RecordStatus, number>;
   }[];
-  totals: { present: number; absent: number; half_day: number; holiday: number; working: number; percent: number };
+  rows: {
+    date: string;
+    label: string;
+    dow: string;
+    sunday: boolean;
+    today: boolean;
+    /** teacher id → status; null for a day still to come */
+    cells: Record<string, RecordStatus | null>;
+  }[];
+}
+
+export interface CardCounts {
+  present: number;
+  absent: number;
+  half_day: number;
+  holiday: number;
+  not_marked: number;
+  working: number;
+}
+export interface MonthCard {
+  key: string;
+  label: string;
+  /** Blank cells before the 1st, in a Sunday-first week. */
+  lead: number;
+  cells: { day: number; date: string; status: RecordStatus | null; in_period: boolean }[];
+  counts: CardCounts;
+  pct: number;
+}
+export interface PersonCards {
+  person: string;
+  title: string;
+  counts: CardCounts & { percent: number };
+  months: MonthCard[];
 }
 
 export interface ClassTeacherAssignment {
   id: number;
   teacher_id: number;
   teacher_name: string;
+  teacher_email?: string;
   teacher_image: string | null;
   standard_id: number;
   section_id: number | null;
   standard: string;
   section: string | null;
 }
+export interface ClassTeachers {
+  assignments: ClassTeacherAssignment[];
+  /** Every assignment in the school, whatever the filter. */
+  taken: { id: number; teacher_id: number }[];
+}
+
+export interface SavedDay {
+  title: string;
+  message: string;
+  updated: boolean;
+}
+
+const savedDay = (data: any): SavedDay => ({
+  title: data?.data?.title ?? 'Attendance saved',
+  message: data?.message ?? '',
+  updated: !!data?.data?.updated,
+});
 
 // ── Lookups ────────────────────────────────────────────────────────────────
 export const getAttendanceLookups = async (): Promise<AttendanceLookups> => {
@@ -108,52 +149,105 @@ export const getSectionStudents = async (standard_id: number, section_id: number
 };
 
 // ── Teacher ──────────────────────────────────────────────────────────────
-export const getTeacherMarkList = async (date: string): Promise<{ date: string; rows: MarkTeacherRow[] }> => {
-  const { data } = await apiClient.get('/admin/attendance/teacher/mark', { params: { date } });
-  return unwrap(data);
+export const getTeacherDay = async (date: string): Promise<MarkDay> => {
+  const { data } = await apiClient.get('/admin/attendance/teacher/mark', { params: { date, ...V } });
+  const d = unwrap(data);
+  return {
+    date: d.date,
+    existing: !!d.existing,
+    rows: (d.rows ?? []).map((r: any) => ({
+      id: r.teacher_detail_id,
+      name: r.name,
+      sub: r.email ?? '',
+      image: r.image ?? null,
+      status: r.status ?? '',
+      remark: r.remark ?? '',
+    })),
+  };
 };
 
-export const submitTeacherAttendance = async (p: {
+export const saveTeacherDay = async (p: {
   date: string;
-  marks: { teacher_detail_id: number; status: AttStatus; remark?: string }[];
-}) => {
-  const { data } = await apiClient.post('/admin/attendance/teacher/mark', p);
+  holiday?: boolean;
+  marks: { id: number; status: MarkStatus; remark: string }[];
+}): Promise<SavedDay> => {
+  const { data } = await apiClient.post('/admin/attendance/teacher/mark', {
+    ...V,
+    date: p.date,
+    holiday: p.holiday ? 1 : 0,
+    marks: p.marks.map(m => ({ teacher_detail_id: m.id, status: m.status, remark: m.remark })),
+  });
+  return savedDay(data);
+};
+
+export const getTeacherRecords = async (date: string, status = ''): Promise<DayRecords> => {
+  const { data } = await apiClient.get('/admin/attendance/teacher/by-date', {
+    params: { date, status: status || undefined, ...V },
+  });
   return unwrap(data);
 };
 
-export const getTeacherByDate = async (date: string, status = ''): Promise<{ date: string; rows: ByDateRow[]; stats: Tally }> => {
-  const { data } = await apiClient.get('/admin/attendance/teacher/by-date', { params: { date, status: status || undefined } });
-  return unwrap(data);
-};
-
-export const getTeacherCalendar = async (p: { teacher_id: number; month?: string; year?: number }): Promise<{ type: 'monthly' | 'yearly'; calendar?: MonthCalendar; yearly?: YearlySummary }> => {
-  const { data } = await apiClient.get('/admin/attendance/teacher/calendar', { params: p });
+export const getTeacherMonthGrid = async (month: string, teacher_id?: number | null): Promise<MonthGrid> => {
+  const { data } = await apiClient.get('/admin/attendance/teacher/month-grid', {
+    params: { month, teacher_id: teacher_id || undefined },
+  });
   return unwrap(data);
 };
 
 // ── Student ──────────────────────────────────────────────────────────────
-export const getStudentMarkList = async (standard_id: number, section_id: number, date: string): Promise<{ date: string; rows: MarkStudentRow[] }> => {
-  const { data } = await apiClient.get('/admin/attendance/student/mark', { params: { standard_id, section_id, date } });
-  return unwrap(data);
+export const getStudentDay = async (standard_id: number, section_id: number, date: string): Promise<MarkDay> => {
+  const { data } = await apiClient.get('/admin/attendance/student/mark', {
+    params: { standard_id, section_id, date, ...V },
+  });
+  const d = unwrap(data);
+  return {
+    date: d.date,
+    existing: !!d.existing,
+    rows: (d.rows ?? []).map((r: any) => ({
+      id: r.student_detail_id,
+      name: r.name,
+      sub: r.roll_no ? `Roll no. ${r.roll_no}` : r.email ?? '',
+      image: r.image ?? null,
+      status: r.status ?? '',
+      remark: r.remark ?? '',
+    })),
+  };
 };
 
-export const submitStudentAttendance = async (p: {
+export const saveStudentDay = async (p: {
   standard_id: number;
   section_id: number;
   date: string;
-  marks: { student_detail_id: number; user_id?: number | null; status: AttStatus; remark?: string }[];
-}) => {
-  const { data } = await apiClient.post('/admin/attendance/student/mark', p);
+  holiday?: boolean;
+  marks: { id: number; status: MarkStatus; remark: string }[];
+}): Promise<SavedDay> => {
+  const { data } = await apiClient.post('/admin/attendance/student/mark', {
+    ...V,
+    standard_id: p.standard_id,
+    section_id: p.section_id,
+    date: p.date,
+    holiday: p.holiday ? 1 : 0,
+    marks: p.marks.map(m => ({ student_detail_id: m.id, status: m.status, remark: m.remark })),
+  });
+  return savedDay(data);
+};
+
+export const getStudentRecords = async (standard_id: number, section_id: number, date: string): Promise<DayRecords> => {
+  const { data } = await apiClient.get('/admin/attendance/student/by-date', {
+    params: { standard_id, section_id, date, ...V },
+  });
   return unwrap(data);
 };
 
-export const getStudentByDate = async (standard_id: number, section_id: number, date: string, status = ''): Promise<{ date: string; rows: ByDateRow[]; stats: Tally }> => {
-  const { data } = await apiClient.get('/admin/attendance/student/by-date', { params: { standard_id, section_id, date, status: status || undefined } });
-  return unwrap(data);
-};
-
-export const getStudentCalendar = async (p: { student_id: number; month?: string; year?: number }): Promise<{ type: 'monthly' | 'yearly'; calendar?: MonthCalendar; yearly?: YearlySummary }> => {
-  const { data } = await apiClient.get('/admin/attendance/student/calendar', { params: p });
+// ── A person's months ──────────────────────────────────────────────────────
+export const getPersonCards = async (
+  who: 'teacher' | 'student',
+  id: number,
+  period: { month: string } | { year: string },
+): Promise<PersonCards> => {
+  const { data } = await apiClient.get(`/admin/attendance/${who}/calendar`, {
+    params: { [who === 'teacher' ? 'teacher_id' : 'student_id']: id, ...period, ...V },
+  });
   return unwrap(data);
 };
 
@@ -163,9 +257,17 @@ export const getClassTeachers = async (p: {
   standard_id?: number | null;
   section_id?: number | null;
   teacher_id?: number | null;
-}): Promise<ClassTeacherAssignment[]> => {
-  const { data } = await apiClient.get('/admin/attendance/class-teachers', { params: p });
-  return unwrap(data)?.assignments ?? [];
+}): Promise<ClassTeachers> => {
+  const { data } = await apiClient.get('/admin/attendance/class-teachers', {
+    params: {
+      mode: p.mode,
+      standard_id: p.standard_id || undefined,
+      section_id: p.section_id || undefined,
+      teacher_id: p.teacher_id || undefined,
+    },
+  });
+  const d = unwrap(data);
+  return { assignments: d?.assignments ?? [], taken: d?.taken ?? [] };
 };
 
 export const saveClassTeacher = async (p: {
@@ -173,9 +275,9 @@ export const saveClassTeacher = async (p: {
   teacher_detail_id: number;
   standard_id: number;
   section_id?: number | null;
-}) => {
+}): Promise<string> => {
   const { data } = await apiClient.post('/admin/attendance/class-teachers', p);
-  return unwrap(data);
+  return data?.message ?? (p.id ? 'Assignment updated.' : 'Class teacher assigned.');
 };
 
 export const deleteClassTeacher = async (id: number) => {

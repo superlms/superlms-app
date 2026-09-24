@@ -4,8 +4,7 @@ import { TouchableOpacity } from 'react-native';
 import VectorIcon from '../components/VectorIcon';
 import { theme } from '../utils/theme';
 import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
-import AdminAttendanceScreen from '../screens/admin/AdminAttendanceScreen';
-import { AdminFeesStack, AdminStudentsStack, AdminTeachersStack } from './adminStacks';
+import { AdminAttendanceStack, AdminFeesStack, AdminStudentsStack, AdminTeachersStack } from './adminStacks';
 import { canAccessAdminModule } from '../screens/admin/adminModules';
 import { useAdminProfile } from '../screens/admin/useAdminProfile';
 
@@ -68,7 +67,7 @@ const AdminTabNavigator = () => {
       <Tab.Screen name="Dashboard" component={AdminDashboardScreen} />
       {allowed('Students') && <Tab.Screen name="Students" component={AdminStudentsStack} />}
       {allowed('Teachers') && <Tab.Screen name="Teachers" component={AdminTeachersStack} />}
-      {allowed('Attendance') && <Tab.Screen name="Attendance" component={AdminAttendanceScreen} />}
+      {allowed('Attendance') && <Tab.Screen name="Attendance" component={AdminAttendanceStack} />}
       {allowed('Fees') && <Tab.Screen name="Fees" component={AdminFeesStack} />}
     </Tab.Navigator>
   );
