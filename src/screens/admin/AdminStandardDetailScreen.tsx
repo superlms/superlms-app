@@ -17,14 +17,14 @@ import {
 } from '../../api/adminStandardApi';
 import { DocHeader } from '../more/docUi';
 import { SubjectIcon } from '../subjects/subjectIcon';
-import { QuietAction, confirmDestructive } from './adminFormUi';
+import { confirmDestructive } from './adminFormUi';
 import { InfoRow } from './adminTransportUi';
 
 /**
  * One class, section or subject on its own page — the panel's View: what it
  * is and where it sits, its counts, and when it was made. A class opens onto
  * its sections and a section onto its subjects from here too. The pencil
- * edits it; Delete (in the header for a class or a section) asks first, and the server says
+ * edits it; Delete, beside it in the header, asks first, and the server says
  * no, as the panel does, to a class or section with students in it (they are
  * moved first), to a class that still has sections — which the page itself
  * refuses before asking — and to a subject the timetable or assignments use.
@@ -33,9 +33,7 @@ import { InfoRow } from './adminTransportUi';
 type StdType = 'class' | 'section' | 'subject';
 const TITLES: Record<StdType, string> = { class: 'Class', section: 'Section', subject: 'Subject' };
 // What the header says.
-const HEADS: Record<StdType, string> = { class: 'Class', section: 'Section Detail', subject: 'Subject' };
-// A class's and a section's Delete sit in the header, beside the pencil.
-const deleteInHeader = (type: StdType) => type === 'class' || type === 'section';
+const HEADS: Record<StdType, string> = { class: 'Standard Detail', section: 'Section Detail', subject: 'Subject Detail' };
 const ICONS: Record<StdType, string> = { class: 'school-outline', section: 'grid-outline', subject: 'library-outline' };
 
 const when = (iso?: string | null) => (iso ? moment(iso).format('DD MMM YYYY, h:mm A') : null);
@@ -155,24 +153,21 @@ const AdminStandardDetailScreen = ({ navigation, route }: any) => {
 
   return (
     <View style={s.root}>
-      {deleteInHeader(type) ? (
-        <DocHeader
-          title={HEADS[type]}
-          onBackPress={() => navigation.goBack()}
-          rightSlot={
-            <View style={s.headActions}>
-              <HeaderIconButton icon="create-outline" onPress={edit} />
-              {busy ? (
-                <ActivityIndicator style={s.headBusy} color={theme.colors.primary} />
-              ) : (
-                <HeaderIconButton icon="trash-outline" onPress={remove} />
-              )}
-            </View>
-          }
-        />
-      ) : (
-        <DocHeader title={HEADS[type]} onBackPress={() => navigation.goBack()} rightIcon="create-outline" onRightPress={edit} />
-      )}
+      {/* Delete sits in the header, beside the pencil */}
+      <DocHeader
+        title={HEADS[type]}
+        onBackPress={() => navigation.goBack()}
+        rightSlot={
+          <View style={s.headActions}>
+            <HeaderIconButton icon="create-outline" onPress={edit} />
+            {busy ? (
+              <ActivityIndicator style={s.headBusy} color={theme.colors.primary} />
+            ) : (
+              <HeaderIconButton icon="trash-outline" onPress={remove} />
+            )}
+          </View>
+        }
+      />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
         <View style={s.head}>
           {type === 'subject' ? (
@@ -196,11 +191,6 @@ const AdminStandardDetailScreen = ({ navigation, route }: any) => {
           ))}
         </View>
 
-        {!deleteInHeader(type) && (
-          <View style={s.quiet}>
-            <QuietAction icon="trash-2" label={`Delete ${TITLES[type].toLowerCase()}`} danger busy={busy} onPress={remove} />
-          </View>
-        )}
       </ScrollView>
     </View>
   );
@@ -226,7 +216,6 @@ const __mk_s = () => StyleSheet.create({
   sub: { fontSize: 13, color: theme.colors.textSecondary },
   off: { color: theme.colors.danger },
   rows: { paddingHorizontal: 20 },
-  quiet: { paddingHorizontal: 20, paddingTop: 20 },
   headActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   headBusy: { width: 40 },
 });

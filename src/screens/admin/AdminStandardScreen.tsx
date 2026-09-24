@@ -336,7 +336,7 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
   return (
     <View style={st.root}>
       <DocHeader
-        title={tab === 'sections' ? 'Sections' : 'Standards'}
+        title={tab === 'sections' ? 'Sections' : tab === 'subjects' ? 'Subjects' : 'Standards'}
         onBackPress={goUp}
         rightIcon="add"
         onRightPress={() => setSheet('add')}

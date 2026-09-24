@@ -143,7 +143,10 @@ const AdminStandardFormScreen = ({ navigation, route }: any) => {
 
   return (
     <View style={s.root}>
-      <DocHeader title={`${isEdit ? 'Edit' : 'Add'} ${TITLES[type]}`} onBackPress={() => navigation.goBack()} />
+      <DocHeader
+        title={type === 'class' && isEdit ? 'Edit Standard' : `${isEdit ? 'Edit' : 'Add'} ${TITLES[type]}`}
+        onBackPress={() => navigation.goBack()}
+      />
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
           {type === 'class' && (
