@@ -20,23 +20,28 @@ export interface AdminClass {
   is_active: boolean;
   sections_count?: number | null;
   subjects_count?: number | null;
+  /** Each section's name, as the panel's list shows them. */
+  section_names?: string[] | null;
+  created_at?: string | null;
 }
 
 export interface AdminSection {
   id: number;
   name: string;
-  code: string;
+  /** The panel's Section has no code; older ones may carry one. */
+  code?: string | null;
   description?: string | null;
   standard_id: number;
   standard_name?: string | null;
   is_active: boolean;
   subjects_count?: number | null;
+  created_at?: string | null;
 }
 
 export interface AdminSubject {
   id: number;
   name: string;
-  code: string;
+  code?: string | null;
   description?: string | null;
   is_active: boolean;
   image_url?: string | null;
@@ -46,6 +51,7 @@ export interface AdminSubject {
   is_mandatory?: boolean | null;
   section_ids: number[];
   sections: string;
+  created_at?: string | null;
 }
 
 export interface StandardStats {
@@ -63,7 +69,12 @@ export interface LookupClass {
 }
 
 // ─── Lookups ──────────────────────────────────────────────────────────────────
-export const getAcademicLookups = async (): Promise<{ classes: LookupClass[]; board: string }> => {
+export const getAcademicLookups = async (): Promise<{
+  classes: LookupClass[];
+  board: string;
+  /** The code the panel's Add Class suggests. */
+  next_code?: string;
+}> => {
   const { data } = await apiClient.get('/admin/academic-lookups');
   return unwrap(data);
 };
@@ -106,7 +117,7 @@ export const getSections = async (opts: {
 
 export const createSection = async (p: {
   name: string;
-  code: string;
+  code?: string;
   description?: string;
   standard_id: number;
   is_active?: boolean;
@@ -117,7 +128,7 @@ export const createSection = async (p: {
 
 export const updateSection = async (id: number, p: {
   name: string;
-  code: string;
+  code?: string;
   description?: string;
   standard_id: number;
   is_active?: boolean;
@@ -143,9 +154,12 @@ export const getSubjects = async (opts: {
 
 export interface SubjectPayload {
   name: string;
-  code: string;
+  /** Left out, the server keeps what it has — the panel's form has no code. */
+  code?: string;
   description?: string;
   standard_id: number;
+  /** The class the subject was opened in — picking another moves it out of that one. */
+  from_standard_id?: number | null;
   section_ids: number[];
   is_mandatory?: boolean;
   is_active?: boolean;
@@ -156,9 +170,10 @@ export interface SubjectPayload {
 const subjectForm = (p: SubjectPayload) => {
   const form = new FormData();
   form.append('name', p.name);
-  form.append('code', p.code);
+  if (p.code !== undefined) form.append('code', p.code);
   if (p.description) form.append('description', p.description);
   form.append('standard_id', String(p.standard_id));
+  if (p.from_standard_id) form.append('from_standard_id', String(p.from_standard_id));
   p.section_ids.forEach(id => form.append('section_ids[]', String(id)));
   form.append('is_mandatory', p.is_mandatory ? '1' : '0');
   form.append('is_active', p.is_active === false ? '0' : '1');

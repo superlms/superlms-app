@@ -1,16 +1,10 @@
 import React, { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
-import Header from '../../components/Header';
-import { theme } from '../../utils/theme';
+import { AppAlert } from '../../components/AppDialog';
+import { useFocusLoad } from '../../hooks/useRefresh';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import {
   deleteClass,
@@ -20,34 +14,35 @@ import {
   getSections,
   getSubjects,
 } from '../../api/adminStandardApi';
-import { AppAlert } from '../../components/AppDialog';
+import { DocHeader } from '../more/docUi';
+import { SubjectIcon } from '../subjects/subjectIcon';
+import { QuietAction, confirmDestructive } from './adminFormUi';
+import { InfoRow } from './adminTransportUi';
+
+/**
+ * One class, section or subject on its own page — the panel's View: what it
+ * is and where it sits, its counts, and when it was made. A class opens onto
+ * its sections and a section onto its subjects from here too. The pencil
+ * edits it; Delete asks first, and the server says no, as the panel does, to
+ * a class or section with students in it (they are moved first), to a class
+ * that still has sections, and to a subject the timetable or assignments use.
+ */
 
 type StdType = 'class' | 'section' | 'subject';
-const TITLES: Record<StdType, string> = { class: 'Class Details', section: 'Section Details', subject: 'Subject Details' };
-const ICONS: Record<StdType, { icon: string; color: string }> = {
-  class: { icon: 'book', color: '#F59E0B' },
-  section: { icon: 'grid', color: '#0EA5E9' },
-  subject: { icon: 'library', color: '#22C55E' },
-};
+const TITLES: Record<StdType, string> = { class: 'Class', section: 'Section', subject: 'Subject' };
+const ICONS: Record<StdType, string> = { class: 'school-outline', section: 'grid-outline', subject: 'library-outline' };
 
-const Row = ({ label, value }: { label: string; value?: string | number | null }) =>
-  value === null || value === undefined || value === '' ? null : (
-    <View style={s.row}>
-      <Text style={s.rowLabel}>{label}</Text>
-      <Text style={s.rowValue}>{String(value)}</Text>
-    </View>
-  );
+const when = (iso?: string | null) => (iso ? moment(iso).format('DD MMM YYYY, h:mm A') : null);
 
 const AdminStandardDetailScreen = ({ navigation, route }: any) => {
   const type: StdType = route?.params?.type ?? 'class';
+  const fromClassId: number | undefined = route?.params?.fromClassId ?? undefined;
   const [item, setItem] = useState<any>(route?.params?.item ?? null);
-  const [loading, setLoading] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  // Re-fetch through the admin list endpoints so the detail reflects edits.
+  // Back from its form, the page shows what was saved.
   const refresh = useCallback(async () => {
     if (!item?.id) return;
-    setLoading(true);
     try {
       let found: any = null;
       if (type === 'class') {
@@ -55,112 +50,119 @@ const AdminStandardDetailScreen = ({ navigation, route }: any) => {
       } else if (type === 'section') {
         found = (await getSections({ standard_id: item.standard_id })).sections.find((x: any) => x.id === item.id);
       } else {
-        found = (await getSubjects({ standard_id: item.standard_id })).subjects.find((x: any) => x.id === item.id);
+        found = (await getSubjects({ standard_id: fromClassId ?? item.standard_id })).subjects.find((x: any) => x.id === item.id);
       }
       if (found) setItem(found);
-      else navigation.goBack(); // deleted elsewhere
     } catch {
-      // keep the item we were passed
-    } finally {
-      setLoading(false);
+      // keep what was passed
     }
-  }, [type, item?.id, item?.standard_id, navigation]);
-
-  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
+  }, [type, item?.id, item?.standard_id, fromClassId]);
+  useFocusLoad(refresh);
 
   const remove = () =>
-    AppAlert.alert(`Delete ${type}`, `Delete "${item?.name}"? This cannot be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setDeleting(true);
-          try {
-            if (type === 'class') await deleteClass(item.id);
-            else if (type === 'section') await deleteSection(item.id);
-            else await deleteSubject(item.id);
-            navigation.goBack();
-          } catch (e) {
-            AppAlert.alert('Error', apiErr(e, 'Could not delete.'));
-          } finally {
-            setDeleting(false);
-          }
-        },
+    confirmDestructive(
+      `Delete ${TITLES[type].toLowerCase()}?`,
+      type === 'section'
+        ? `"${item?.name}" and the subjects only it has will be removed.`
+        : `"${item?.name}" will be removed. This cannot be undone.`,
+      'Delete',
+      async () => {
+        setBusy(true);
+        try {
+          if (type === 'class') await deleteClass(item.id);
+          else if (type === 'section') await deleteSection(item.id);
+          else await deleteSubject(item.id);
+          navigation.goBack();
+        } catch (e) {
+          AppAlert.alert(`Cannot delete ${TITLES[type].toLowerCase()}`, apiErr(e, 'Could not delete.'));
+        } finally {
+          setBusy(false);
+        }
       },
-    ]);
+    );
+
+  const edit = () => navigation.navigate('AdminStandardForm', { type, id: item.id, item, fromClassId });
+
+  const drill = (d: object) => navigation.popTo('AdminStandardHome', { drill: d });
 
   if (!item) {
     return (
       <View style={s.root}>
-        <Header title={TITLES[type]} onBackPress={() => navigation.goBack()} />
-        <View style={s.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>
+        <DocHeader title={TITLES[type]} onBackPress={() => navigation.goBack()} />
+        <ActivityIndicator style={s.loader} color={theme.colors.primary} />
       </View>
     );
   }
 
-  const meta = ICONS[type];
+  const status = item.is_active ? 'Active' : 'Inactive';
+  const rows: { label: string; value?: string | number | null; onPress?: () => void }[] =
+    type === 'class'
+      ? [
+          { label: 'Code', value: item.code },
+          { label: 'Board', value: item.board },
+          { label: 'Display order', value: item.order },
+          { label: 'Status', value: status },
+          {
+            label: 'Sections',
+            value: `${item.sections_count ?? 0}${item.section_names?.length ? ` · ${item.section_names.join(', ')}` : ''}`,
+            onPress: () => drill({ tab: 'sections', classId: item.id }),
+          },
+          { label: 'Subjects', value: item.subjects_count ?? 0 },
+          { label: 'Created', value: when(item.created_at) },
+        ]
+      : type === 'section'
+      ? [
+          { label: 'Class', value: item.standard_name },
+          { label: 'Code', value: item.code },
+          { label: 'Description', value: item.description },
+          { label: 'Status', value: status },
+          {
+            label: 'Subjects',
+            value: item.subjects_count ?? 0,
+            onPress: () => drill({ tab: 'subjects', classId: item.standard_id, sectionId: item.id }),
+          },
+          { label: 'Created', value: when(item.created_at) },
+        ]
+      : [
+          { label: 'Code', value: item.code },
+          { label: 'Class', value: item.standard_name ?? 'Not assigned' },
+          { label: 'Sections', value: item.sections },
+          { label: 'Mandatory', value: item.standard_id ? (item.is_mandatory ? 'Yes' : 'No') : 'N/A' },
+          { label: 'Status', value: status },
+          { label: 'Description', value: item.description },
+          { label: 'Created', value: when(item.created_at) },
+        ];
+  const shown = rows.filter(r => r.value !== null && r.value !== undefined && r.value !== '');
 
   return (
     <View style={s.root}>
-      <Header title={TITLES[type]} onBackPress={() => navigation.goBack()} />
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        <View style={s.hero}>
-          <View style={[s.heroIcon, { backgroundColor: meta.color + '18' }]}>
-            <VectorIcon iconSet="Ionicons" iconName={meta.icon} size={30} color={meta.color} />
-          </View>
-          <Text style={s.name}>{item.name}</Text>
-          <Text style={s.sub}>Code {item.code}</Text>
-          <View style={[s.statusTag, item.is_active ? s.statusActive : s.statusInactive]}>
-            <Text style={[s.statusText, item.is_active ? s.statusTextActive : s.statusTextInactive]}>
-              {item.is_active ? 'Active' : 'Inactive'}
+      <DocHeader title={TITLES[type]} onBackPress={() => navigation.goBack()} rightIcon="create-outline" onRightPress={edit} />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+        <View style={s.head}>
+          {type === 'subject' ? (
+            <SubjectIcon image={item.image_url} size={52} />
+          ) : (
+            <View style={s.icon}>
+              <VectorIcon iconSet="Ionicons" iconName={ICONS[type]} size={24} color={theme.colors.primary} />
+            </View>
+          )}
+          <View style={s.headBody}>
+            <Text style={s.name}>{item.name}</Text>
+            <Text style={[s.sub, !item.is_active && s.off]}>
+              {[type === 'class' && item.code ? `Code ${item.code}` : null, status].filter(Boolean).join(' · ')}
             </Text>
           </View>
-          {loading && <ActivityIndicator style={{ marginTop: 10 }} color={theme.colors.primary} />}
         </View>
 
-        <View style={s.card}>
-          {type === 'class' && (
-            <>
-              <Row label="Board" value={item.board} />
-              <Row label="Display Order" value={item.order} />
-              <Row label="Sections" value={item.sections_count ?? 0} />
-              <Row label="Subjects" value={item.subjects_count ?? 0} />
-            </>
-          )}
-          {type === 'section' && (
-            <>
-              <Row label="Class" value={item.standard_name} />
-              <Row label="Description" value={item.description} />
-              <Row label="Subjects" value={item.subjects_count ?? 0} />
-            </>
-          )}
-          {type === 'subject' && (
-            <>
-              <Row label="Class" value={item.standard_name} />
-              <Row label="Sections" value={item.sections} />
-              <Row label="Type" value={item.is_mandatory ? 'Mandatory' : 'Optional'} />
-              <Row label="Description" value={item.description} />
-            </>
-          )}
+        <View style={s.rows}>
+          {shown.map((r, i) => (
+            <InfoRow key={r.label} label={r.label} value={String(r.value)} onPress={r.onPress} last={i === shown.length - 1} />
+          ))}
         </View>
 
-        <View style={s.actions}>
-          <TouchableOpacity style={[s.actBtn, s.editBtn]} activeOpacity={0.9}
-            onPress={() => navigation.navigate('AdminStandardForm', { type, id: item.id, item })}>
-            <VectorIcon iconSet="Ionicons" iconName="create-outline" size={18} color="#fff" />
-            <Text style={s.actBtnText}>Edit</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[s.actBtn, s.deleteBtn]} activeOpacity={0.9} onPress={remove} disabled={deleting}>
-            {deleting ? <ActivityIndicator color="#fff" /> : (
-              <>
-                <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={18} color="#fff" />
-                <Text style={s.actBtnText}>Delete</Text>
-              </>
-            )}
-          </TouchableOpacity>
+        <View style={s.quiet}>
+          <QuietAction icon="trash-2" label={`Delete ${TITLES[type].toLowerCase()}`} danger busy={busy} onPress={remove} />
         </View>
-        <View style={{ height: 30 }} />
       </ScrollView>
     </View>
   );
@@ -168,30 +170,27 @@ const AdminStandardDetailScreen = ({ navigation, route }: any) => {
 
 export default AdminStandardDetailScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  scroll: { padding: 16 },
-
-  hero: { alignItems: 'center', paddingVertical: 12 },
-  heroIcon: { width: 72, height: 72, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  name: { fontSize: 19, fontWeight: '900', color: theme.colors.textPrimary, marginTop: 10, textAlign: 'center' },
-  sub: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 3 },
-  statusTag: { marginTop: 8, paddingHorizontal: 12, paddingVertical: 4, borderRadius: theme.radius.full },
-  statusActive: { backgroundColor: '#DCFCE7' },
-  statusInactive: { backgroundColor: '#FEE2E2' },
-  statusText: { fontSize: 11, fontWeight: '800' },
-  statusTextActive: { color: '#15803D' },
-  statusTextInactive: { color: theme.colors.danger },
-
-  card: { backgroundColor: theme.colors.card, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 14, marginTop: 18 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  rowLabel: { fontSize: 13, color: theme.colors.textSecondary },
-  rowValue: { fontSize: 13, fontWeight: '600', color: theme.colors.textPrimary, flex: 1, textAlign: 'right' },
-
-  actions: { flexDirection: 'row', gap: 12, marginTop: 22 },
-  actBtn: { flex: 1, height: 50, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  editBtn: { backgroundColor: theme.colors.primary },
-  deleteBtn: { backgroundColor: theme.colors.danger },
-  actBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  loader: { marginTop: 40 },
+  scroll: { paddingBottom: 40 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 },
+  icon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.primary + '12',
+  },
+  headBody: { flex: 1, gap: 3 },
+  name: { fontSize: 20, fontWeight: '700', color: theme.colors.textPrimary },
+  sub: { fontSize: 13, color: theme.colors.textSecondary },
+  off: { color: theme.colors.danger },
+  rows: { paddingHorizontal: 20 },
+  quiet: { paddingHorizontal: 20, paddingTop: 20 },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });

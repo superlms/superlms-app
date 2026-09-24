@@ -1,32 +1,34 @@
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import Header from '../../components/Header';
-import Select from '../../components/Select';
-import { theme } from '../../utils/theme';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppDialog } from '../../components/AppDialog';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
-import { Field, ToggleRow, ChipPicker } from './AdminStandardScreen';
 import {
-  AdminClass,
-  AdminSection,
+  LookupClass,
   createClass,
   createSection,
   createSubject,
-  getClasses,
-  getSections,
+  getAcademicLookups,
   updateClass,
   updateSection,
   updateSubject,
 } from '../../api/adminStandardApi';
-import { AppAlert } from '../../components/AppDialog';
+import { DocHeader } from '../more/docUi';
+import { SubjectIcon } from '../subjects/subjectIcon';
+import { ChipChoices, FieldLabel, FormCard, FormError, Hint, OptionSheet, PickerCard, SubmitButton, SwitchRow } from './adminFormUi';
+
+/**
+ * Add or edit a class, a section or a subject — the panel's Academic
+ * Structure form, field for field:
+ *   Class    its name, its code (the next one suggested; roll numbers start
+ *            with its last digit), its display order (blank goes last) and
+ *            whether it is active.
+ *   Section  its name — once per class — its class, and whether it is active.
+ *   Subject  its name, its class and the sections of it that have it (a name
+ *            the class already has just gains the sections it lacked), whether
+ *            it is mandatory and active; its icon comes from its name. Edited
+ *            into another class, it moves out of the one it was opened in.
+ */
 
 type StdType = 'class' | 'section' | 'subject';
 const TITLES: Record<StdType, string> = { class: 'Class', section: 'Section', subject: 'Subject' };
@@ -37,124 +39,203 @@ const AdminStandardFormScreen = ({ navigation, route }: any) => {
   const item = route?.params?.item;
   const presetClassId: number | undefined = route?.params?.presetClassId;
   const presetSectionId: number | undefined = route?.params?.presetSectionId;
+  // The class a subject was opened in — the panel's "moves out of this one".
+  const fromClassId: number | undefined = route?.params?.fromClassId ?? item?.standard_id ?? undefined;
   const isEdit = !!id;
 
-  const [classes, setClasses] = useState<AdminClass[]>([]);
-  const [sections, setSections] = useState<AdminSection[]>([]);
-  const [saving, setSaving] = useState(false);
-
-  const [name, setName] = useState(item?.name ?? '');
-  const [code, setCode] = useState(item?.code ?? '');
-  const [order, setOrder] = useState(item?.order != null ? String(item.order) : '');
-  const [desc, setDesc] = useState(item?.description ?? '');
-  const [active, setActive] = useState(item?.is_active ?? true);
-  const [classId, setClassId] = useState<number | null>(item?.standard_id ?? presetClassId ?? null);
-  const [mandatory, setMandatory] = useState(item?.is_mandatory ?? true);
-  const [sectionIds, setSectionIds] = useState<number[]>(
-    item?.section_ids ?? (presetSectionId ? [presetSectionId] : []),
+  const [classes, setClasses] = useState<LookupClass[]>([]);
+  const [name, setName] = useState<string>(item?.name ?? '');
+  const [code, setCode] = useState<string>(item?.code ?? '');
+  const [order, setOrder] = useState<string>(item?.order != null ? String(item.order) : '');
+  const [active, setActive] = useState<boolean>(item?.is_active ?? true);
+  const [classId, setClassId] = useState<number | null>(
+    type === 'subject' ? fromClassId ?? presetClassId ?? null : item?.standard_id ?? presetClassId ?? null,
   );
+  const [mandatory, setMandatory] = useState<boolean>(item?.is_mandatory ?? true);
+  const [sectionIds, setSectionIds] = useState<number[]>(item?.section_ids ?? (presetSectionId ? [presetSectionId] : []));
+  const [classSheet, setClassSheet] = useState(false);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState('');
 
   useEffect(() => {
-    getClasses().then(r => {
-      setClasses(r.standards);
-      // Default a class when creating a section/subject with none preset.
-      setClassId(prev => prev ?? (type !== 'class' ? r.standards[0]?.id ?? null : null));
-    }).catch(() => {});
-  }, [type]);
+    getAcademicLookups()
+      .then(r => {
+        setClasses(r.classes ?? []);
+        // A new class opens with the next code suggested, as the panel's does.
+        if (type === 'class' && !isEdit) setCode(prev => prev || r.next_code || '');
+        // A class from before codes existed opens with the next one suggested too.
+        if (type === 'class' && isEdit && !item?.code) setCode(prev => prev || r.next_code || '');
+      })
+      .catch(() => {});
+  }, [type, isEdit, item?.code]);
 
-  useEffect(() => {
-    if (type === 'subject' && classId) {
-      getSections({ standard_id: classId }).then(r => setSections(r.sections)).catch(() => setSections([]));
-    }
-  }, [type, classId]);
+  const cls = classes.find(c => c.id === classId) ?? null;
+  const sections = cls?.sections ?? [];
+  // Only this class's sections count — ticked ones of another class drop off.
+  const picked = sectionIds.filter(sid => sections.some(x => x.id === sid));
 
-  const onClassChange = (cid: number) => {
-    setClassId(cid);
-    if (type === 'subject') setSectionIds([]);
+  const pickClass = (k: string) => {
+    setClassSheet(false);
+    setClassId(Number(k));
+    setError('');
   };
-  const toggleSection = (sid: number) =>
+
+  const toggleSection = (k: string) => {
+    const sid = Number(k);
     setSectionIds(prev => (prev.includes(sid) ? prev.filter(x => x !== sid) : [...prev, sid]));
+    setError('');
+  };
+
+  // "code 03 gives 301, 302, 303…"
+  const rollDigit = (code.replace(/\D/g, '') || '0').slice(-1);
 
   const save = async () => {
-    if (!name.trim() || !code.trim()) return AppAlert.alert('Required', 'Name and code are required.');
-    if (type !== 'class' && !classId) return AppAlert.alert('Required', 'Please select a class.');
-    if (type === 'subject' && sectionIds.length === 0) return AppAlert.alert('Required', 'Select at least one section.');
+    const n = name.trim();
+    if (!n) return setError(`Enter the ${TITLES[type].toLowerCase()} name.`);
+    if (type === 'class') {
+      if (!code.trim()) return setError('Please enter a class code.');
+      if (order.trim() && !/^\d{1,6}$/.test(order.trim())) return setError('Display order must be a whole number.');
+    }
+    if (type !== 'class' && !classId) return setError('Please select a class.');
+    if (type === 'subject' && picked.length === 0) return setError('Please select at least one section.');
 
     setSaving(true);
     try {
+      let res: any;
       if (type === 'class') {
-        const p = { name: name.trim(), code: code.trim(), order: order ? Number(order) : undefined, is_active: active };
-        isEdit ? await updateClass(id!, p) : await createClass(p);
+        const p = { name: n, code: code.trim(), order: order.trim() ? Number(order) : undefined, is_active: active };
+        res = isEdit ? await updateClass(id!, p) : await createClass(p);
       } else if (type === 'section') {
-        const p = { name: name.trim(), code: code.trim(), description: desc.trim(), standard_id: classId!, is_active: active };
-        isEdit ? await updateSection(id!, p) : await createSection(p);
+        const p = { name: n, standard_id: classId!, is_active: active };
+        res = isEdit ? await updateSection(id!, p) : await createSection(p);
       } else {
         const p = {
-          name: name.trim(), code: code.trim(), description: desc.trim(),
-          standard_id: classId!, section_ids: sectionIds,
-          is_mandatory: mandatory, is_active: active,
+          name: n,
+          standard_id: classId!,
+          from_standard_id: isEdit ? fromClassId ?? null : null,
+          section_ids: picked,
+          is_mandatory: mandatory,
+          is_active: active,
         };
-        isEdit ? await updateSubject(id!, p) : await createSubject(p);
+        res = isEdit ? await updateSubject(id!, p) : await createSubject(p);
       }
-      AppAlert.alert('Success', `${TITLES[type]} ${isEdit ? 'updated' : 'created'} successfully.`);
-      navigation.goBack();
+      setSavedMsg(
+        typeof res?.message === 'string'
+          ? res.message
+          : `${TITLES[type]} ${isEdit ? 'updated' : type === 'subject' ? 'saved' : 'created'} successfully!`,
+      );
     } catch (e) {
-      AppAlert.alert('Error', apiErr(e, `Could not save ${type}.`));
+      setError(apiErr(e, `Could not save this ${TITLES[type].toLowerCase()}.`));
     } finally {
       setSaving(false);
     }
   };
 
+  const closeSaved = () => {
+    setSavedMsg('');
+    navigation.goBack();
+  };
+
+  const classPicker = (
+    <PickerCard label="Class" value={cls?.name ?? null} placeholder="Select class" onPress={() => setClassSheet(true)} />
+  );
+
   return (
     <View style={s.root}>
-      <Header title={`${isEdit ? 'Edit' : 'New'} ${TITLES[type]}`} onBackPress={() => navigation.goBack()} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-
-          {type !== 'class' && (
-            <Select label="Class" placeholder="Select class" value={classId}
-              options={classes.map(c => ({ label: c.name, value: c.id }))}
-              onChange={(v) => onClassChange(Number(v))} />
-          )}
-
-          <Field label={`${TITLES[type]} Name`} value={name} onChangeText={setName}
-            placeholder={type === 'class' ? 'e.g. Class 10' : type === 'section' ? 'e.g. A' : 'e.g. Mathematics'} />
-          <Field label={`${TITLES[type]} Code`} value={code} onChangeText={setCode}
-            placeholder={type === 'class' ? 'e.g. 10' : type === 'section' ? 'e.g. A' : 'e.g. MATH'} />
-
+      <DocHeader title={`${isEdit ? 'Edit' : 'Add'} ${TITLES[type]}`} onBackPress={() => navigation.goBack()} />
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
           {type === 'class' && (
-            <Field label="Display Order" value={order} onChangeText={setOrder} placeholder="0" keyboardType="number-pad" />
+            <>
+              <FormCard label="Class name" value={name} onChangeText={v => { setName(v); setError(''); }} placeholder="e.g. Class 10" maxLength={255} />
+              <View>
+                <FormCard
+                  label="Class code"
+                  value={code}
+                  onChangeText={v => { setCode(v); setError(''); }}
+                  placeholder="01"
+                  maxLength={10}
+                  autoCapitalize="characters"
+                />
+                <Hint>{`Roll numbers for this class start with the last digit of the code — code ${code.trim() || '—'} gives ${rollDigit}01, ${rollDigit}02, ${rollDigit}03…`}</Hint>
+              </View>
+              <FormCard
+                label="Display order"
+                value={order}
+                onChangeText={v => { setOrder(v.replace(/[^\d]/g, '')); setError(''); }}
+                placeholder="Left blank, it goes last"
+                keyboardType="number-pad"
+                maxLength={6}
+              />
+            </>
           )}
-          {type !== 'class' && (
-            <Field label="Description" value={desc} onChangeText={setDesc} placeholder="Optional" multiline />
+
+          {type === 'section' && (
+            <>
+              <FormCard label="Section name" value={name} onChangeText={v => { setName(v); setError(''); }} placeholder="e.g. A" maxLength={255} />
+              {classPicker}
+            </>
           )}
 
           {type === 'subject' && (
             <>
-              <Text style={s.fieldLabel}>Sections (select one or more)</Text>
-              <ChipPicker multi items={sections.map(x => ({ id: x.id, label: x.name }))} selected={sectionIds} onToggle={toggleSection} />
-              <ToggleRow label="Mandatory" value={mandatory} onValueChange={setMandatory} />
+              <FormCard label="Subject name" value={name} onChangeText={v => { setName(v); setError(''); }} placeholder="e.g. Mathematics" maxLength={255} />
+              {classPicker}
+              <View style={s.group}>
+                <FieldLabel>Sections</FieldLabel>
+                {!cls ? (
+                  <Hint>Select a class first.</Hint>
+                ) : sections.length === 0 ? (
+                  <Hint>No sections in this class.</Hint>
+                ) : (
+                  <ChipChoices
+                    options={sections.map(x => ({ key: String(x.id), label: x.name }))}
+                    selected={picked.map(String)}
+                    onToggle={toggleSection}
+                  />
+                )}
+              </View>
+              <View style={s.iconRow}>
+                {isEdit && item?.image_url ? <SubjectIcon image={item.image_url} size={36} /> : null}
+                <Text style={s.iconText}>The icon is picked from the subject’s name. One it doesn’t recognise gets the plain icon.</Text>
+              </View>
+              <SwitchRow label="Mandatory subject" value={mandatory} onValueChange={setMandatory} />
             </>
           )}
 
-          <ToggleRow label="Active" value={active} onValueChange={setActive} />
+          <SwitchRow label="Active" value={active} onValueChange={setActive} />
 
-          <TouchableOpacity style={[s.saveBtn, saving && { opacity: 0.7 }]} onPress={save} disabled={saving} activeOpacity={0.9}>
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>{isEdit ? `Update ${TITLES[type]}` : `Create ${TITLES[type]}`}</Text>}
-          </TouchableOpacity>
-          <View style={{ height: 40 }} />
+          <FormError>{error}</FormError>
+          <SubmitButton label={`${isEdit ? 'Update' : 'Create'} ${TITLES[type].toLowerCase()}`} busy={saving} onPress={save} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <OptionSheet
+        visible={classSheet}
+        title="Class"
+        options={classes.map(c => ({ key: String(c.id), label: c.name }))}
+        selected={cls ? [String(cls.id)] : []}
+        onPick={pickClass}
+        onClose={() => setClassSheet(false)}
+        emptyText="No classes yet."
+      />
+      <AppDialog visible={!!savedMsg} title="Saved" message={savedMsg} actions={[{ text: 'Done', onPress: closeSaved }]} onRequestClose={closeSaved} />
     </View>
   );
 };
 
 export default AdminStandardFormScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16 },
-  fieldLabel: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary, marginTop: 12, marginBottom: 6 },
-  saveBtn: { marginTop: 22, height: 50, borderRadius: 14, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
-  saveBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  flex: { flex: 1 },
+  scroll: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 40, gap: 14 },
+  group: { gap: 8 },
+  iconRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iconText: { flex: 1, fontSize: 12, color: theme.colors.textMuted, lineHeight: 17 },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });
