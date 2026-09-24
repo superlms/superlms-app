@@ -33,7 +33,7 @@ import {
 import { DocHeader, DocNoData } from '../more/docUi';
 import { SubjectIcon } from '../subjects/subjectIcon';
 import { OptionSheet } from './adminFormUi';
-import { DropPill, ErrorBox, ListSkeleton } from './adminTransportUi';
+import { ErrorBox, ListSkeleton } from './adminTransportUi';
 
 /**
  * Standards — the admin panel's Academic Structure, drawn as the app's own
@@ -139,7 +139,7 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
   const [subjects, setSubjects] = useState<AdminSubject[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [sheet, setSheet] = useState<null | 'add' | 'section'>(null);
+  const [sheet, setSheet] = useState<null | 'add'>(null);
   const seq = useRef(0);
 
   const loadLookups = useCallback(() => {
@@ -252,7 +252,6 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
   };
 
   const cls = lookups.find(c => c.id === classId) ?? null;
-  const sec = cls?.sections.find(x => x.id === sectionId) ?? null;
 
   const list = tab === 'classes' ? classes : tab === 'sections' ? sections : subjects;
   const waiting = (tab === 'sections' && !classId) || (tab === 'subjects' && !sectionId);
@@ -341,13 +340,6 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
         rightIcon="add"
         onRightPress={() => setSheet('add')}
       />
-      {/* Which section of the open class */}
-      {tab === 'subjects' && !!cls && (
-        <View style={st.filters}>
-          <DropPill label={sec ? `Section ${sec.name}` : 'Select section'} active={!!sec} onPress={() => setSheet('section')} />
-        </View>
-      )}
-
       {waiting ? (
         tab === 'sections' ? (
           <DocNoData icon="grid-outline" title="Select a class to view sections" subtitle="Go back and tap a class." />
@@ -381,19 +373,6 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
           add(k);
         }}
         onClose={() => setSheet(null)}
-      />
-      <OptionSheet
-        visible={sheet === 'section'}
-        title="Section"
-        options={(cls?.sections ?? []).map(x => ({ key: String(x.id), label: `Section ${x.name}` }))}
-        selected={sec ? [String(sec.id)] : []}
-        onPick={k => {
-          setSheet(null);
-          setSectionId(Number(k));
-          setSubjects(null);
-        }}
-        onClose={() => setSheet(null)}
-        emptyText="No sections in this class."
       />
     </View>
   );
@@ -456,7 +435,6 @@ export default AdminStandardScreen;
 
 const __mk_st = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
-  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingBottom: 8 },
   list: { paddingBottom: 40 },
   muted: { color: theme.colors.textMuted },
 
