@@ -10,17 +10,26 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
+import { HeaderIconButton } from '../../components/Header';
 import { theme, onThemeChange } from '../../utils/theme';
-import { apiErr } from '../../utils/filePickers';
+import { apiErr, pickImage, takePhoto } from '../../utils/filePickers';
 import { DocHeader } from '../more/docUi';
-import { StudentDetail, deleteStudent, getStudent } from '../../api/adminStudentApi';
-import { AppAlert } from '../../components/AppDialog';
+import {
+  StudentDetail,
+  deleteStudent,
+  getStudent,
+  removeStudentPhoto,
+  setStudentPhoto,
+} from '../../api/adminStudentApi';
+import { AppAlert, AppDialog } from '../../components/AppDialog';
 
 /**
- * One student, as the app shows a person: the photo, the name and the class
- * over what the school keeps about them — each block a heading and plain lines,
- * with no boxes around them. Edit opens the same form the + does; Remove takes
- * the student and their login away, and asks first.
+ * Student Detail — one student, as the app shows a person: the photo, the name
+ * and the class over what the school keeps about them, each block a heading
+ * and plain lines. The photo opens large to look at; it is changed (camera or
+ * gallery) or removed from here, on its own. Edit and Delete are in the
+ * header: Edit opens the student's form, and saved, it comes back here; Delete
+ * takes the student and their login away, and asks first.
  */
 
 interface Line {
@@ -46,11 +55,17 @@ const Block = ({ title, lines }: { title: string; lines: Line[] }) => {
   );
 };
 
+// A profile picture needs no more than this on its longest side — it keeps the
+// upload well under the server's 2 MB.
+const PHOTO_SIDE = 1024;
+
 const AdminStudentDetailScreen = ({ navigation, route }: any) => {
   const id: number = route?.params?.id;
   const [d, setD] = useState<StudentDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [asking, setAsking] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -64,13 +79,14 @@ const AdminStudentDetailScreen = ({ navigation, route }: any) => {
     }
   }, [id, navigation]);
 
+  // Back from Edit, the page shows what was saved.
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const remove = () =>
-    AppAlert.alert('Remove this student?', `${d?.full_name || 'This student'} and their login will be deleted. This cannot be undone.`, [
+    AppAlert.alert('Delete this student?', `${d?.full_name || 'This student'} and their login will be deleted. This cannot be undone.`, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Remove',
+        text: 'Delete',
         style: 'destructive',
         onPress: async () => {
           setDeleting(true);
@@ -78,7 +94,7 @@ const AdminStudentDetailScreen = ({ navigation, route }: any) => {
             await deleteStudent(id);
             navigation.goBack();
           } catch (e) {
-            AppAlert.alert('Could not remove', apiErr(e, 'Please try again.'));
+            AppAlert.alert('Could not delete', apiErr(e, 'Please try again.'));
           } finally {
             setDeleting(false);
           }
@@ -86,9 +102,68 @@ const AdminStudentDetailScreen = ({ navigation, route }: any) => {
       },
     ]);
 
+  // ── The photo ──
+  const changePhoto = async (from: 'camera' | 'gallery') => {
+    setAsking(false);
+    const f = from === 'camera' ? await takePhoto({ maxSide: PHOTO_SIDE }) : await pickImage({ maxSide: PHOTO_SIDE });
+    if (!f) return;
+    setPhotoBusy(true);
+    try {
+      const image = await setStudentPhoto(id, f);
+      setD(prev => (prev ? { ...prev, image } : prev));
+    } catch (e) {
+      AppAlert.alert('Photo not saved', apiErr(e, 'Could not save the photo.'));
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const takePhotoOff = () => {
+    setAsking(false);
+    AppAlert.alert('Remove the photo?', `${d?.full_name || 'This student'} will show their initial instead.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          setPhotoBusy(true);
+          try {
+            await removeStudentPhoto(id);
+            setD(prev => (prev ? { ...prev, image: null } : prev));
+          } catch (e) {
+            AppAlert.alert('Photo not removed', apiErr(e, 'Please try again.'));
+          } finally {
+            setPhotoBusy(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  // A photo opens large; without one, the photo is picked.
+  const openPhoto = () => {
+    if (d?.image) navigation.navigate('AdminStudentPhoto', { uri: d.image, title: d.full_name });
+    else setAsking(true);
+  };
+
   return (
     <View style={s.root}>
-      <DocHeader title="Student" onBackPress={() => navigation.goBack()} />
+      <DocHeader
+        title="Student Detail"
+        onBackPress={() => navigation.goBack()}
+        rightSlot={
+          d ? (
+            <View style={s.headActions}>
+              <HeaderIconButton icon="create-outline" onPress={() => navigation.navigate('AdminStudentForm', { id })} />
+              {deleting ? (
+                <ActivityIndicator style={s.headBusy} color={theme.colors.primary} />
+              ) : (
+                <HeaderIconButton icon="trash-outline" onPress={remove} />
+              )}
+            </View>
+          ) : undefined
+        }
+      />
 
       {loading ? (
         <View style={s.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>
@@ -96,13 +171,40 @@ const AdminStudentDetailScreen = ({ navigation, route }: any) => {
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
           {/* Who they are */}
           <View style={s.hero}>
-            {d.image ? (
-              <Image source={{ uri: d.image }} style={s.photo} />
-            ) : (
-              <View style={[s.photo, s.photoEmpty]}>
-                <Text style={s.initial}>{(d.full_name || '?').charAt(0).toUpperCase()}</Text>
-              </View>
-            )}
+            <View>
+              <TouchableOpacity activeOpacity={0.8} onPress={openPhoto} disabled={photoBusy} accessibilityLabel={d.image ? 'View photo' : 'Add a photo'}>
+                {d.image ? (
+                  <Image source={{ uri: d.image }} style={s.photo} />
+                ) : (
+                  <View style={[s.photo, s.photoEmpty]}>
+                    <Text style={s.initial}>{(d.full_name || '?').charAt(0).toUpperCase()}</Text>
+                  </View>
+                )}
+                {photoBusy && (
+                  <View style={[s.photo, s.photoBusy]}>
+                    <ActivityIndicator color={theme.colors.white} />
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity style={s.camera} onPress={() => setAsking(true)} disabled={photoBusy} hitSlop={8} accessibilityLabel="Change photo">
+                <VectorIcon iconSet="Ionicons" iconName="camera" size={15} color={theme.colors.white} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={s.photoLinks}>
+              <TouchableOpacity onPress={() => setAsking(true)} disabled={photoBusy} hitSlop={8} activeOpacity={0.6}>
+                <Text style={s.photoLink}>{d.image ? 'Change photo' : 'Add a photo'}</Text>
+              </TouchableOpacity>
+              {!!d.image && (
+                <>
+                  <Text style={s.photoDot}>·</Text>
+                  <TouchableOpacity onPress={takePhotoOff} disabled={photoBusy} hitSlop={8} activeOpacity={0.6}>
+                    <Text style={[s.photoLink, s.photoRemove]}>Remove</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+
             <Text style={s.name}>{d.full_name}</Text>
             <Text style={s.sub}>
               {[[d.class, d.section].filter(Boolean).join(' · '), d.roll_no ? `Roll ${d.roll_no}` : null]
@@ -155,25 +257,22 @@ const AdminStudentDetailScreen = ({ navigation, route }: any) => {
             <Block title="Transport" lines={[{ label: 'Route', value: d.route_name ?? '—' }]} />
           )}
 
-          <TouchableOpacity style={s.editBtn} activeOpacity={0.9}
-            onPress={() => navigation.navigate('AdminStudentForm', { id })}>
-            <Text style={s.editText}>Edit student</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={s.removeBtn} activeOpacity={0.7} onPress={remove} disabled={deleting}>
-            {deleting ? (
-              <ActivityIndicator color={theme.colors.danger} />
-            ) : (
-              <>
-                <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={16} color={theme.colors.danger} />
-                <Text style={s.removeText}>Remove student</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
           <View style={s.tail} />
         </ScrollView>
       )}
+
+      <AppDialog
+        visible={asking}
+        title="Student photo"
+        message="Take one now, or pick a picture already on this phone."
+        actions={[
+          { text: 'Camera', onPress: () => changePhoto('camera') },
+          { text: 'Gallery', onPress: () => changePhoto('gallery') },
+          ...(d?.image ? [{ text: 'Remove photo', style: 'destructive' as const, onPress: takePhotoOff }] : []),
+          { text: 'Cancel', style: 'cancel' as const, onPress: () => setAsking(false) },
+        ]}
+        onRequestClose={() => setAsking(false)}
+      />
     </View>
   );
 };
@@ -185,13 +284,33 @@ const __mk_s = () => StyleSheet.create({
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 20, paddingTop: 8 },
   tail: { height: 48 },
+  headActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  headBusy: { width: 40 },
 
   // Photo, name, class
   hero: { alignItems: 'center', paddingTop: 12, paddingBottom: 4 },
-  photo: { width: 88, height: 88, borderRadius: 44, backgroundColor: theme.colors.background },
+  photo: { width: 96, height: 96, borderRadius: 48, backgroundColor: theme.colors.background },
   photoEmpty: { alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.colors.border },
-  initial: { fontSize: 30, fontWeight: '600', color: theme.colors.primary },
-  name: { fontSize: 18, fontWeight: '600', color: theme.colors.textPrimary, marginTop: 12, textAlign: 'center' },
+  photoBusy: { position: 'absolute', top: 0, left: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.35)' },
+  initial: { fontSize: 32, fontWeight: '600', color: theme.colors.primary },
+  camera: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: theme.colors.card,
+  },
+  photoLinks: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 },
+  photoLink: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
+  photoRemove: { color: theme.colors.danger },
+  photoDot: { fontSize: 13, color: theme.colors.textMuted },
+  name: { fontSize: 18, fontWeight: '600', color: theme.colors.textPrimary, marginTop: 10, textAlign: 'center' },
   sub: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 4, textAlign: 'center' },
   inactive: { fontSize: 12, color: theme.colors.textMuted, marginTop: 6 },
 
@@ -201,11 +320,6 @@ const __mk_s = () => StyleSheet.create({
   lineDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   lineLabel: { fontSize: 13, color: theme.colors.textSecondary, flexShrink: 0 },
   lineValue: { fontSize: 14, color: theme.colors.textPrimary, flex: 1, textAlign: 'right' },
-
-  editBtn: { marginTop: 28, height: 50, borderRadius: 12, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
-  editText: { fontSize: 15, fontWeight: '700', color: theme.colors.white },
-  removeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 12, height: 46, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.danger + '55' },
-  removeText: { fontSize: 14, fontWeight: '600', color: theme.colors.danger },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

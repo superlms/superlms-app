@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AdminStudentsScreen from '../screens/admin/AdminStudentsScreen';
 import AdminStudentDetailScreen from '../screens/admin/AdminStudentDetailScreen';
 import AdminStudentFormScreen from '../screens/admin/AdminStudentFormScreen';
+import FeeImageScreen from '../screens/fees/FeeImageScreen';
 // Teachers
 import AdminTeachersScreen from '../screens/admin/AdminTeachersScreen';
 import AdminTeacherDetailScreen from '../screens/admin/AdminTeacherDetailScreen';
@@ -112,6 +113,8 @@ export const AdminStudentsStack = () => (
     <Stack.Screen name="AdminStudentsHome" component={AdminStudentsScreen} />
     <Stack.Screen name="AdminStudentDetail" component={AdminStudentDetailScreen} />
     <Stack.Screen name="AdminStudentForm" component={AdminStudentFormScreen} />
+    {/* A student's photo, large, to pinch or double-tap to zoom */}
+    <Stack.Screen name="AdminStudentPhoto" component={FeeImageScreen} />
   </Stack.Navigator>
 );
 

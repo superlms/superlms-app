@@ -12,9 +12,13 @@ try {
   DocPicker = null;
 }
 
-export const pickImage = (): Promise<PickedFile | null> =>
+/** A longest side to scale a picked photo down to — a profile picture needs no more. */
+type PhotoSize = { maxSide?: number };
+const sized = (o?: PhotoSize) => (o?.maxSide ? { maxWidth: o.maxSide, maxHeight: o.maxSide } : {});
+
+export const pickImage = (opts?: PhotoSize): Promise<PickedFile | null> =>
   new Promise(resolve => {
-    launchImageLibrary({ mediaType: 'photo', quality: 0.8 }, res => {
+    launchImageLibrary({ mediaType: 'photo', quality: 0.8, ...sized(opts) }, res => {
       if (res.didCancel || res.errorCode) return resolve(null);
       const a = res.assets?.[0];
       if (!a?.uri) return resolve(null);
@@ -27,9 +31,9 @@ export const pickImage = (): Promise<PickedFile | null> =>
  * picture, say. The system camera app is opened by intent, so no CAMERA
  * permission is asked for (the manifest declares none).
  */
-export const takePhoto = (): Promise<PickedFile | null> =>
+export const takePhoto = (opts?: PhotoSize): Promise<PickedFile | null> =>
   new Promise(resolve => {
-    launchCamera({ mediaType: 'photo', quality: 0.8, saveToPhotos: false }, res => {
+    launchCamera({ mediaType: 'photo', quality: 0.8, saveToPhotos: false, ...sized(opts) }, res => {
       if (res.didCancel) return resolve(null);
       if (res.errorCode) {
         AppAlert.alert('Camera unavailable', res.errorMessage || 'Could not open the camera on this phone.');

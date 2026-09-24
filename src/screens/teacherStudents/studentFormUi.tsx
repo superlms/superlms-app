@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { theme, onThemeChange } from '../../utils/theme';
 
@@ -22,6 +22,7 @@ export const FormField = ({
   hint,
   multiline,
   half,
+  markFilled,
   ...props
 }: {
   label: string;
@@ -30,19 +31,34 @@ export const FormField = ({
   multiline?: boolean;
   /** Share the line with the field beside it, inside a FormPair. */
   half?: boolean;
+  /** The outline turns the accent colour while typed in, and once it holds something. */
+  markFilled?: boolean;
   [key: string]: any;
-}) => (
-  <View style={[s.field, half && s.half]}>
-    <Text style={s.label}>{label}</Text>
-    <TextInput
-      style={[s.input, multiline && s.inputMultiline]}
-      placeholderTextColor={theme.colors.textMuted}
-      multiline={multiline}
-      {...props}
-    />
-    {!!hint && <Text style={s.hint}>{hint}</Text>}
-  </View>
-);
+}) => {
+  const [focused, setFocused] = useState(false);
+  const marked = markFilled && (focused || String(props.value ?? '').trim() !== '');
+
+  return (
+    <View style={[s.field, half && s.half]}>
+      <Text style={s.label}>{label}</Text>
+      <TextInput
+        style={[s.input, multiline && s.inputMultiline, marked && s.inputMarked]}
+        placeholderTextColor={theme.colors.textMuted}
+        multiline={multiline}
+        {...props}
+        onFocus={(e: any) => {
+          setFocused(true);
+          props.onFocus?.(e);
+        }}
+        onBlur={(e: any) => {
+          setFocused(false);
+          props.onBlur?.(e);
+        }}
+      />
+      {!!hint && <Text style={s.hint}>{hint}</Text>}
+    </View>
+  );
+};
 
 // Two fields side by side, where both are short.
 export const FormPair = ({ children }: { children: React.ReactNode }) => (
@@ -98,6 +114,7 @@ const __mk_s = () => StyleSheet.create({
     color: theme.colors.textPrimary,
   },
   inputMultiline: { minHeight: 74, textAlignVertical: 'top' },
+  inputMarked: { borderColor: theme.colors.primary },
   hint: { fontSize: 11, color: theme.colors.textMuted, marginTop: 4 },
 
   pair: { flexDirection: 'row', gap: 12 },

@@ -1,15 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  KeyboardAvoidingView,
-  Platform,
+  Keyboard,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import Animated from 'react-native-reanimated';
 import VectorIcon from '../../components/VectorIcon';
 import Select from '../../components/Select';
 import { AppAlert, AppDialog } from '../../components/AppDialog';
@@ -18,6 +19,8 @@ import { apiErr, pickImage, takePhoto } from '../../utils/filePickers';
 import { PickedFile } from '../../api/adminProfileApi';
 import { DocHeader } from '../more/docUi';
 import { FormField, FormPair, FormSection, FormToggle } from '../teacherStudents/studentFormUi';
+import { useKeyboardLiftStyle } from '../../hooks/useKeyboardLift';
+import { fromApiDate, toApiDate, typeDate } from '../../utils/dayMonthYear';
 import {
   StudentLookups,
   StudentPayload,
@@ -35,7 +38,19 @@ import {
  *
  * The school's admin keeps every class, so unlike a teacher's form this one
  * asks which class and section the student goes into.
+ *
+ * A field that holds something, or is being typed in, wears the accent's
+ * outline. Dates are typed DD/MM/YYYY and sent as YYYY-MM-DD; the photo is
+ * scaled down before it goes up, to stay inside the server's 2 MB. The page
+ * rides above the keyboard, and the box being typed in is scrolled into view.
+ * Saved, an edit goes back to the student's page.
  */
+
+// A profile picture needs no more than this on its longest side.
+const PHOTO_SIDE = 1024;
+
+// Every box here wears the accent's outline once it holds something.
+const Field = (props: any) => <FormField markFilled {...props} />;
 
 const GENDERS = [
   { label: 'Male', value: 'male' },
@@ -66,6 +81,37 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
 
   const set = (k: keyof StudentPayload, v: any) => setForm(prev => ({ ...prev, [k]: v }));
 
+  // The page rides above the keyboard, and the box being typed in is scrolled
+  // up to sit clear of it — when the keyboard opens, and when another box is
+  // tapped while it is open.
+  const lift = useKeyboardLiftStyle();
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollY = useRef(0);
+  const keyboardTop = useRef<number | null>(null);
+  const reveal = () => {
+    const top = keyboardTop.current;
+    const input: any = TextInput.State.currentlyFocusedInput?.();
+    if (top == null || !input?.measureInWindow) return;
+    input.measureInWindow((_x: number, y: number, _w: number, h: number) => {
+      const overlap = y + h + 24 - top;
+      if (overlap > 0) scrollRef.current?.scrollTo({ y: scrollY.current + overlap, animated: true });
+    });
+  };
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', e => {
+      keyboardTop.current = e.endCoordinates.screenY;
+      // The page has lifted by now; the box goes above the keyboard.
+      setTimeout(reveal, 120);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardTop.current = null;
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
   useEffect(() => {
     getStudentLookups().then(setLookups).catch(() => {});
   }, []);
@@ -77,10 +123,10 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
         const d = await getStudent(editId);
         setForm({
           name: d.full_name ?? '', email: d.email ?? '', mobile: d.phone ?? '',
-          dob: d.dob ?? '', gender: d.gender ?? '',
+          dob: fromApiDate(d.dob), gender: d.gender ?? '',
           standard_id: d.standard_id ?? 0, section_id: d.section_id ?? 0,
           father_name: d.father_name ?? '', mother_name: d.mother_name ?? '',
-          date_of_admission: d.date_of_admission ?? '', aadhar_no: d.aadhar_no ?? '',
+          date_of_admission: fromApiDate(d.date_of_admission), aadhar_no: d.aadhar_no ?? '',
           pincode: d.pincode ?? '', religion: d.religion ?? '',
           local_address: d.local_address ?? '', permanent_address: d.permanent_address ?? '',
           state: d.state ?? '', city: d.city ?? '',
@@ -116,7 +162,7 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
   // The photo: the camera, or the gallery.
   const choose = async (from: 'camera' | 'gallery') => {
     setAsking(false);
-    const f = from === 'camera' ? await takePhoto() : await pickImage();
+    const f = from === 'camera' ? await takePhoto({ maxSide: PHOTO_SIDE }) : await pickImage({ maxSide: PHOTO_SIDE });
     if (!f) return;
     setPhoto(f);
     set('image', f);
@@ -129,18 +175,36 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
     ) {
       return AppAlert.alert('Something is missing', 'Name, email, mobile, date of birth, gender and father’s name are needed.');
     }
-    if (!form.standard_id || !form.section_id) {
-      return AppAlert.alert('No class', 'Pick the class and section the student goes into.');
-    }
+    // What the server would refuse, said here first and plainly.
+    const today = new Date().toISOString().slice(0, 10);
+    const dob = toApiDate(form.dob);
+    const admitted = toApiDate(form.date_of_admission);
+    const problem =
+      !/^\S+@\S+\.\S+$/.test(form.email.trim()) ? 'Enter a valid email address.'
+      : !/^\d{10}$/.test(form.mobile.trim()) ? 'The mobile number must be 10 digits.'
+      : !dob ? 'Enter the date of birth as DD/MM/YYYY — a real date.'
+      : dob >= today ? 'The date of birth must be before today.'
+      : admitted === null ? 'Enter the date of admission as DD/MM/YYYY — a real date — or leave it empty.'
+      : admitted && admitted > today ? 'The date of admission cannot be after today.'
+      : !form.standard_id || !form.section_id ? 'Pick the class and section the student goes into.'
+      : form.aadhar_no && !/^\d{12}$/.test(form.aadhar_no) ? 'The Aadhaar number must be 12 digits.'
+      : form.pincode && !/^\d{6}$/.test(form.pincode) ? 'The pincode must be 6 digits.'
+      : form.transportation_required && !form.route_id ? 'Pick the bus route, or turn off “Takes the bus”.'
+      : null;
+    if (problem) return AppAlert.alert('Please check', problem);
+
+    // Checked above: the date of birth is a real one by now.
+    const payload = { ...form, email: form.email.trim(), mobile: form.mobile.trim(), dob: dob as string, date_of_admission: admitted || '' };
     setSaving(true);
     try {
       if (editId) {
-        await updateStudent(editId, form);
+        await updateStudent(editId, payload);
         AppAlert.alert('Saved', 'The student has been updated.');
       } else {
-        await createStudent(form);
+        await createStudent(payload);
         AppAlert.alert('Added', 'The student has been added. Their login has been emailed to them.');
       }
+      // An edit goes back to the student's page, which shows what was saved.
       navigation.goBack();
     } catch (e) {
       AppAlert.alert('Not saved', apiErr(e, 'Could not save this student.'));
@@ -163,8 +227,17 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
   return (
     <View style={s.root}>
       <DocHeader title={editId ? 'Edit Student' : 'Add Student'} onBackPress={() => navigation.goBack()} />
-      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <Animated.View style={[s.flex, lift]}>
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={s.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={16}
+          onScroll={e => { scrollY.current = e.nativeEvent.contentOffset.y; }}
+          // Another box tapped while the keyboard is open comes into view too.
+          onTouchEnd={() => setTimeout(reveal, 250)}
+        >
 
           {/* The photo */}
           <View style={s.photoBlock}>
@@ -187,52 +260,52 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
           </View>
 
           <FormSection title="Student" first />
-          <FormField label="Full Name" value={form.name} onChangeText={(v: string) => set('name', v)} placeholder="Student name" />
-          <FormField label="Email" value={form.email} onChangeText={(v: string) => set('email', v)} placeholder="email@example.com" keyboardType="email-address" autoCapitalize="none" hint="Their login is emailed here." />
+          <Field label="Full Name" value={form.name} onChangeText={(v: string) => set('name', v)} placeholder="Student name" />
+          <Field label="Email" value={form.email} onChangeText={(v: string) => set('email', v)} placeholder="email@example.com" keyboardType="email-address" autoCapitalize="none" hint="Their login is emailed here." />
           <FormPair>
-            <FormField half label="Mobile" value={form.mobile} onChangeText={(v: string) => set('mobile', v)} placeholder="10-digit" keyboardType="number-pad" maxLength={10} />
-            <FormField half label="Date of Birth" value={form.dob} onChangeText={(v: string) => set('dob', v)} placeholder="YYYY-MM-DD" />
+            <Field half label="Mobile" value={form.mobile} onChangeText={(v: string) => set('mobile', v)} placeholder="10-digit" keyboardType="number-pad" maxLength={10} />
+            <Field half label="Date of Birth" value={form.dob} onChangeText={(v: string) => set('dob', typeDate(v, form.dob))} placeholder="DD/MM/YYYY" keyboardType="number-pad" maxLength={10} />
           </FormPair>
           <View style={s.select}>
-            <Select plain label="Gender" placeholder="Select gender" value={form.gender || null} options={GENDERS} onChange={v => set('gender', v)} />
+            <Select plain markChosen label="Gender" placeholder="Select gender" value={form.gender || null} options={GENDERS} onChange={v => set('gender', v)} />
           </View>
 
           <FormSection title="Class" />
           <View style={s.select}>
-            <Select plain label="Class" placeholder="Select class" value={form.standard_id || null}
+            <Select plain markChosen label="Class" placeholder="Select class" value={form.standard_id || null}
               options={(lookups?.classes ?? []).map(c => ({ label: c.name, value: c.id }))}
               onChange={v => onClassChange(Number(v))} />
           </View>
           <View style={s.select}>
-            <Select plain label="Section" placeholder={form.standard_id ? 'Select section' : 'Select a class first'}
+            <Select plain markChosen label="Section" placeholder={form.standard_id ? 'Select section' : 'Select a class first'}
               value={form.section_id || null}
               options={formSections.map(x => ({ label: x.name, value: x.id }))}
               onChange={v => set('section_id', Number(v))} disabled={!form.standard_id} />
           </View>
 
           <FormSection title="Family" />
-          <FormField label="Father’s Name" value={form.father_name} onChangeText={(v: string) => set('father_name', v)} placeholder="Father’s name" />
-          <FormField label="Mother’s Name" value={form.mother_name} onChangeText={(v: string) => set('mother_name', v)} placeholder="Optional" />
+          <Field label="Father’s Name" value={form.father_name} onChangeText={(v: string) => set('father_name', v)} placeholder="Father’s name" />
+          <Field label="Mother’s Name" value={form.mother_name} onChangeText={(v: string) => set('mother_name', v)} placeholder="Optional" />
 
           <FormSection title="School" />
-          <FormField label="Date of Admission" value={form.date_of_admission} onChangeText={(v: string) => set('date_of_admission', v)} placeholder="YYYY-MM-DD (optional)" />
+          <Field label="Date of Admission" value={form.date_of_admission} onChangeText={(v: string) => set('date_of_admission', typeDate(v, form.date_of_admission ?? ''))} placeholder="DD/MM/YYYY (optional)" keyboardType="number-pad" maxLength={10} />
           <FormPair>
-            <FormField half label="Religion" value={form.religion} onChangeText={(v: string) => set('religion', v)} placeholder="Optional" />
-            <FormField half label="Aadhaar No." value={form.aadhar_no} onChangeText={(v: string) => set('aadhar_no', v)} placeholder="12 digits" keyboardType="number-pad" maxLength={12} />
+            <Field half label="Religion" value={form.religion} onChangeText={(v: string) => set('religion', v)} placeholder="Optional" />
+            <Field half label="Aadhaar No." value={form.aadhar_no} onChangeText={(v: string) => set('aadhar_no', v)} placeholder="12 digits" keyboardType="number-pad" maxLength={12} />
           </FormPair>
           <FormPair>
-            <FormField half label="Apaar ID" value={form.appar_id} onChangeText={(v: string) => set('appar_id', v)} placeholder="Optional" />
-            <FormField half label="Registration No." value={form.registration_number} onChangeText={(v: string) => set('registration_number', v)} placeholder="Optional" />
+            <Field half label="Apaar ID" value={form.appar_id} onChangeText={(v: string) => set('appar_id', v)} placeholder="Optional" />
+            <Field half label="Registration No." value={form.registration_number} onChangeText={(v: string) => set('registration_number', v)} placeholder="Optional" />
           </FormPair>
 
           <FormSection title="Address" />
           <FormPair>
-            <FormField half label="City" value={form.city} onChangeText={(v: string) => set('city', v)} placeholder="Optional" />
-            <FormField half label="State" value={form.state} onChangeText={(v: string) => set('state', v)} placeholder="Optional" />
+            <Field half label="City" value={form.city} onChangeText={(v: string) => set('city', v)} placeholder="Optional" />
+            <Field half label="State" value={form.state} onChangeText={(v: string) => set('state', v)} placeholder="Optional" />
           </FormPair>
-          <FormField label="Pincode" value={form.pincode} onChangeText={(v: string) => set('pincode', v)} placeholder="6 digits (optional)" keyboardType="number-pad" maxLength={6} />
-          <FormField label="Local Address" value={form.local_address} onChangeText={(v: string) => set('local_address', v)} placeholder="Optional" multiline />
-          <FormField label="Permanent Address" value={form.permanent_address} onChangeText={(v: string) => set('permanent_address', v)} placeholder="Optional" multiline />
+          <Field label="Pincode" value={form.pincode} onChangeText={(v: string) => set('pincode', v)} placeholder="6 digits (optional)" keyboardType="number-pad" maxLength={6} />
+          <Field label="Local Address" value={form.local_address} onChangeText={(v: string) => set('local_address', v)} placeholder="Optional" multiline />
+          <Field label="Permanent Address" value={form.permanent_address} onChangeText={(v: string) => set('permanent_address', v)} placeholder="Optional" multiline />
 
           <FormSection title="Transport & Access" />
           <FormToggle
@@ -245,6 +318,7 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
             <View style={s.select}>
               <Select
                 plain
+                markChosen
                 label="Route"
                 placeholder="Select route"
                 value={form.route_id ?? null}
@@ -264,13 +338,13 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
             {saving ? (
               <ActivityIndicator color={theme.colors.white} />
             ) : (
-              <Text style={s.saveText}>{editId ? 'Save changes' : 'Add student'}</Text>
+              <Text style={s.saveText}>{editId ? 'Update Student' : 'Add Student'}</Text>
             )}
           </TouchableOpacity>
 
           <View style={s.tail} />
         </ScrollView>
-      </KeyboardAvoidingView>
+      </Animated.View>
 
       <AppDialog
         visible={asking}

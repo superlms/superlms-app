@@ -164,6 +164,19 @@ export const updateStudent = async (id: number, p: StudentPayload): Promise<Stud
   return unwrap(data);
 };
 
+/** A new photo for the student, leaving the rest of them as they are. */
+export const setStudentPhoto = async (id: number, image: PickedFile): Promise<string | null> => {
+  const form = new FormData();
+  form.append('image', filePart(image));
+  const { data } = await apiClient.post(`/admin/students/${id}/photo`, form, MULTIPART);
+  return unwrap(data)?.image ?? null;
+};
+
+/** Takes the student's photo off. */
+export const removeStudentPhoto = async (id: number): Promise<void> => {
+  await apiClient.post(`/admin/students/${id}/photo`, { remove: 1 });
+};
+
 export const deleteStudent = async (id: number) => {
   await apiClient.delete(`/admin/students/${id}`);
 };

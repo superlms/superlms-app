@@ -64,7 +64,8 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 // ── One student ──────────────────────────────────────────────────────────────
 //   (photo)  Aarav Sharma                                          >
-//            Class 5 · A · Roll 12 · Adm 2026-0007
+//            2026-0007
+//            Class 5 · A
 const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
   const [failed, setFailed] = useState(false);
 
@@ -79,20 +80,15 @@ const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
 };
 
 const Row = ({ student, onOpen, isLast }: { student: StudentRow; onOpen: () => void; isLast: boolean }) => {
-  const meta = [
-    [student.class, student.section].filter(Boolean).join(' · '),
-    student.roll_no ? `Roll ${student.roll_no}` : null,
-    student.admission_no ? `Adm ${student.admission_no}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const cls = [student.class, student.section].filter(Boolean).join(' · ');
 
   return (
     <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onOpen}>
       <Avatar uri={student.image} name={student.full_name} />
       <View style={s.body}>
         <Text style={s.name} numberOfLines={1}>{student.full_name}</Text>
-        {!!meta && <Text style={s.meta} numberOfLines={1}>{meta}</Text>}
+        {!!student.admission_no && <Text style={s.meta} numberOfLines={1}>{student.admission_no}</Text>}
+        {!!cls && <Text style={s.cls} numberOfLines={1}>{cls}</Text>}
       </View>
       {!student.is_active && <Text style={s.off}>OFF</Text>}
       <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />
@@ -381,6 +377,7 @@ const __mk_s = () => StyleSheet.create({
   body: { flex: 1, gap: 3 },
   name: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   meta: { fontSize: 13, color: theme.colors.textSecondary },
+  cls: { fontSize: 12, color: theme.colors.textMuted },
   off: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: theme.colors.textMuted },
 
   // Loading
