@@ -18,11 +18,9 @@ import {
 } from '../../api/adminAttendanceApi';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { Tabs } from '../analytics/analyticsUi';
-import { DateSheet, OptionSheet, SubmitButton } from './adminFormUi';
+import { DateSheet, OptionSheet } from './adminFormUi';
 import { Avatar, DropPill, ErrorBox, ListSkeleton } from './adminTransportUi';
 import {
-  DaySummary,
-  DaySummarySkeleton,
   Legend,
   PersonMonths,
   PersonMonthsSkeleton,
@@ -35,12 +33,12 @@ import {
 
 /**
  * Teacher Attendance — the panel's Teacher tab, laid out as the student's
- * Attendance. By Date is the day's register: every teacher's status and
- * remark, narrowed by status, with the day's present-% and counts. By Month is
- * the month's dates down the side and a column per teacher (or the one picked),
- * with each teacher's totals. By Teacher is one teacher's month, or the whole
- * school year (April → March), as month calendars. Mark attendance opens the
- * day on today; saved, it comes back to that day's register.
+ * Attendance. By Date is the day's teachers alone — photo, name and username,
+ * with their status — narrowed by status. By Month is the month's dates down
+ * the side and a column per teacher (or the one picked), with each teacher's
+ * totals. By Teacher is one teacher's month, or the whole school year (April →
+ * March), as month calendars. Mark in the header opens Mark Attendance on
+ * today; saved, it comes back to that day's teachers.
  */
 
 type View3 = 'by_date' | 'by_month' | 'by_teacher';
@@ -158,13 +156,9 @@ const AdminTeacherAttendanceScreen = ({ navigation, route }: any) => {
     error && !records ? (
       <ErrorBox message={error} onRetry={load} />
     ) : !records ? (
-      <>
-        <DaySummarySkeleton />
-        <ListSkeleton photo />
-      </>
+      <ListSkeleton photo />
     ) : (
       <>
-        <DaySummary date={records.date} stats={records.stats} />
         {records.rows.length === 0 ? (
           <DocNoData
             icon="people-outline"
@@ -188,7 +182,7 @@ const AdminTeacherAttendanceScreen = ({ navigation, route }: any) => {
               <Avatar uri={r.image} name={r.name} />
               <View style={s.body}>
                 <Text style={s.name} numberOfLines={1}>{r.name}</Text>
-                <Text style={s.sub} numberOfLines={1}>{r.remark || r.email || ''}</Text>
+                {!!r.username && <Text style={s.sub} numberOfLines={1}>{r.username}</Text>}
               </View>
               <StatusTag status={r.status} />
             </TouchableOpacity>
@@ -279,7 +273,20 @@ const AdminTeacherAttendanceScreen = ({ navigation, route }: any) => {
 
   return (
     <View style={s.root}>
-      <DocHeader title="Teacher Attendance" onBackPress={() => navigation.goBack()} />
+      <DocHeader
+        title="Teacher Attendance"
+        onBackPress={() => navigation.goBack()}
+        rightSlot={
+          <TouchableOpacity
+            style={s.markBtn}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate('AdminAttendanceMark', { who: 'teacher' })}
+            accessibilityLabel="Mark attendance"
+          >
+            <Text style={s.markText}>Mark</Text>
+          </TouchableOpacity>
+        }
+      />
       <Tabs tabs={VIEWS} active={view} onChange={switchView} />
 
       <View style={s.filters}>
@@ -315,10 +322,6 @@ const AdminTeacherAttendanceScreen = ({ navigation, route }: any) => {
       >
         {view === 'by_date' ? byDate() : view === 'by_month' ? byMonth() : byTeacher()}
       </ScrollView>
-
-      <View style={s.foot}>
-        <SubmitButton label="Mark attendance" onPress={() => navigation.navigate('AdminAttendanceMark', { who: 'teacher' })} />
-      </View>
 
       <DateSheet
         visible={sheet === 'date'}
@@ -382,7 +385,7 @@ const ROW = 36;
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
-  scroll: { paddingBottom: 110 },
+  scroll: { paddingBottom: 40 },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 20, paddingVertical: 12 },
   divider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
@@ -413,18 +416,9 @@ const __mk_s = () => StyleSheet.create({
   totalRow: { height: 44, justifyContent: 'center' },
   totalText: { fontSize: 10, fontWeight: '600', textAlign: 'center' },
 
-  foot: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 20,
-    backgroundColor: theme.colors.card,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.border,
-  },
+  // Mark attendance, in the header
+  markBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: theme.radius.full, backgroundColor: theme.colors.primaryLight },
+  markText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

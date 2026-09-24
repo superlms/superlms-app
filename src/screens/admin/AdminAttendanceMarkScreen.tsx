@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import moment from 'moment';
 import { AppAlert } from '../../components/AppDialog';
+import { HeaderIconButton } from '../../components/Header';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import {
@@ -23,7 +24,8 @@ import { STATUS, dayLabel } from './adminAttendanceUi';
 
 /**
  * Mark Attendance — the panel's mark panel for teachers or for one section of
- * a class, on a fresh day (today). Every row starts on what is saved for the
+ * a class, on a fresh day (today); the teachers' day is changed from the
+ * calendar in the header. Every row starts on what is saved for the
  * day, or blank — Sunday on Holiday — and only the rows given a status are
  * saved; tapping a row's status again leaves it unmarked, and a row left blank
  * clears what was saved for it. All present / absent / holiday / Clear set
@@ -223,17 +225,23 @@ const AdminAttendanceMarkScreen = ({ navigation, route }: any) => {
 
   return (
     <View style={s.root}>
-      <DocHeader title={who === 'teacher' ? 'Mark Teacher Attendance' : 'Mark Student Attendance'} onBackPress={() => navigation.goBack()} />
-
-      <View style={s.filters}>
-        {who === 'student' && (
-          <>
+      {who === 'teacher' ? (
+        // The teachers' day is picked from the calendar in the header.
+        <DocHeader
+          title="Mark Attendance"
+          onBackPress={() => navigation.goBack()}
+          rightSlot={<HeaderIconButton icon="calendar-outline" onPress={() => setSheet('date')} />}
+        />
+      ) : (
+        <>
+          <DocHeader title="Mark Student Attendance" onBackPress={() => navigation.goBack()} />
+          <View style={s.filters}>
             <DropPill label={cls?.name ?? 'Select class'} active={!!cls} onPress={() => setSheet('class')} />
             <DropPill label={sec ? `Section ${sec.name}` : 'Select section'} active={!!sec} onPress={() => setSheet(cls ? 'section' : 'class')} />
-          </>
-        )}
-        <DropPill label={dayLabel(date)} active onPress={() => setSheet('date')} />
-      </View>
+            <DropPill label={dayLabel(date)} active onPress={() => setSheet('date')} />
+          </View>
+        </>
+      )}
 
       <View style={s.flex}>
         {!ready ? (

@@ -45,6 +45,7 @@ export interface DayRecord {
   id: number;
   name: string;
   email?: string;
+  username?: string;
   roll_no?: string | number | null;
   image: string | null;
   status: RecordStatus;
@@ -113,6 +114,7 @@ export interface ClassTeacherAssignment {
   teacher_id: number;
   teacher_name: string;
   teacher_email?: string;
+  teacher_username?: string;
   teacher_image: string | null;
   standard_id: number;
   section_id: number | null;
@@ -158,7 +160,7 @@ export const getTeacherDay = async (date: string): Promise<MarkDay> => {
     rows: (d.rows ?? []).map((r: any) => ({
       id: r.teacher_detail_id,
       name: r.name,
-      sub: r.email ?? '',
+      sub: r.username || r.email || '',
       image: r.image ?? null,
       status: r.status ?? '',
       remark: r.remark ?? '',
