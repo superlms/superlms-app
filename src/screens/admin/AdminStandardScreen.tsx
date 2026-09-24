@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -13,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useFocusLoad } from '../../hooks/useRefresh';
@@ -29,29 +31,22 @@ import {
   getSubjects,
 } from '../../api/adminStandardApi';
 import { DocHeader, DocNoData } from '../more/docUi';
-import { Tabs } from '../analytics/analyticsUi';
 import { SubjectIcon } from '../subjects/subjectIcon';
 import { OptionSheet } from './adminFormUi';
-import { DropPill, ErrorBox, ListSkeleton, SearchBar } from './adminTransportUi';
+import { DropPill, ErrorBox, ListSkeleton } from './adminTransportUi';
 
 /**
  * Standards — the admin panel's Academic Structure, drawn as the app's own
- * lists are. Classes, Sections and Subjects are tabs; each is searched and
- * narrowed by status, as on the panel. A class opens onto its sections and a
- * section onto its subjects, the way the panel drills in, and the ⓘ on a row
- * opens it on its own page, with Edit and Delete. Sections wait for a class,
- * and subjects for a class and a section. The + asks what to add — a class, a
- * section or a subject — and opens its form with what is picked filled in.
+ * lists are. The classes come first; a class opens onto its sections and a
+ * section onto its subjects, the way the panel drills in — by tapping the row
+ * or the arrow at its end, beside a dot that is green for an active one and red
+ * for an inactive one. Back steps out a level. The ⓘ on a row opens it on its
+ * own page, with Edit and Delete. The + asks what to add — a class, a section
+ * or a subject — and opens its form with what is picked filled in.
  */
 
+// The level on show: the classes, one class's sections or one section's subjects.
 type Tab = 'classes' | 'sections' | 'subjects';
-type Status = '' | 'active' | 'inactive';
-
-const STATUS: { key: Status; label: string }[] = [
-  { key: '', label: 'All status' },
-  { key: 'active', label: 'Active' },
-  { key: 'inactive', label: 'Inactive' },
-];
 
 const ADD: { key: string; label: string; sub: string }[] = [
   { key: 'class', label: 'Class', sub: 'A class, its code and display order' },
@@ -66,7 +61,7 @@ const sectionLine = (names?: string[] | null) => {
   return names.length > 3 ? `${shown}…` : shown;
 };
 
-//  [▣]  Class 10 (10)                               Inactive  ⓘ
+//  [▣]  Class 10 (10)                                   ⓘ  ● ›
 //       A, B, C…
 const Row = ({
   lead,
@@ -76,6 +71,7 @@ const Row = ({
   inactive,
   onPress,
   onInfo,
+  onOpen,
   isLast,
 }: {
   lead: React.ReactNode;
@@ -85,6 +81,8 @@ const Row = ({
   inactive?: boolean;
   onPress: () => void;
   onInfo?: () => void;
+  /** Opens what is inside it (a class's sections, a section's subjects). */
+  onOpen?: () => void;
   isLast: boolean;
 }) => (
   <TouchableOpacity style={[st.row, !isLast && st.rowDivider]} activeOpacity={0.6} onPress={onPress}>
@@ -104,13 +102,25 @@ const Row = ({
         </Text>
       )}
     </View>
-    {inactive && <Text style={st.inactive}>Inactive</Text>}
+    {inactive && !onOpen && <Text style={st.inactive}>Inactive</Text>}
     {onInfo ? (
       <TouchableOpacity hitSlop={10} activeOpacity={0.6} onPress={onInfo}>
         <VectorIcon iconSet="Ionicons" iconName="information-circle-outline" size={20} color={theme.colors.textMuted} />
       </TouchableOpacity>
     ) : (
-      <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={15} color={theme.colors.textMuted} />
+      !onOpen && <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={15} color={theme.colors.textMuted} />
+    )}
+    {onOpen && (
+      <View style={st.open}>
+        {/* Green for an active one, red for an inactive one */}
+        <View
+          style={[st.dot, inactive ? st.dotOff : st.dotOn]}
+          accessibilityLabel={inactive ? 'Inactive' : 'Active'}
+        />
+        <TouchableOpacity hitSlop={10} activeOpacity={0.6} onPress={onOpen} accessibilityLabel={`Open ${title}`}>
+          <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={18} color={theme.colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
     )}
   </TouchableOpacity>
 );
@@ -123,8 +133,6 @@ const Lead = ({ icon }: { icon: string }) => (
 
 const AdminStandardScreen = ({ navigation, route }: any) => {
   const [tab, setTab] = useState<Tab>('classes');
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<Status>('');
   const [lookups, setLookups] = useState<LookupClass[]>([]);
   const [classId, setClassId] = useState<number | null>(null);
   const [sectionId, setSectionId] = useState<number | null>(null);
@@ -134,7 +142,7 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
   const [subjects, setSubjects] = useState<AdminSubject[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [sheet, setSheet] = useState<null | 'add' | 'status' | 'class' | 'section'>(null);
+  const [sheet, setSheet] = useState<null | 'add' | 'class' | 'section'>(null);
   const seq = useRef(0);
 
   const loadLookups = useCallback(() => {
@@ -144,24 +152,21 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
   }, []);
   useEffect(loadLookups, [loadLookups]);
 
-  const term = search.trim();
-
   const load = useCallback(async () => {
     const mine = ++seq.current;
     setError(null);
-    const st2 = status || undefined;
     try {
       if (tab === 'classes') {
-        const r = await getClasses(term || undefined, st2);
+        const r = await getClasses();
         if (mine === seq.current) setClasses(r.standards);
       } else if (tab === 'sections') {
         // The panel lists sections of one class.
-        const r = classId ? (await getSections({ standard_id: classId, search: term || undefined, status: st2 })).sections : [];
+        const r = classId ? (await getSections({ standard_id: classId })).sections : [];
         if (mine === seq.current) setSections(r);
       } else {
         // …and subjects of one section.
         const r = sectionId
-          ? (await getSubjects({ section_id: sectionId, standard_id: classId ?? undefined, search: term || undefined, status: st2 })).subjects
+          ? (await getSubjects({ section_id: sectionId, standard_id: classId ?? undefined })).subjects
           : [];
         if (mine === seq.current) setSubjects(r);
       }
@@ -170,13 +175,11 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
     } finally {
       if (mine === seq.current) setRefreshing(false);
     }
-  }, [tab, term, status, classId, sectionId]);
+  }, [tab, classId, sectionId]);
 
-  // Typing waits a moment before it asks.
   useEffect(() => {
-    const t = setTimeout(load, term ? 300 : 0);
-    return () => clearTimeout(t);
-  }, [load, term]);
+    load();
+  }, [load]);
 
   // Back from a form or a page, the lists (and the pickers) are fresh.
   const loaded = useRef(false);
@@ -199,19 +202,8 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route?.params?.drill]);
 
-  const showTab = (t: Tab) => {
-    // As the panel: another tab starts without the last one's filters.
-    setTab(t);
-    setSearch('');
-    setStatus('');
-    setClassId(null);
-    setSectionId(null);
-  };
-
   const openClass = (id: number) => {
     setTab('sections');
-    setSearch('');
-    setStatus('');
     setClassId(id);
     setSectionId(null);
     setSections(null);
@@ -219,12 +211,39 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
 
   const openSection = (cid: number, sid: number) => {
     setTab('subjects');
-    setSearch('');
-    setStatus('');
     setClassId(cid);
     setSectionId(sid);
     setSubjects(null);
   };
+
+  // With no tabs to go back by, back steps out a level: a section's subjects
+  // to its class's sections, those to the classes, and the classes away.
+  const goUp = () => {
+    if (tab === 'subjects' && classId) {
+      openClass(classId);
+    } else if (tab !== 'classes') {
+      setTab('classes');
+      setClassId(null);
+      setSectionId(null);
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('PanelHome');
+    }
+  };
+
+  // The phone's back button does the same while a class or section is open.
+  useFocusEffect(
+    useCallback(() => {
+      if (tab === 'classes') return;
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        goUp();
+        return true;
+      });
+      return () => sub.remove();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tab, classId]),
+  );
 
   const detail = (type: 'class' | 'section' | 'subject', item: any) =>
     navigation.navigate('AdminStandardDetail', { type, item, fromClassId: type === 'subject' ? classId : undefined });
@@ -238,19 +257,8 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
   const cls = lookups.find(c => c.id === classId) ?? null;
   const sec = cls?.sections.find(x => x.id === sectionId) ?? null;
 
-  const counts: Record<Tab, number | null> = {
-    classes: classes ? classes.length : null,
-    sections: tab === 'sections' && sections ? sections.length : null,
-    subjects: tab === 'subjects' && subjects ? subjects.length : null,
-  };
-  const tabs = (['classes', 'sections', 'subjects'] as Tab[]).map(k => ({
-    key: k,
-    label: `${k === 'classes' ? 'Classes' : k === 'sections' ? 'Sections' : 'Subjects'}${counts[k] ? ` · ${counts[k]}` : ''}`,
-  }));
-
   const list = tab === 'classes' ? classes : tab === 'sections' ? sections : subjects;
   const waiting = (tab === 'sections' && !classId) || (tab === 'subjects' && !sectionId);
-  const filtered = !!term || !!status;
 
   const renderItem = ({ item, index }: { item: any; index: number }) => {
     const isLast = index === (list?.length ?? 0) - 1;
@@ -265,6 +273,7 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
           inactive={!c.is_active}
           onPress={() => openClass(c.id)}
           onInfo={() => detail('class', c)}
+          onOpen={() => openClass(c.id)}
           isLast={isLast}
         />
       );
@@ -280,6 +289,7 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
           inactive={!x.is_active}
           onPress={() => openSection(x.standard_id, x.id)}
           onInfo={() => detail('section', x)}
+          onOpen={() => openSection(x.standard_id, x.id)}
           isLast={isLast}
         />
       );
@@ -304,7 +314,7 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
         <DocNoData
           icon="school-outline"
           title="No classes found"
-          subtitle={filtered ? 'No classes match your filters.' : 'You haven’t added any classes yet — add one with +.'}
+          subtitle="You haven’t added any classes yet — add one with +."
         />
       );
     }
@@ -313,7 +323,7 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
         <DocNoData
           icon="grid-outline"
           title="No sections in this class"
-          subtitle={filtered ? 'No sections match your filters.' : 'Add one with + and choose Section.'}
+          subtitle="Add one with + and choose Section."
         />
       );
     }
@@ -321,7 +331,7 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
       <DocNoData
         icon="library-outline"
         title="No subjects in this section"
-        subtitle={filtered ? 'No subjects match your filters.' : 'Add one with + and choose Subject.'}
+        subtitle="Add one with + and choose Subject."
       />
     );
   };
@@ -330,31 +340,25 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
     <View style={st.root}>
       <DocHeader
         title="Standards"
-        onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
+        onBackPress={goUp}
         rightIcon="add"
         onRightPress={() => setSheet('add')}
       />
-      <Tabs tabs={tabs} active={tab} onChange={showTab} />
-      <SearchBar
-        value={search}
-        onChangeText={setSearch}
-        placeholder={`Search ${tab === 'classes' ? 'classes' : tab === 'sections' ? 'sections' : 'subjects'}…`}
-      />
-      <View style={st.filters}>
-        {tab !== 'classes' && (
+      {/* Which class (and section) is open */}
+      {tab !== 'classes' && (
+        <View style={st.filters}>
           <DropPill label={cls ? cls.name : 'Select class'} active={!!cls} onPress={() => setSheet('class')} />
-        )}
-        {tab === 'subjects' && !!cls && (
-          <DropPill label={sec ? `Section ${sec.name}` : 'Select section'} active={!!sec} onPress={() => setSheet('section')} />
-        )}
-        <DropPill label={STATUS.find(x => x.key === status)?.label ?? 'All status'} active={!!status} onPress={() => setSheet('status')} />
-      </View>
+          {tab === 'subjects' && !!cls && (
+            <DropPill label={sec ? `Section ${sec.name}` : 'Select section'} active={!!sec} onPress={() => setSheet('section')} />
+          )}
+        </View>
+      )}
 
       {waiting ? (
         tab === 'sections' ? (
-          <DocNoData icon="grid-outline" title="Select a class to view sections" subtitle="Pick a class above, or tap one on the Classes tab." />
+          <DocNoData icon="grid-outline" title="Select a class to view sections" subtitle="Pick a class above." />
         ) : (
-          <DocNoData icon="library-outline" title="Select a section to view subjects" subtitle="Pick a class, then a section, above — or tap a section on the Sections tab." />
+          <DocNoData icon="library-outline" title="Select a section to view subjects" subtitle="Pick a class, then a section, above." />
         )
       ) : error && !list ? (
         <ErrorBox message={error} onRetry={load} />
@@ -381,17 +385,6 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
         onPick={k => {
           setSheet(null);
           add(k);
-        }}
-        onClose={() => setSheet(null)}
-      />
-      <OptionSheet
-        visible={sheet === 'status'}
-        title="Status"
-        options={STATUS}
-        selected={[status]}
-        onPick={k => {
-          setSheet(null);
-          setStatus(k as Status);
         }}
         onClose={() => setSheet(null)}
       />
@@ -496,6 +489,10 @@ const __mk_st = () => StyleSheet.create({
   rowSub: { fontSize: 13, color: theme.colors.textSecondary },
   rowMeta: { fontSize: 12, color: theme.colors.textMuted },
   inactive: { fontSize: 12, fontWeight: '600', color: theme.colors.textMuted },
+  open: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  dot: { width: 7, height: 7, borderRadius: 3.5 },
+  dotOn: { backgroundColor: theme.colors.success },
+  dotOff: { backgroundColor: theme.colors.danger },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.
