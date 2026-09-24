@@ -82,7 +82,7 @@ const LoginScreen = () => {
 
   const handleLogin = async () => {
     if (!identifier.trim()) {
-      setError('Please enter your email or admission number.');
+      setError('Please enter your admission number or username.');
       return;
     }
     if (!password.trim()) {
@@ -152,13 +152,13 @@ const LoginScreen = () => {
               subtitleYRef.current = e.nativeEvent.layout.y;
             }}
           >
-            Students sign in with their admission number, staff with their email.
+            Enter your credentials to log in to the SuperLMS app.
           </Text>
 
           {/* Identifier */}
-          <Text style={styles.label}>Admission Number, Username or Email</Text>
+          <Text style={styles.label}>Admission Number or Username</Text>
           <TextInput
-            placeholder="2026DMO650015, meera@tds or you@school.com"
+            placeholder="2026DMO650015 or meera@tds"
             placeholderTextColor={theme.colors.textMuted}
             style={[styles.input, (identifierFocused || !!identifier) && styles.inputActive]}
             value={identifier}
