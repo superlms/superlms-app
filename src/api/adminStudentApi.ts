@@ -1,5 +1,7 @@
 import apiClient from './apiClient';
+import constant from '../utils/constant';
 import { PickedFile } from './adminProfileApi';
+import { authHeader, downloadFile } from './pdfDownload';
 
 // Students module. Mirrors app/Livewire/Admin/Student.php over /admin/students.
 
@@ -83,8 +85,9 @@ export const getStudent = async (id: number): Promise<StudentDetail> => {
 };
 
 export interface StudentLookups {
-  classes: { id: number; name: string; code: string; board?: string | null }[];
-  sections: { id: number; name: string; code: string; standard_id: number }[];
+  /** students — how many the class has (newer servers). */
+  classes: { id: number; name: string; code: string; board?: string | null; students?: number }[];
+  sections: { id: number; name: string; code: string; standard_id: number; students?: number }[];
   routes: { id: number; route_name: string; monthly_fee?: number }[];
 }
 
@@ -179,4 +182,35 @@ export const removeStudentPhoto = async (id: number): Promise<void> => {
 
 export const deleteStudent = async (id: number) => {
   await apiClient.delete(`/admin/students/${id}`);
+};
+
+/**
+ * The panel's Export: the whole school, or one class (and one section of it),
+ * as an Excel sheet or a PDF, saved to the phone's Downloads. Returns the file
+ * name. A selection with nobody in it throws "No students to export".
+ */
+export const exportStudents = async (p: {
+  format: 'xlsx' | 'pdf';
+  classId?: number | null;
+  sectionId?: number | null;
+  fileName: string;
+}): Promise<string> => {
+  const query = [
+    `format=${p.format}`,
+    p.classId ? `class_id=${p.classId}` : '',
+    p.classId && p.sectionId ? `section_id=${p.sectionId}` : '',
+  ].filter(Boolean).join('&');
+  const name = `${p.fileName}.${p.format}`;
+  try {
+    await downloadFile(`${constant.API_BASE_URL}/admin/students/export?${query}`, name, {
+      ...(await authHeader()),
+      Accept: '*/*',
+    });
+  } catch (e: any) {
+    const msg = String(e?.message ?? '');
+    if (msg.includes('422')) throw new Error('No students to export for this choice.');
+    if (msg.includes('404')) throw new Error('That class is no longer there.');
+    throw e;
+  }
+  return name;
 };
