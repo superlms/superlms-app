@@ -113,18 +113,24 @@ const IDCardScreen = ({ navigation, route }: any) => {
       <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
-        {/* Front / Back — a plain tab strip */}
-        <View style={s.tabs}>
+        {/* Front / Back — a segmented switch as wide as the card */}
+        <View style={s.segment}>
           {(['Front', 'Back'] as const).map(side => {
             const active = side === 'Back' ? flipped : !flipped;
             return (
               <TouchableOpacity
                 key={side}
-                style={[s.tab, active && s.tabActive]}
+                style={[s.segmentItem, active && s.segmentItemActive]}
                 onPress={() => flipTo(side === 'Back')}
-                activeOpacity={0.6}
+                activeOpacity={0.7}
               >
-                <Text style={[s.tabText, active && s.tabTextActive]}>{side}</Text>
+                <VectorIcon
+                  iconSet="Ionicons"
+                  iconName={side === 'Front' ? 'id-card-outline' : 'qr-code-outline'}
+                  size={15}
+                  color={active ? theme.colors.primary : theme.colors.textSecondary}
+                />
+                <Text style={[s.segmentText, active && s.segmentTextActive]}>{side}</Text>
               </TouchableOpacity>
             );
           })}
@@ -158,12 +164,33 @@ const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
   scroll: { alignItems: 'center', paddingTop: 4, paddingBottom: 40 },
 
-  // Front / Back tabs
-  tabs: { flexDirection: 'row', gap: 22, paddingBottom: 18 },
-  tab: { paddingTop: 12, paddingBottom: 10, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabActive: { borderBottomColor: theme.colors.primary },
-  tabText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
-  tabTextActive: { color: theme.colors.primary, fontWeight: '600' },
+  // Front / Back — the app's segmented switch (as on the admin announcements),
+  // as wide as the card under it
+  segment: {
+    flexDirection: 'row',
+    width: CARD_W,
+    padding: 3,
+    marginTop: 16,
+    marginBottom: 20,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+  },
+  segmentItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  segmentItemActive: { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+  segmentText: { fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
+  segmentTextActive: { color: theme.colors.primary, fontWeight: '600' },
 
   // Card stage — both faces sit on top of each other and turn
   stage: { width: CARD_W, height: CARD_H },
