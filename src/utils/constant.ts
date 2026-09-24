@@ -4,7 +4,7 @@ const constant = {
   API_BASE_URL: 'https://superlms.in/api/v1',
   /**
    * OTA (over-the-air) JS updates. Bundles + manifest are hosted on S3 and
-   * served via the existing CloudFront distribution (cdn.superlms.in).
+   * served from cdn.superlms.in (the app box proxies it to the bucket).
    * Manifest: `${OTA_BASE_URL}/android/update.json`
    */
   OTA_BASE_URL: 'https://cdn.superlms.in/ota',
@@ -16,7 +16,7 @@ const constant = {
    * `versionCode`/`versionName` whenever you cut a new native (Play Store) build
    * so it equals the OTA `version` whose JS is baked into that build.
    */
-  OTA_BASELINE_VERSION: 2,
+  OTA_BASELINE_VERSION: 3,
   /** screen */
   screen: Dimensions.get('window'),
   screenHeight:

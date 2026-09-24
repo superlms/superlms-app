@@ -8,13 +8,13 @@
  *   2. Builds a production Android JS bundle (`react-native bundle --dev false`).
  *   3. Compiles it to Hermes bytecode (the app ships with Hermes enabled).
  *   4. Zips it in the parent-folder layout the native module expects.
- *   5. Uploads the zip + an updated `update.json` manifest to S3.
- *   6. Invalidates the manifest on CloudFront so devices see it immediately.
+ *   5. Uploads the zip + an updated `update.json` manifest (no-cache) to S3,
+ *      where cdn.superlms.in serves them.
  *
  * Usage:  yarn ota:release            (auto-bumps version)
  *         yarn ota:release --mandatory  (forces an immediate restart on devices)
  *
- * Prereqs: AWS CLI configured with write access to the bucket below, and the
+ * Prereqs: the AWS CLI profile below with write access to the bucket, and the
  * project already built once with react-native-ota-hot-update wired in.
  *
  * IMPORTANT: this only ships JS/asset changes. Anything touching native code
@@ -27,17 +27,21 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import os from 'node:os';
 
-// ---- Config (matches the existing superlms AWS setup) -----------------------
-const S3_BUCKET = 'superlms-media-540361297670';
+// ---- Config (the live superlms AWS setup) ------------------------------------
+// cdn.superlms.in is served by the app box — Caddy reverse-proxies it to this
+// bucket in the new AWS account — not by CloudFront, so there is no cache to
+// invalidate: the manifest goes up with no-cache and devices see it at once.
+// The bucket's public-read policy must cover ota/* for devices to fetch it.
+const AWS_PROFILE = 'superlms-new';
+const S3_BUCKET = 'superlms-media-033649549123';
 const S3_REGION = 'ap-south-1';
 const S3_PREFIX = 'ota/android';
 const CDN_BASE = 'https://cdn.superlms.in/ota/android';
-const CLOUDFRONT_DISTRIBUTION_ID = 'E39TLU8ROCRGZ6';
 const MANIFEST_URL = `${CDN_BASE}/update.json`;
 // Must match `constant.OTA_BASELINE_VERSION` in the app. When nothing is
 // published yet, the first release becomes baseline+1 so it actually reaches
 // devices already running the baseline JS baked into the installed build.
-const OTA_BASELINE_VERSION = 2;
+const OTA_BASELINE_VERSION = 3;
 // -----------------------------------------------------------------------------
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -140,23 +144,17 @@ async function main() {
   const manifestPath = join(DIST, 'update.json');
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
-  // 5) Upload bundle (immutable, long cache) then manifest (no cache)
+  // 5) Upload bundle (immutable, long cache) then manifest (no cache) — the
+  //    manifest last, so devices never see a version whose zip isn't there yet
   run(
     `aws s3 cp "${zipPath}" "s3://${S3_BUCKET}/${S3_PREFIX}/${zipName}" ` +
-      `--region ${S3_REGION} --content-type application/zip ` +
+      `--profile ${AWS_PROFILE} --region ${S3_REGION} --content-type application/zip ` +
       `--cache-control "public, max-age=31536000, immutable"`,
   );
   run(
     `aws s3 cp "${manifestPath}" "s3://${S3_BUCKET}/${S3_PREFIX}/update.json" ` +
-      `--region ${S3_REGION} --content-type application/json ` +
+      `--profile ${AWS_PROFILE} --region ${S3_REGION} --content-type application/json ` +
       `--cache-control "no-cache, max-age=0"`,
-  );
-
-  // 6) Invalidate the manifest on CloudFront so devices see it right away
-  run(
-    `aws cloudfront create-invalidation ` +
-      `--distribution-id ${CLOUDFRONT_DISTRIBUTION_ID} ` +
-      `--paths "/${S3_PREFIX}/update.json"`,
   );
 
   console.log(`\n✅ Published OTA v${nextVersion}`);
