@@ -15,6 +15,7 @@ import Select from '../../components/Select';
 import { AppAlert, AppDialog } from '../../components/AppDialog';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr, pickImage, takePhoto } from '../../utils/filePickers';
+import { fromApiDate, toApiDate, typeDate } from '../../utils/dayMonthYear';
 import { PickedFile } from '../../api/adminProfileApi';
 import { DocHeader } from '../more/docUi';
 import { FormField, FormPair, FormSection, FormToggle } from './studentFormUi';
@@ -111,10 +112,10 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
         const d = await getStudent(editId);
         setForm({
           name: d.full_name ?? '', email: d.email ?? '', mobile: d.phone ?? '',
-          dob: d.dob ?? '', gender: d.gender ?? '',
+          dob: fromApiDate(d.dob), gender: d.gender ?? '',
           standard_id: d.standard_id ?? 0, section_id: d.section_id ?? 0,
           father_name: d.father_name ?? '', mother_name: d.mother_name ?? '',
-          date_of_admission: d.date_of_admission ?? '', aadhar_no: d.aadhar_no ?? '',
+          date_of_admission: fromApiDate(d.date_of_admission), aadhar_no: d.aadhar_no ?? '',
           pincode: d.pincode ?? '', religion: d.religion ?? '',
           local_address: d.local_address ?? '', permanent_address: d.permanent_address ?? '',
           state: d.state ?? '', city: d.city ?? '',
@@ -151,13 +152,23 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
     if (!form.standard_id || !form.section_id) {
       return AppAlert.alert('No class', 'Your class could not be read. Pull the list to refresh and try again.');
     }
+    // The boxes hold DD/MM/YYYY; the server takes YYYY-MM-DD.
+    const dob = toApiDate(form.dob);
+    if (!dob) {
+      return AppAlert.alert('Date of birth', 'Write it as DD/MM/YYYY — a real date, like 12/04/2015.');
+    }
+    const admitted = toApiDate(form.date_of_admission);
+    if (admitted === null) {
+      return AppAlert.alert('Date of admission', 'Write it as DD/MM/YYYY, or leave it empty.');
+    }
+    const payload = { ...form, dob, date_of_admission: admitted };
     setSaving(true);
     try {
       if (editId) {
-        await updateStudent(editId, form);
+        await updateStudent(editId, payload);
         AppAlert.alert('Saved', 'The student has been updated.');
       } else {
-        await createStudent(form);
+        await createStudent(payload);
         AppAlert.alert('Added', 'The student has been added. Their login has been emailed to them.');
       }
       navigation.goBack();
@@ -228,7 +239,7 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
           <FormField label="Email" value={form.email} onChangeText={(v: string) => set('email', v)} placeholder="email@example.com" keyboardType="email-address" autoCapitalize="none" hint="Their login is emailed here." />
           <FormPair>
             <FormField half label="Mobile" value={form.mobile} onChangeText={(v: string) => set('mobile', v)} placeholder="10-digit" keyboardType="number-pad" maxLength={10} />
-            <FormField half label="Date of Birth" value={form.dob} onChangeText={(v: string) => set('dob', v)} placeholder="YYYY-MM-DD" />
+            <FormField half label="Date of Birth" value={form.dob} onChangeText={(v: string) => set('dob', typeDate(v, form.dob))} placeholder="DD/MM/YYYY" keyboardType="number-pad" maxLength={10} />
           </FormPair>
           <View style={s.select}>
             <Select plain label="Gender" placeholder="Select gender" value={form.gender || null} options={GENDERS} onChange={v => set('gender', v)} />
@@ -239,7 +250,7 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
           <FormField label="Mother’s Name" value={form.mother_name} onChangeText={(v: string) => set('mother_name', v)} placeholder="Optional" />
 
           <FormSection title="School" />
-          <FormField label="Date of Admission" value={form.date_of_admission} onChangeText={(v: string) => set('date_of_admission', v)} placeholder="YYYY-MM-DD (optional)" />
+          <FormField label="Date of Admission" value={form.date_of_admission} onChangeText={(v: string) => set('date_of_admission', typeDate(v, form.date_of_admission ?? ''))} placeholder="DD/MM/YYYY (optional)" keyboardType="number-pad" maxLength={10} />
           <FormPair>
             <FormField half label="Religion" value={form.religion} onChangeText={(v: string) => set('religion', v)} placeholder="Optional" />
             <FormField half label="Aadhaar No." value={form.aadhar_no} onChangeText={(v: string) => set('aadhar_no', v)} placeholder="12 digits" keyboardType="number-pad" maxLength={12} />
