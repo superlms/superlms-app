@@ -535,6 +535,9 @@ const ListBody = ({ bootstrapping, accounts, activeId, busyId, onSwitch, onRemov
         const meta = [labelForType(acct.user_type), acct.organization?.name || acct.email]
           .filter(Boolean)
           .join(' · ');
+        // An admin or accounts login has no photo of its own: it wears the school's logo.
+        const isOrgAccount = acct.user_type === 'admin' || acct.user_type === 'accounts';
+        const photo = acct.image || (isOrgAccount ? acct.organization?.logo : null);
 
         return (
           <View key={acct.user_id}>
@@ -544,7 +547,7 @@ const ListBody = ({ bootstrapping, accounts, activeId, busyId, onSwitch, onRemov
               disabled={isActive || isBusy}
               style={s.row}
             >
-              <Avatar uri={acct.image} name={acct.name} />
+              <Avatar uri={photo} name={acct.name} />
               <View style={s.rowMain}>
                 <Text style={[s.rowName, isActive && s.rowNameActive]} numberOfLines={1}>
                   {acct.name}
