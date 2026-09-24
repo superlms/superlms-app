@@ -152,7 +152,7 @@ const LoginScreen = () => {
               subtitleYRef.current = e.nativeEvent.layout.y;
             }}
           >
-            Enter your credentials to log in to the SuperLMS app.
+            Enter your credentials to log in to the SuperLMS app and access your school account.
           </Text>
 
           {/* Identifier */}

@@ -290,12 +290,12 @@ const ForgotPasswordScreen = () => {
                 descYRef.current = e.nativeEvent.layout.y;
               }}
             >
-              Enter your admission number, username or email. The code goes to
-              the address your school has for you.
+              Enter your admission number or username to get a code on your
+              registered email.
             </Text>
-            <Text style={styles.label}>Admission Number, Username or Email</Text>
+            <Text style={styles.label}>Admission Number or Username</Text>
             <TextInput
-              placeholder="2026DMO650015, meera@tds or you@school.com"
+              placeholder="2026DMO650015 or meera@tds"
               placeholderTextColor={theme.colors.textMuted}
               style={[
                 styles.input,
