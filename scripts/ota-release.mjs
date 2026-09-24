@@ -22,7 +22,7 @@
  * build — bump versionCode/versionName and constant.OTA_BASELINE_VERSION too.
  */
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, renameSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import os from 'node:os';
@@ -113,12 +113,22 @@ async function main() {
   rmSync(BUNDLE_FILE, { force: true });
   renameSync(hbc, BUNDLE_FILE);
 
-  // 3) Zip with the required parent-folder layout: bundle/index.android.bundle + bundle/assets
-  //    PowerShell Compress-Archive keeps the top-level folder inside the archive.
+  // 3) Zip with the required parent-folder layout: bundle/index.android.bundle + bundle/drawable-*
+  //    Windows' own tar (bsdtar) writes the paths with "/". PowerShell's
+  //    Compress-Archive wrote them with "\", which the app's unzip does not
+  //    split on: the bundle still loaded, but its images (the splash logo…)
+  //    landed as flat files outside any drawable-* folder and never showed.
   rmSync(zipPath, { force: true });
-  run(
-    `powershell -NoProfile -Command "Compress-Archive -Path '${BUNDLE_DIR}' -DestinationPath '${zipPath}' -Force"`,
-  );
+  const tar =
+    os.platform() === 'win32'
+      ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe')
+      : 'tar';
+  run(`"${tar}" -a -c -f "${zipPath}" -C "${DIST}" bundle`);
+  // The names sit in the zip as plain text (tar -t would show "\" as "/").
+  const zip = readFileSync(zipPath);
+  if (zip.includes('bundle\\') || !zip.includes('bundle/drawable-mdpi/src_assets_logo.png')) {
+    throw new Error(`${zipName} does not have its images under bundle/drawable-*/ — not publishing it.`);
+  }
 
   // 4) Write the manifest
   const manifest = {
