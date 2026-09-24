@@ -39,10 +39,10 @@ import { DropPill, ErrorBox, ListSkeleton } from './adminTransportUi';
  * Standards — the admin panel's Academic Structure, drawn as the app's own
  * lists are. The classes come first; a class opens onto its sections and a
  * section onto its subjects, the way the panel drills in — by tapping the row
- * or the arrow at its end, beside a dot that is green for an active one and red
- * for an inactive one. Back steps out a level. The ⓘ on a row opens it on its
- * own page, with Edit and Delete. The + asks what to add — a class, a section
- * or a subject — and opens its form with what is picked filled in.
+ * or the arrow at its end, with a red dot before it for an inactive one. Back
+ * steps out a level. The eye on a row opens it on its own page, with Edit and
+ * Delete. The + asks what to add — a class, a section or a subject — and opens
+ * its form with what is picked filled in.
  */
 
 // The level on show: the classes, one class's sections or one section's subjects.
@@ -61,7 +61,7 @@ const sectionLine = (names?: string[] | null) => {
   return names.length > 3 ? `${shown}…` : shown;
 };
 
-//  [▣]  Class 10 (10)                                   ⓘ  ● ›
+//  [▣]  Class 10 (10)                              (eye)  ● ›   (● only when inactive)
 //       A, B, C…
 const Row = ({
   lead,
@@ -104,19 +104,16 @@ const Row = ({
     </View>
     {inactive && !onOpen && <Text style={st.inactive}>Inactive</Text>}
     {onInfo ? (
-      <TouchableOpacity hitSlop={10} activeOpacity={0.6} onPress={onInfo}>
-        <VectorIcon iconSet="Ionicons" iconName="information-circle-outline" size={20} color={theme.colors.textMuted} />
+      <TouchableOpacity hitSlop={10} activeOpacity={0.6} onPress={onInfo} accessibilityLabel={`View ${title}`}>
+        <VectorIcon iconSet="Ionicons" iconName="eye-outline" size={20} color={theme.colors.textMuted} />
       </TouchableOpacity>
     ) : (
       !onOpen && <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={15} color={theme.colors.textMuted} />
     )}
     {onOpen && (
       <View style={st.open}>
-        {/* Green for an active one, red for an inactive one */}
-        <View
-          style={[st.dot, inactive ? st.dotOff : st.dotOn]}
-          accessibilityLabel={inactive ? 'Inactive' : 'Active'}
-        />
+        {/* A red dot for an inactive one */}
+        {inactive && <View style={st.dot} accessibilityLabel="Inactive" />}
         <TouchableOpacity hitSlop={10} activeOpacity={0.6} onPress={onOpen} accessibilityLabel={`Open ${title}`}>
           <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={18} color={theme.colors.textSecondary} />
         </TouchableOpacity>
@@ -142,7 +139,7 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
   const [subjects, setSubjects] = useState<AdminSubject[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [sheet, setSheet] = useState<null | 'add' | 'class' | 'section'>(null);
+  const [sheet, setSheet] = useState<null | 'add' | 'section'>(null);
   const seq = useRef(0);
 
   const loadLookups = useCallback(() => {
@@ -339,26 +336,23 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
   return (
     <View style={st.root}>
       <DocHeader
-        title="Standards"
+        title={tab === 'sections' ? 'Sections' : 'Standards'}
         onBackPress={goUp}
         rightIcon="add"
         onRightPress={() => setSheet('add')}
       />
-      {/* Which class (and section) is open */}
-      {tab !== 'classes' && (
+      {/* Which section of the open class */}
+      {tab === 'subjects' && !!cls && (
         <View style={st.filters}>
-          <DropPill label={cls ? cls.name : 'Select class'} active={!!cls} onPress={() => setSheet('class')} />
-          {tab === 'subjects' && !!cls && (
-            <DropPill label={sec ? `Section ${sec.name}` : 'Select section'} active={!!sec} onPress={() => setSheet('section')} />
-          )}
+          <DropPill label={sec ? `Section ${sec.name}` : 'Select section'} active={!!sec} onPress={() => setSheet('section')} />
         </View>
       )}
 
       {waiting ? (
         tab === 'sections' ? (
-          <DocNoData icon="grid-outline" title="Select a class to view sections" subtitle="Pick a class above." />
+          <DocNoData icon="grid-outline" title="Select a class to view sections" subtitle="Go back and tap a class." />
         ) : (
-          <DocNoData icon="library-outline" title="Select a section to view subjects" subtitle="Pick a class, then a section, above." />
+          <DocNoData icon="library-outline" title="Select a section to view subjects" subtitle="Go back and tap a section." />
         )
       ) : error && !list ? (
         <ErrorBox message={error} onRetry={load} />
@@ -387,21 +381,6 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
           add(k);
         }}
         onClose={() => setSheet(null)}
-      />
-      <OptionSheet
-        visible={sheet === 'class'}
-        title="Class"
-        options={lookups.map(c => ({ key: String(c.id), label: c.name }))}
-        selected={cls ? [String(cls.id)] : []}
-        onPick={k => {
-          setSheet(null);
-          setClassId(Number(k));
-          setSectionId(null);
-          setSections(null);
-          setSubjects(null);
-        }}
-        onClose={() => setSheet(null)}
-        emptyText="No classes yet."
       />
       <OptionSheet
         visible={sheet === 'section'}
@@ -490,9 +469,7 @@ const __mk_st = () => StyleSheet.create({
   rowMeta: { fontSize: 12, color: theme.colors.textMuted },
   inactive: { fontSize: 12, fontWeight: '600', color: theme.colors.textMuted },
   open: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dot: { width: 7, height: 7, borderRadius: 3.5 },
-  dotOn: { backgroundColor: theme.colors.success },
-  dotOff: { backgroundColor: theme.colors.danger },
+  dot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: theme.colors.danger },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

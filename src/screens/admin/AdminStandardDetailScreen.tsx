@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
+import { HeaderIconButton } from '../../components/Header';
 import { AppAlert } from '../../components/AppDialog';
 import { useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
@@ -23,13 +24,18 @@ import { InfoRow } from './adminTransportUi';
  * One class, section or subject on its own page — the panel's View: what it
  * is and where it sits, its counts, and when it was made. A class opens onto
  * its sections and a section onto its subjects from here too. The pencil
- * edits it; Delete asks first, and the server says no, as the panel does, to
- * a class or section with students in it (they are moved first), to a class
- * that still has sections, and to a subject the timetable or assignments use.
+ * edits it; Delete (in the header for a class or a section) asks first, and the server says
+ * no, as the panel does, to a class or section with students in it (they are
+ * moved first), to a class that still has sections — which the page itself
+ * refuses before asking — and to a subject the timetable or assignments use.
  */
 
 type StdType = 'class' | 'section' | 'subject';
 const TITLES: Record<StdType, string> = { class: 'Class', section: 'Section', subject: 'Subject' };
+// What the header says.
+const HEADS: Record<StdType, string> = { class: 'Class', section: 'Section Detail', subject: 'Subject' };
+// A class's and a section's Delete sit in the header, beside the pencil.
+const deleteInHeader = (type: StdType) => type === 'class' || type === 'section';
 const ICONS: Record<StdType, string> = { class: 'school-outline', section: 'grid-outline', subject: 'library-outline' };
 
 const when = (iso?: string | null) => (iso ? moment(iso).format('DD MMM YYYY, h:mm A') : null);
@@ -59,7 +65,19 @@ const AdminStandardDetailScreen = ({ navigation, route }: any) => {
   }, [type, item?.id, item?.standard_id, fromClassId]);
   useFocusLoad(refresh);
 
-  const remove = () =>
+  // A class with sections stays: they go first, each from its own page.
+  const classSections = type === 'class' ? Math.max(item?.sections_count ?? 0, item?.section_names?.length ?? 0) : 0;
+
+  const remove = () => {
+    if (classSections > 0) {
+      AppAlert.alert(
+        'Cannot delete class',
+        `"${item?.name}" has ${classSections} ${classSections === 1 ? 'section' : 'sections'}. Delete ${
+          classSections === 1 ? 'it' : 'them'
+        } first, then the class.`,
+      );
+      return;
+    }
     confirmDestructive(
       `Delete ${TITLES[type].toLowerCase()}?`,
       type === 'section'
@@ -80,6 +98,7 @@ const AdminStandardDetailScreen = ({ navigation, route }: any) => {
         }
       },
     );
+  };
 
   const edit = () => navigation.navigate('AdminStandardForm', { type, id: item.id, item, fromClassId });
 
@@ -88,7 +107,7 @@ const AdminStandardDetailScreen = ({ navigation, route }: any) => {
   if (!item) {
     return (
       <View style={s.root}>
-        <DocHeader title={TITLES[type]} onBackPress={() => navigation.goBack()} />
+        <DocHeader title={HEADS[type]} onBackPress={() => navigation.goBack()} />
         <ActivityIndicator style={s.loader} color={theme.colors.primary} />
       </View>
     );
@@ -136,7 +155,24 @@ const AdminStandardDetailScreen = ({ navigation, route }: any) => {
 
   return (
     <View style={s.root}>
-      <DocHeader title={TITLES[type]} onBackPress={() => navigation.goBack()} rightIcon="create-outline" onRightPress={edit} />
+      {deleteInHeader(type) ? (
+        <DocHeader
+          title={HEADS[type]}
+          onBackPress={() => navigation.goBack()}
+          rightSlot={
+            <View style={s.headActions}>
+              <HeaderIconButton icon="create-outline" onPress={edit} />
+              {busy ? (
+                <ActivityIndicator style={s.headBusy} color={theme.colors.primary} />
+              ) : (
+                <HeaderIconButton icon="trash-outline" onPress={remove} />
+              )}
+            </View>
+          }
+        />
+      ) : (
+        <DocHeader title={HEADS[type]} onBackPress={() => navigation.goBack()} rightIcon="create-outline" onRightPress={edit} />
+      )}
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
         <View style={s.head}>
           {type === 'subject' ? (
@@ -160,9 +196,11 @@ const AdminStandardDetailScreen = ({ navigation, route }: any) => {
           ))}
         </View>
 
-        <View style={s.quiet}>
-          <QuietAction icon="trash-2" label={`Delete ${TITLES[type].toLowerCase()}`} danger busy={busy} onPress={remove} />
-        </View>
+        {!deleteInHeader(type) && (
+          <View style={s.quiet}>
+            <QuietAction icon="trash-2" label={`Delete ${TITLES[type].toLowerCase()}`} danger busy={busy} onPress={remove} />
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -189,6 +227,8 @@ const __mk_s = () => StyleSheet.create({
   off: { color: theme.colors.danger },
   rows: { paddingHorizontal: 20 },
   quiet: { paddingHorizontal: 20, paddingTop: 20 },
+  headActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  headBusy: { width: 40 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.
