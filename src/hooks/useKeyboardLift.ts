@@ -10,6 +10,15 @@ import {
   type AnimatedStyle,
 } from 'react-native-reanimated';
 
+// The status bar is translucent and App.tsx paints the header's white under it.
+// Left to its default, Reanimated takes the bar for an opaque one while it
+// watches the keyboard: it moves the whole app down below the bar, which then
+// shows the window's own grey (#FAFAFA) instead of the white — on every
+// dashboard, since the account switcher in the top bar is always mounted. The
+// navigation bar keeps Reanimated's default, so both keyboard heights still
+// leave it out.
+const KEYBOARD_OPTIONS = { isStatusBarTranslucentAndroid: true };
+
 /**
  * Keeps whatever is pinned to the bottom of a screen — a chat composer, a
  * submit bar — above the keyboard.
@@ -34,7 +43,7 @@ import {
  * a chat's composer under the keyboard by the bar's height.
  */
 export function useKeyboardLiftStyle(): AnimatedStyle {
-  const keyboard = useAnimatedKeyboard();
+  const keyboard = useAnimatedKeyboard(KEYBOARD_OPTIONS);
   const jsHeight = useSharedValue(0);
 
   useEffect(() => {
@@ -69,7 +78,7 @@ export function useKeyboardLiftStyle(): AnimatedStyle {
  * into place.
  */
 export function useKeyboardHeight() {
-  const keyboard = useAnimatedKeyboard();
+  const keyboard = useAnimatedKeyboard(KEYBOARD_OPTIONS);
   const jsHeight = useSharedValue(0);
 
   useEffect(() => {
