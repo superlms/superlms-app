@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from './apiClient';
 import constant from '../utils/constant';
 import type { AccountType } from '../utils/accountStore';
+import { unregisterDeviceTokenFor } from '../notifications/push';
 
 // ─── Snapshot type (mirror of buildSnapshot() on the backend) ─────────────────
 
@@ -123,6 +124,8 @@ export const verifyAddAccountOtp = async (
 // Authorization header so we revoke the *target* token, not the active one.
 
 export const revokeAccountToken = async (token: string): Promise<void> => {
+  // Its pushes stop coming to this phone first, while the token still signs in.
+  await unregisterDeviceTokenFor(token);
   await axios.post(
     `${constant.API_BASE_URL}/switch-account/remove`,
     {},

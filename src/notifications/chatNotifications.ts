@@ -8,10 +8,15 @@
 //  conversation clears its box. Chat messages stay out of the in-app inbox.
 //
 //  The lines are kept in storage, since a push can arrive while the app is shut.
+//
+//  With several accounts signed in on the phone, each account's conversations
+//  have their own boxes, and a message for an account other than the active
+//  one names that account under the sender.
 // ─────────────────────────────────────────────────────────────────────────────
 import { Platform } from 'react-native';
 import notifee, { AndroidGroupAlertBehavior, AndroidImportance, AndroidStyle } from '@notifee/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getActiveUserId } from '../utils/accountStore';
 import {
   CHANNEL_ID,
   NOTIFICATION_COLOR,
@@ -55,9 +60,16 @@ const writeThreads = (threads: Threads) => AsyncStorage.setItem(STORE_KEY, JSON.
 
 export const chatNotificationId = (userId: number | string) => `chat_${userId}`;
 
+// One box per conversation — per account, when the push says which account it is for.
+const threadKey = (accountId: number | null | undefined, fromUserId: number) =>
+  accountId ? `${accountId}_${fromUserId}` : String(fromUserId);
+
 /** A chat message arrived: add it to its conversation's box, with the sound. */
 export async function showChatMessage(input: {
   fromUserId: number;
+  // The account on this phone it was sent to, and its name when that isn't the active one.
+  accountId?: number | null;
+  accountName?: string | null;
   name: string;
   text: string;
   params: Record<string, any>;
@@ -65,7 +77,7 @@ export async function showChatMessage(input: {
   if (!(await notificationsEnabled())) return;
 
   const threads = await readThreads();
-  const key = String(input.fromUserId);
+  const key = threadKey(input.accountId, input.fromUserId);
   const previous = threads[key]?.lines ?? [];
   threads[key] = {
     name: input.name,
@@ -79,6 +91,8 @@ export async function showChatMessage(input: {
     await notifee.displayNotification({
       id: chatNotificationId(key),
       title: input.name,
+      // Whose message it is, when it isn't the active account's.
+      subtitle: input.accountName ?? undefined,
       body: input.text,
       data: { screen: 'UserChats', params: JSON.stringify(input.params), chatFrom: key },
       android: {
@@ -115,16 +129,18 @@ export async function showChatMessage(input: {
   }
 }
 
-/** The conversation is open: its box goes, and the summary follows. */
+/** The active account's conversation is open: its box goes, and the summary follows. */
 export async function clearChatNotifications(fromUserId: number): Promise<void> {
   const threads = await readThreads();
-  const key = String(fromUserId);
-  if (threads[key]) {
-    delete threads[key];
+  // The active account's box, and one kept before boxes were per account.
+  const keys = [...new Set([threadKey(await getActiveUserId(), fromUserId), String(fromUserId)])];
+  const cleared = keys.filter(key => threads[key]);
+  if (cleared.length) {
+    cleared.forEach(key => delete threads[key]);
     await writeThreads(threads);
   }
   try {
-    await notifee.cancelNotification(chatNotificationId(key));
+    await Promise.all(keys.map(key => notifee.cancelNotification(chatNotificationId(key))));
     await showSummary(threads);
   } catch {
     // Nothing shown to clear.

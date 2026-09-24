@@ -59,6 +59,19 @@ export const getActiveAccount = async (): Promise<StoredAccount | null> => {
   return list.find(a => a.user_id === id) ?? null;
 };
 
+/** The signed-in user's id: the active switcher account, or else the one logged in. */
+export const getActiveUserId = async (): Promise<number | null> => {
+  const id = await getActiveAccountId();
+  if (id != null) return id;
+  try {
+    const user = JSON.parse((await AsyncStorage.getItem(K_USER)) ?? 'null');
+    const n = Number(user?.id);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+};
+
 /**
  * Insert or refresh an account by user_id. Does NOT change the active account.
  */
