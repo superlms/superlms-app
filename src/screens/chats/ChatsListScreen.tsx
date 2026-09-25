@@ -106,7 +106,7 @@ const ChatRow = ({
         {skeleton ? (
           <Skeleton width={46} height={46} radius={23} />
         ) : item.avatar ? (
-          <Image source={{ uri: item.avatar }} style={s.avatar} />
+          <Image source={{ uri: item.avatar }} style={s.avatar} resizeMethod="resize" />
         ) : (
           <View style={[s.avatar, s.avatarFallback]}>
             <Text style={s.avatarInitials}>{initials(item.name)}</Text>

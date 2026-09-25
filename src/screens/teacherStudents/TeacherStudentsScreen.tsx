@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import { HeaderIconButton } from '../../components/Header';
@@ -31,11 +31,30 @@ const classOf = (s: { class?: string | null; section?: string | null }) =>
 // ── One student ──────────────────────────────────────────────────────────────
 //   (photo)  Aarav Sharma                                          >
 //            Roll 12 · Adm 2026-0007
+// The photo is decoded at the avatar's size (resizeMethod "resize"): students'
+// photos are full camera shots (4000 px), and a class of them decoded whole
+// ran out of image memory, so some rows lost theirs at random. One that still
+// misses is asked for twice more before the initial stands in.
 const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
   const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
+  const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setFailed(false);
+    setTries(0);
+  }, [uri]);
+  useEffect(() => () => {
+    if (retry.current) clearTimeout(retry.current);
+  }, []);
+
+  const onError = () => {
+    if (tries < 2) retry.current = setTimeout(() => setTries(t => t + 1), 800 * (tries + 1));
+    else setFailed(true);
+  };
 
   if (uri && !failed) {
-    return <Image source={{ uri }} style={s.photo} onError={() => setFailed(true)} />;
+    return <Image key={tries} source={{ uri }} style={s.photo} resizeMethod="resize" onError={onError} />;
   }
 
   return (

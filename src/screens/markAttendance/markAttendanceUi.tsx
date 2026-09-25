@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { theme, onThemeChange } from '../../utils/theme';
 import constant from '../../utils/constant';
@@ -34,11 +34,31 @@ export const allMarked = (students: MarkStudent[]) =>
   students.length > 0 && students.every(st => st.status !== null);
 
 // ── Student photo with first-letter fallback ──
+// Decoded at the avatar's size (resizeMethod "resize"): students' photos are
+// full camera shots (4000 px), and a class of them decoded whole ran out of
+// image memory, so some rows lost theirs at random. One that still misses is
+// asked for twice more before the initial stands in.
 export const Avatar = ({ name, photo }: { name: string; photo: string | null }) => {
   const uri = resolveFileUrl(photo);
   const [failed, setFailed] = useState(false);
+  const [tries, setTries] = useState(0);
+  const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setFailed(false);
+    setTries(0);
+  }, [uri]);
+  useEffect(() => () => {
+    if (retry.current) clearTimeout(retry.current);
+  }, []);
+
+  const onError = () => {
+    if (tries < 2) retry.current = setTimeout(() => setTries(t => t + 1), 800 * (tries + 1));
+    else setFailed(true);
+  };
+
   if (uri && !failed) {
-    return <Image source={{ uri }} style={s.avatar} onError={() => setFailed(true)} />;
+    return <Image key={tries} source={{ uri }} style={s.avatar} resizeMethod="resize" onError={onError} />;
   }
   return (
     <View style={[s.avatar, s.avatarFallback]}>

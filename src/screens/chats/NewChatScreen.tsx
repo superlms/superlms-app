@@ -44,7 +44,7 @@ const initials = (name: string) =>
 
 const Avatar = ({ person }: { person: ChatContact }) =>
   person.avatar ? (
-    <Image source={{ uri: person.avatar }} style={s.avatar} />
+    <Image source={{ uri: person.avatar }} style={s.avatar} resizeMethod="resize" />
   ) : (
     <View style={[s.avatar, s.avatarFallback]}>
       <Text style={s.avatarInitials}>{initials(person.name)}</Text>
