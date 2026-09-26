@@ -100,6 +100,15 @@ import AdminExamSyllabusFormScreen from '../screens/admin/AdminExamSyllabusFormS
 import AdminExamPapersScreen from '../screens/admin/AdminExamPapersScreen';
 import AdminExamPaperDetailScreen from '../screens/admin/AdminExamPaperDetailScreen';
 import AdminExamPaperFormScreen from '../screens/admin/AdminExamPaperFormScreen';
+// Admit Card
+import AdminAdmitCardScreen from '../screens/admin/AdminAdmitCardScreen';
+import AdminAdmitCardClassesScreen from '../screens/admin/AdminAdmitCardClassesScreen';
+import AdminAdmitCardSectionsScreen from '../screens/admin/AdminAdmitCardSectionsScreen';
+import AdminAdmitCardStudentsScreen from '../screens/admin/AdminAdmitCardStudentsScreen';
+import AdminAdmitCardViewScreen from '../screens/admin/AdminAdmitCardViewScreen';
+import AdminAdmitCardIssueScreen from '../screens/admin/AdminAdmitCardIssueScreen';
+import AdminAdmitCardPrintScreen from '../screens/admin/AdminAdmitCardPrintScreen';
+import AdminAdmitCardSheetScreen from '../screens/admin/AdminAdmitCardSheetScreen';
 // ID Card
 import AdminIdCardScreen from '../screens/admin/AdminIdCardScreen';
 import AdminIdCardGenerateScreen from '../screens/admin/AdminIdCardGenerateScreen';
@@ -288,6 +297,21 @@ export const AdminExamStack = () => (
     <Stack.Screen name="AdminExamPapers" component={AdminExamPapersScreen} />
     <Stack.Screen name="AdminExamPaperDetail" component={AdminExamPaperDetailScreen} />
     <Stack.Screen name="AdminExamPaperForm" component={AdminExamPaperFormScreen} />
+  </Stack.Navigator>
+);
+
+// Admit Card: exams → classes → sections → students → a card, plus the web's
+// Issue and Print panels and the print sheet.
+export const AdminAdmitCardStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminAdmitCardHome" component={AdminAdmitCardScreen} />
+    <Stack.Screen name="AdminAdmitCardClasses" component={AdminAdmitCardClassesScreen} />
+    <Stack.Screen name="AdminAdmitCardSections" component={AdminAdmitCardSectionsScreen} />
+    <Stack.Screen name="AdminAdmitCardStudents" component={AdminAdmitCardStudentsScreen} />
+    <Stack.Screen name="AdminAdmitCardView" component={AdminAdmitCardViewScreen} />
+    <Stack.Screen name="AdminAdmitCardIssue" component={AdminAdmitCardIssueScreen} />
+    <Stack.Screen name="AdminAdmitCardPrint" component={AdminAdmitCardPrintScreen} />
+    <Stack.Screen name="AdminAdmitCardSheet" component={AdminAdmitCardSheetScreen} />
   </Stack.Navigator>
 );
 

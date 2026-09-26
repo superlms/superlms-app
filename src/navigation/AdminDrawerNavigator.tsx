@@ -24,7 +24,6 @@ import AdminTimetableScreen from '../screens/admin/AdminTimetableScreen';
 import AdminArrangementScreen from '../screens/admin/AdminArrangementScreen';
 import AdminHomeworkScreen from '../screens/admin/AdminHomeworkScreen';
 import AdminCreditScreen from '../screens/admin/AdminCreditScreen';
-import AdminAdmitCardScreen from '../screens/admin/AdminAdmitCardScreen';
 import AdminReportCardScreen from '../screens/admin/AdminReportCardScreen';
 import AdminTcCertificateScreen from '../screens/admin/AdminTcCertificateScreen';
 import AdminListsScreen from '../screens/admin/AdminListsScreen';
@@ -45,6 +44,7 @@ import {
   AdminMoreStack,
   AdminExamStack,
   AdminIdCardStack,
+  AdminAdmitCardStack,
   AdminPerformanceStack,
   AdminExamCopyStack,
 } from './adminStacks';
@@ -359,7 +359,7 @@ const AdminDrawerNavigator = () => {
       <Drawer.Screen name="AdminIdCard" component={AdminIdCardStack} />
       <Drawer.Screen name="AdminLists" component={AdminListsScreen} />
       <Drawer.Screen name="AdminExam" component={AdminExamStack} />
-      <Drawer.Screen name="AdminAdmitCard" component={AdminAdmitCardScreen} />
+      <Drawer.Screen name="AdminAdmitCard" component={AdminAdmitCardStack} />
       <Drawer.Screen name="AdminPerformance" component={AdminPerformanceStack} />
       <Drawer.Screen name="AdminExamCopy" component={AdminExamCopyStack} />
       <Drawer.Screen name="AdminReportCard" component={AdminReportCardScreen} />
