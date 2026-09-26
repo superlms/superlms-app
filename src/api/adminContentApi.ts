@@ -1,5 +1,6 @@
 import apiClient from './apiClient';
 import { PickedFile } from './adminProfileApi';
+import type { Pagination } from './adminStudentApi';
 
 const unwrap = (data: any) => data?.data ?? data;
 const MULTIPART = { headers: { 'Content-Type': 'multipart/form-data' } };
@@ -196,17 +197,25 @@ export const deleteEvent = async (id: number): Promise<void> => {
 };
 
 // ─── Enquiries ────────────────────────────────────────────────────────────────
-export type EnquiryTab = 'teacher' | 'student';
+// The panel's Enquiries: students' and teachers' Contact School queries, and
+// what the school's public website sent (which takes no reply).
+export type EnquiryTab = 'teacher' | 'student' | 'website';
 
 export interface AdminEnquiry {
   id: number;
+  /** A query's topic, or a website enquiry's subject. */
   topic: string;
+  /** A query's text, or a website enquiry's message. */
   query: string;
   image_url?: string | null;
   admin_text?: string | null;
   replied: boolean;
   user_name: string;
   user_email?: string | null;
+  /** Website enquiries only. */
+  phone?: string | null;
+  /** When the reply was last saved. */
+  replied_at?: string | null;
   created_at?: string;
 }
 
@@ -221,16 +230,20 @@ export const getAdminEnquiries = async (opts: {
   search?: string;
   days?: number;
   status?: 'pending' | 'replied';
+  /** Ten to a page, as on the panel; without it, the latest 100. */
+  page?: number;
 }): Promise<{
   tab: EnquiryTab;
   enquiries: AdminEnquiry[];
+  pagination?: Pagination | null;
   stats: EnquiryStats;
-  tab_totals: { teacher: number; student: number };
+  tab_totals: { teacher: number; student: number; website?: number };
 }> => {
   const params: any = { tab: opts.tab };
   if (opts.search) params.search = opts.search;
   if (opts.days) params.days = opts.days;
   if (opts.status) params.status = opts.status;
+  if (opts.page) params.page = opts.page;
   const { data } = await apiClient.get('/admin/enquiries', { params });
   return unwrap(data);
 };

@@ -1,36 +1,53 @@
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
-import Header from '../../components/Header';
-import { theme } from '../../utils/theme';
+import { HeaderIconButton } from '../../components/Header';
+import { AppAlert } from '../../components/AppDialog';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { AdminEnquiry, EnquiryTab, deleteEnquiry } from '../../api/adminContentApi';
-import { AppAlert } from '../../components/AppDialog';
+import { DocHeader, DocSection, DocBody, docStyles } from '../more/docUi';
+import { DetailRow } from '../calendar/calendarUi';
+import { QuietAction, confirmDestructive, isPdfUrl } from './adminFormUi';
+
+/**
+ * One enquiry, as a student's View Query page draws a query — when it came in
+ * and where it stands, the topic, the query with its attachment as a chip,
+ * then the school's reply — with who sent it, as the panel's view shows. Reply
+ * (or Edit reply) writes the answer; the bin deletes the enquiry and its
+ * attachment. A website enquiry shows who sent it and their message, and takes
+ * no reply.
+ *
+ * Route params: tab – student, teacher or website; enquiry – from the list.
+ */
+
+const TITLE = 'View Enquiry';
+
+const PENDING = '#F59E0B';
+const REPLIED = '#10B981';
+
+const when = (iso?: string | null) => (iso ? moment(iso).format('DD MMM YYYY, hh:mm A') : '');
 
 const AdminEnquiryDetailScreen = ({ navigation, route }: any) => {
   const tab: EnquiryTab = route.params?.tab ?? 'teacher';
-  const enquiry: AdminEnquiry = route.params?.enquiry;
+  const enquiry: AdminEnquiry | undefined = route.params?.enquiry;
+  const website = tab === 'website';
   const [deleting, setDeleting] = useState(false);
 
   if (!enquiry) {
     return (
-      <View style={s.root}>
-        <Header title="Enquiry" onBackPress={() => navigation.goBack()} />
-        <Text style={s.empty}>Enquiry not found.</Text>
+      <View style={docStyles.root}>
+        <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
+        <View style={s.center}>
+          <Text style={s.muted}>Enquiry not found</Text>
+        </View>
       </View>
     );
   }
 
   const replied = enquiry.replied;
+  const color = replied ? REPLIED : PENDING;
 
   const openReply = () =>
     navigation.navigate('AdminEnquiryReply', {
@@ -38,134 +55,152 @@ const AdminEnquiryDetailScreen = ({ navigation, route }: any) => {
       id: enquiry.id,
       topic: enquiry.topic,
       admin_text: enquiry.admin_text ?? '',
+      user_name: enquiry.user_name,
+      query: enquiry.query,
     });
 
-  const confirmDelete = () =>
-    AppAlert.alert('Delete enquiry', 'Delete this enquiry permanently?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setDeleting(true);
-          try {
-            await deleteEnquiry(tab, enquiry.id);
-            navigation.goBack();
-          } catch (e) {
-            AppAlert.alert('Error', apiErr(e, 'Could not delete.'));
-          } finally {
-            setDeleting(false);
-          }
-        },
+  const remove = () =>
+    confirmDestructive(
+      'Delete enquiry?',
+      'This will permanently delete the enquiry and any attachment.',
+      'Delete',
+      async () => {
+        setDeleting(true);
+        try {
+          await deleteEnquiry(tab, enquiry.id);
+          navigation.goBack();
+        } catch (e) {
+          AppAlert.alert('Could not delete', apiErr(e, 'Please try again.'));
+          setDeleting(false);
+        }
       },
-    ]);
+    );
+
+  const openFile = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      AppAlert.alert('Error', 'Unable to open this file on this device.');
+    }
+  };
+
+  const file = enquiry.image_url;
+  const pdf = !!file && isPdfUrl(file);
 
   return (
-    <View style={s.root}>
-      <Header title="Enquiry" onBackPress={() => navigation.goBack()} />
+    <View style={docStyles.root}>
+      <DocHeader
+        title={TITLE}
+        onBackPress={() => navigation.goBack()}
+        rightSlot={
+          deleting ? (
+            <ActivityIndicator style={s.headBusy} color={theme.colors.primary} />
+          ) : (
+            <HeaderIconButton icon="trash-outline" onPress={remove} />
+          )
+        }
+      />
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* Status + topic */}
-        <View style={s.topRow}>
-          <View style={[s.statusBadge, { backgroundColor: (replied ? '#22C55E' : '#F59E0B') + '18' }]}>
-            <VectorIcon iconSet="Ionicons" iconName={replied ? 'checkmark-circle' : 'time'} size={13}
-              color={replied ? '#22C55E' : '#F59E0B'} />
-            <Text style={[s.statusText, { color: replied ? '#22C55E' : '#F59E0B' }]}>
-              {replied ? 'Replied' : 'Pending'}
-            </Text>
-          </View>
-        </View>
-        <Text style={s.topic}>{enquiry.topic}</Text>
-
-        {/* From */}
-        <View style={s.card}>
-          <View style={s.fromRow}>
-            <View style={s.avatar}>
-              <Text style={s.avatarText}>{(enquiry.user_name || '?').charAt(0).toUpperCase()}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.fromName} numberOfLines={1}>{enquiry.user_name}</Text>
-              {!!enquiry.user_email && <Text style={s.fromEmail} numberOfLines={1}>{enquiry.user_email}</Text>}
-            </View>
-            {!!enquiry.created_at && (
-              <Text style={s.date}>{new Date(enquiry.created_at).toLocaleDateString()}</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={docStyles.scroll}>
+        {/* When it came in and where it stands, then the topic */}
+        <View>
+          <View style={s.metaLine}>
+            {!!enquiry.created_at && <Text style={s.dateText}>{when(enquiry.created_at)}</Text>}
+            {website ? (
+              <Text style={s.dateText}>From the school website</Text>
+            ) : (
+              <View style={s.status}>
+                <View style={[s.dot, { backgroundColor: color }]} />
+                <Text style={[s.statusText, { color }]}>{replied ? 'Replied' : 'Pending'}</Text>
+              </View>
             )}
           </View>
+          <Text style={s.title}>{enquiry.topic || (website ? 'No subject' : 'No topic')}</Text>
         </View>
 
-        {/* Query */}
-        <Text style={s.sectionLabel}>Query</Text>
-        <View style={s.card}>
-          <Text style={s.body}>{enquiry.query}</Text>
-          {!!enquiry.image_url && (
-            <TouchableOpacity onPress={() => Linking.openURL(enquiry.image_url!)} activeOpacity={0.85}>
-              <Image source={{ uri: enquiry.image_url }} style={s.image} />
-            </TouchableOpacity>
-          )}
-        </View>
+        {/* Who sent it */}
+        <DocSection title="From">
+          <DetailRow label="Name" value={enquiry.user_name || '—'} />
+          {website && <DetailRow label="Phone" value={enquiry.phone || '—'} />}
+          <DetailRow label="Email" value={enquiry.user_email || '—'} />
+          <DetailRow label={website ? 'Received' : 'Sent by'} value={website ? when(enquiry.created_at) : tab === 'student' ? 'Student' : 'Teacher'} last />
+        </DocSection>
 
-        {/* Reply */}
-        {!!enquiry.admin_text && (
-          <>
-            <Text style={s.sectionLabel}>Your reply</Text>
-            <View style={[s.card, s.replyCard]}>
-              <Text style={s.body}>{enquiry.admin_text}</Text>
+        {/* The query, with its attachment right under it */}
+        <DocSection title={website ? 'Message' : 'Query'}>
+          <DocBody>{enquiry.query || '—'}</DocBody>
+          {!!file && (
+            <View style={s.chips}>
+              <TouchableOpacity style={s.chip} activeOpacity={0.7} onPress={() => openFile(file)}>
+                <VectorIcon iconSet="Feather" iconName={pdf ? 'file-text' : 'image'} size={14} color={theme.colors.primary} />
+                <Text style={s.chipText}>{pdf ? 'PDF' : 'Image'}</Text>
+                <VectorIcon iconSet="Feather" iconName="external-link" size={12} color={theme.colors.textMuted} />
+              </TouchableOpacity>
             </View>
+          )}
+        </DocSection>
+
+        {!website && (
+          <>
+            <View style={s.divider} />
+            <DocSection title="School's Reply">
+              {replied && !!enquiry.admin_text ? (
+                <>
+                  <Text style={s.replyMeta}>
+                    School Admin{enquiry.replied_at ? ` · ${when(enquiry.replied_at)}` : ''}
+                  </Text>
+                  <DocBody>{enquiry.admin_text}</DocBody>
+                </>
+              ) : (
+                <Text style={s.muted}>No reply yet.</Text>
+              )}
+              <View style={s.action}>
+                <QuietAction icon="corner-up-left" label={replied ? 'Edit reply' : 'Reply'} onPress={openReply} />
+              </View>
+            </DocSection>
           </>
         )}
-
-        <View style={{ height: 20 }} />
       </ScrollView>
-
-      {/* Sticky actions */}
-      <View style={s.actionBar}>
-        <TouchableOpacity style={[s.actionBtn, s.deleteBtn]} onPress={confirmDelete} activeOpacity={0.85} disabled={deleting}>
-          {deleting ? <ActivityIndicator color={theme.colors.danger} /> : (
-            <>
-              <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={18} color={theme.colors.danger} />
-              <Text style={s.deleteText}>Delete</Text>
-            </>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity style={[s.actionBtn, s.replyBtn]} onPress={openReply} activeOpacity={0.9}>
-          <VectorIcon iconSet="Ionicons" iconName="arrow-undo" size={18} color="#fff" />
-          <Text style={s.replyText}>{replied ? 'Edit Reply' : 'Reply'}</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 };
 
 export default AdminEnquiryDetailScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  empty: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', marginTop: 30 },
-  scroll: { padding: 16 },
+const __mk_s = () => StyleSheet.create({
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  muted: { fontSize: 14, color: theme.colors.textMuted, lineHeight: 21 },
+  headBusy: { width: 36 },
 
-  topRow: { flexDirection: 'row' },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.radius.full },
-  statusText: { fontSize: 11, fontWeight: '800' },
-  topic: { fontSize: 20, fontWeight: '900', color: theme.colors.textPrimary, marginTop: 10 },
+  // The date and time with the status right after it, over the topic
+  metaLine: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 12, rowGap: 4, marginBottom: 8 },
+  dateText: { fontSize: 13, color: theme.colors.textMuted },
+  status: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot: { width: 7, height: 7, borderRadius: 4 },
+  statusText: { fontSize: 13, fontWeight: '500' },
+  title: { fontSize: 20, fontWeight: '700', color: theme.colors.textPrimary, lineHeight: 27 },
 
-  sectionLabel: { fontSize: 11, fontWeight: '800', color: theme.colors.textMuted, marginTop: 16, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 },
-  card: { backgroundColor: theme.colors.card, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: theme.colors.border, marginTop: 12 },
-  replyCard: { backgroundColor: '#22C55E10', borderColor: '#22C55E33' },
+  // Attachment chip
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: theme.radius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.background,
+  },
+  chipText: { fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
 
-  fromRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 16, fontWeight: '900', color: theme.colors.primary },
-  fromName: { fontSize: 15, fontWeight: '800', color: theme.colors.textPrimary },
-  fromEmail: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 1 },
-  date: { fontSize: 11, color: theme.colors.textMuted },
-
-  body: { fontSize: 14, color: theme.colors.textPrimary, lineHeight: 21 },
-  image: { width: '100%', height: 190, borderRadius: 12, marginTop: 12, resizeMode: 'cover' },
-
-  actionBar: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20, borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.card },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14 },
-  deleteBtn: { flex: 1, backgroundColor: theme.colors.danger + '14' },
-  deleteText: { fontSize: 15, fontWeight: '800', color: theme.colors.danger },
-  replyBtn: { flex: 2, backgroundColor: theme.colors.primary },
-  replyText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  // Line between the query and the reply
+  divider: { height: 1, backgroundColor: theme.colors.border },
+  replyMeta: { fontSize: 12, color: theme.colors.textMuted, marginBottom: 6 },
+  action: { marginTop: 18 },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });

@@ -1,43 +1,44 @@
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import VectorIcon from '../../components/VectorIcon';
-import Header from '../../components/Header';
-import { theme } from '../../utils/theme';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { EnquiryTab, replyEnquiry } from '../../api/adminContentApi';
-import { AppAlert } from '../../components/AppDialog';
+import { DocHeader } from '../more/docUi';
+import { FormCard, FormError, Hint, SubmitButton } from './adminFormUi';
+
+/**
+ * The school's reply to a student's or teacher's query, as the panel's reply
+ * form has it: who it answers and what they asked, then the reply — at least
+ * five characters. Sent, it marks the query replied and goes back to the list.
+ *
+ * Route params: tab, id, topic, admin_text (the reply so far), user_name, query.
+ */
+
+const MIN = 5;
 
 const AdminEnquiryReplyScreen = ({ navigation, route }: any) => {
   const tab: EnquiryTab = route.params?.tab ?? 'teacher';
   const id: number = route.params?.id;
-  const topic: string = route.params?.topic ?? 'Enquiry';
+  const topic: string = route.params?.topic || 'Enquiry';
+  const userName: string | undefined = route.params?.user_name;
+  const query: string | undefined = route.params?.query;
   const isEdit = !!route.params?.admin_text;
 
   const [text, setText] = useState<string>(route.params?.admin_text ?? '');
+  const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
 
   const send = async () => {
-    if (text.trim().length < 2) {
-      AppAlert.alert('Required', 'Please write a reply.');
-      return;
-    }
+    if (!text.trim()) return setError('Write your reply.');
+    if (text.trim().length < MIN) return setError(`Your reply must be at least ${MIN} characters.`);
+    setError('');
     setSending(true);
     try {
       await replyEnquiry(tab, id, text.trim());
-      // Pop back to the list; it refreshes on focus and shows "Replied".
+      // Back to the list; it refreshes on focus and shows "Replied".
       navigation.navigate('AdminEnquiriesHome');
     } catch (e) {
-      AppAlert.alert('Error', apiErr(e, 'Could not send reply.'));
+      setError(apiErr(e, 'Could not send the reply.'));
     } finally {
       setSending(false);
     }
@@ -45,38 +46,40 @@ const AdminEnquiryReplyScreen = ({ navigation, route }: any) => {
 
   return (
     <View style={s.root}>
-      <Header title={isEdit ? 'Edit Reply' : 'Reply'} onBackPress={() => navigation.goBack()} />
+      <DocHeader title={isEdit ? 'Edit Reply' : 'Send Reply'} onBackPress={() => navigation.goBack()} />
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-          <Text style={s.contextLabel}>Replying to</Text>
-          <View style={s.contextCard}>
-            <VectorIcon iconSet="Ionicons" iconName="chatbubble-ellipses-outline" size={16} color={theme.colors.primary} />
-            <Text style={s.contextText} numberOfLines={2}>{topic}</Text>
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+          {/* Who it answers, and what they asked */}
+          <View style={s.context}>
+            <Text style={s.contextLabel}>{userName ? `Replying to ${userName}` : 'Replying to'}</Text>
+            <Text style={s.topic}>{topic}</Text>
+            {!!query && (
+              <Text style={s.query} numberOfLines={4}>
+                {query}
+              </Text>
+            )}
           </View>
 
-          <Text style={s.label}>Your reply</Text>
-          <TextInput
-            style={s.input}
-            value={text}
-            onChangeText={setText}
-            placeholder="Write your reply..."
-            placeholderTextColor={theme.colors.textMuted}
-            multiline
-            autoFocus
-          />
-        </ScrollView>
+          <View style={s.group}>
+            <FormCard
+              label="Your Reply"
+              value={text}
+              onChangeText={t => {
+                setText(t);
+                setError('');
+              }}
+              placeholder="Type your reply here..."
+              multiline
+              minHeight={160}
+            />
+            <Hint>At least {MIN} characters.</Hint>
+          </View>
 
-        <View style={s.footer}>
-          <TouchableOpacity style={s.sendBtn} onPress={send} activeOpacity={0.9} disabled={sending}>
-            {sending ? <ActivityIndicator color="#fff" /> : (
-              <>
-                <VectorIcon iconSet="Ionicons" iconName="send" size={17} color="#fff" />
-                <Text style={s.sendText}>{isEdit ? 'Update Reply' : 'Send Reply'}</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
+          <FormError>{error}</FormError>
+
+          <SubmitButton label={isEdit ? 'Update Reply' : 'Send Reply'} busy={sending} onPress={send} />
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -84,22 +87,18 @@ const AdminEnquiryReplyScreen = ({ navigation, route }: any) => {
 
 export default AdminEnquiryReplyScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { padding: 16 },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  flex: { flex: 1 },
+  scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 14 },
+  group: { gap: 8 },
 
-  contextLabel: { fontSize: 11, fontWeight: '800', color: theme.colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 },
-  contextCard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.colors.primaryLight, borderRadius: 12, padding: 12 },
-  contextText: { flex: 1, fontSize: 13, fontWeight: '700', color: theme.colors.textPrimary },
-
-  label: { fontSize: 13, fontWeight: '800', color: theme.colors.textPrimary, marginTop: 20, marginBottom: 8 },
-  input: {
-    borderWidth: 1, borderColor: theme.colors.border, borderRadius: 14,
-    paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: theme.colors.textPrimary,
-    backgroundColor: theme.colors.card, minHeight: 160, textAlignVertical: 'top',
-  },
-
-  footer: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20, borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.card },
-  sendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 52, borderRadius: 14, backgroundColor: theme.colors.primary },
-  sendText: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  context: { paddingBottom: 4 },
+  contextLabel: { fontSize: 12, color: theme.colors.textMuted },
+  topic: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary, marginTop: 4 },
+  query: { fontSize: 14, lineHeight: 21, color: theme.colors.textSecondary, marginTop: 6 },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });

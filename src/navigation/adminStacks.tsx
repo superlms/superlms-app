@@ -91,8 +91,15 @@ import AdminListsScreen from '../screens/admin/AdminListsScreen';
 import AdminRateLmsScreen from '../screens/admin/AdminRateLmsScreen';
 // Exam
 import AdminExamScreen from '../screens/admin/AdminExamScreen';
+import AdminExamListScreen from '../screens/admin/AdminExamListScreen';
+import AdminExamDetailScreen from '../screens/admin/AdminExamDetailScreen';
 import AdminExamFormScreen from '../screens/admin/AdminExamFormScreen';
+import AdminExamSyllabusScreen from '../screens/admin/AdminExamSyllabusScreen';
+import AdminExamSyllabusDetailScreen from '../screens/admin/AdminExamSyllabusDetailScreen';
 import AdminExamSyllabusFormScreen from '../screens/admin/AdminExamSyllabusFormScreen';
+import AdminExamPapersScreen from '../screens/admin/AdminExamPapersScreen';
+import AdminExamPaperDetailScreen from '../screens/admin/AdminExamPaperDetailScreen';
+import AdminExamPaperFormScreen from '../screens/admin/AdminExamPaperFormScreen';
 // ID Card
 import AdminIdCardScreen from '../screens/admin/AdminIdCardScreen';
 import AdminIdCardGenerateScreen from '../screens/admin/AdminIdCardGenerateScreen';
@@ -272,8 +279,15 @@ export const AdminMoreStack = () => (
 export const AdminExamStack = () => (
   <Stack.Navigator screenOptions={opts}>
     <Stack.Screen name="AdminExamHome" component={AdminExamScreen} />
+    <Stack.Screen name="AdminExamList" component={AdminExamListScreen} />
+    <Stack.Screen name="AdminExamDetail" component={AdminExamDetailScreen} />
     <Stack.Screen name="AdminExamForm" component={AdminExamFormScreen} />
+    <Stack.Screen name="AdminExamSyllabus" component={AdminExamSyllabusScreen} />
+    <Stack.Screen name="AdminExamSyllabusDetail" component={AdminExamSyllabusDetailScreen} />
     <Stack.Screen name="AdminExamSyllabusForm" component={AdminExamSyllabusFormScreen} />
+    <Stack.Screen name="AdminExamPapers" component={AdminExamPapersScreen} />
+    <Stack.Screen name="AdminExamPaperDetail" component={AdminExamPaperDetailScreen} />
+    <Stack.Screen name="AdminExamPaperForm" component={AdminExamPaperFormScreen} />
   </Stack.Navigator>
 );
 
