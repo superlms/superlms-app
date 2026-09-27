@@ -96,6 +96,8 @@ import AdminRateLmsScreen from '../screens/admin/AdminRateLmsScreen';
 import AdminContactAdminScreen from '../screens/admin/AdminContactAdminScreen';
 import AdminContactAdminDetailScreen from '../screens/admin/AdminContactAdminDetailScreen';
 import AdminContactAdminFormScreen from '../screens/admin/AdminContactAdminFormScreen';
+import AdminRulesScreen from '../screens/admin/AdminRulesScreen';
+import AdminRulesFormScreen from '../screens/admin/AdminRulesFormScreen';
 // Exam
 import AdminExamScreen from '../screens/admin/AdminExamScreen';
 import AdminExamListScreen from '../screens/admin/AdminExamListScreen';
@@ -319,6 +321,9 @@ export const AdminMoreStack = () => (
     <Stack.Screen name="AdminContactAdmin" component={AdminContactAdminScreen} />
     <Stack.Screen name="AdminContactAdminDetail" component={AdminContactAdminDetailScreen} />
     <Stack.Screen name="AdminContactAdminForm" component={AdminContactAdminFormScreen} />
+    {/* Rules & Regulation: read as students do, and edited as on the panel */}
+    <Stack.Screen name="AdminRules" component={AdminRulesScreen} />
+    <Stack.Screen name="AdminRulesForm" component={AdminRulesFormScreen} />
   </Stack.Navigator>
 );
 

@@ -22,7 +22,7 @@ const ITEMS: MoreItem[] = [
   { title: 'Users', description: 'Staff and sub-admin accounts', icon: 'people-outline', route: 'AdminUsers' },
   { title: 'Admissions', description: 'Admission enquiries and pipeline', icon: 'person-add-outline', route: 'AdminAdmissions' },
   { title: 'Lists', description: 'Student and staff lists', icon: 'list-outline', route: 'AdminLists' },
-  { title: 'Rules & Regulation', description: 'School rules to follow', icon: 'shield-checkmark-outline', route: 'RulesRegulationsMore' },
+  { title: 'Rules & Regulation', description: 'School rules to follow', icon: 'shield-checkmark-outline', route: 'AdminRules' },
   { title: 'Contact Admin', description: 'Message the Super Admin', icon: 'chatbubbles-outline', route: 'AdminContactAdmin' },
   { title: 'About App', description: 'App details and version', icon: 'information-circle-outline', route: 'AboutAppMore' },
   { title: 'Rate LMS', description: 'Share your feedback with us', icon: 'star-outline', route: 'AdminRateLms' },
