@@ -79,6 +79,9 @@ import AdminContentFormScreen from '../screens/admin/AdminContentFormScreen';
 import AdminQuizScreen from '../screens/admin/AdminQuizScreen';
 import AdminQuizFormScreen from '../screens/admin/AdminQuizFormScreen';
 // Book
+import AdminArrangementDayScreen from '../screens/admin/AdminArrangementDayScreen';
+import AdminArrangementSlotScreen from '../screens/admin/AdminArrangementSlotScreen';
+
 import AdminHomeworkHubScreen from '../screens/admin/AdminHomeworkHubScreen';
 import AdminHomeworkListScreen from '../screens/admin/AdminHomeworkListScreen';
 import AdminHomeworkDetailScreen from '../screens/admin/AdminHomeworkDetailScreen';
@@ -300,6 +303,14 @@ export const AdminQuizStack = () => (
   <Stack.Navigator screenOptions={opts}>
     <Stack.Screen name="AdminQuizHome" component={AdminQuizScreen} />
     <Stack.Screen name="AdminQuizForm" component={AdminQuizFormScreen} />
+  </Stack.Navigator>
+);
+
+// Arrangement — the day's absent teachers and their periods; a period's page.
+export const AdminArrangementStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminArrangementHome" component={AdminArrangementDayScreen} />
+    <Stack.Screen name="AdminArrangementSlot" component={AdminArrangementSlotScreen} />
   </Stack.Navigator>
 );
 
