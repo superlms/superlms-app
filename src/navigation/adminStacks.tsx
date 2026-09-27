@@ -127,8 +127,9 @@ import AdminTimetablePdfScreen from '../screens/admin/AdminTimetablePdfScreen';
 import AdminTimetableTeachersScreen from '../screens/admin/AdminTimetableTeachersScreen';
 import AdminTimetableTeacherScreen from '../screens/admin/AdminTimetableTeacherScreen';
 // TC & Certificate
+import AdminTcHubScreen from '../screens/admin/AdminTcHubScreen';
 import AdminTcCertificateListScreen from '../screens/admin/AdminTcCertificateListScreen';
-import AdminTcCertificateViewScreen from '../screens/admin/AdminTcCertificateViewScreen';
+import AdminTcCertificateDetailScreen from '../screens/admin/AdminTcCertificateDetailScreen';
 import AdminCertificateFormScreen from '../screens/admin/AdminCertificateFormScreen';
 import AdminTransferCertificateFormScreen from '../screens/admin/AdminTransferCertificateFormScreen';
 
@@ -366,8 +367,9 @@ export const AdminTimetableStack = () => (
 
 export const AdminTcCertificateStack = () => (
   <Stack.Navigator screenOptions={opts}>
-    <Stack.Screen name="AdminTcHome" component={AdminTcCertificateListScreen} />
-    <Stack.Screen name="AdminTcView" component={AdminTcCertificateViewScreen} />
+    <Stack.Screen name="AdminTcHome" component={AdminTcHubScreen} />
+    <Stack.Screen name="AdminTcList" component={AdminTcCertificateListScreen} />
+    <Stack.Screen name="AdminTcDetail" component={AdminTcCertificateDetailScreen} />
     <Stack.Screen name="AdminCertForm" component={AdminCertificateFormScreen} />
     <Stack.Screen name="AdminTcForm" component={AdminTransferCertificateFormScreen} />
   </Stack.Navigator>

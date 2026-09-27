@@ -10,33 +10,34 @@ import {
   TcAnalytics,
   TcItem,
   TcLookups,
-  TcStatistics,
   TcTab,
   getTcList,
   getTcLookups,
   getTcStats,
 } from '../../api/adminTcCertificateApi';
 import { OptionSheet } from './adminFormUi';
-import { ErrorState, FilterBar, FilterChip, RowsSkeleton, SearchField, UnderlineTabs } from './adminExamUi';
+import { ErrorState, FilterBar, FilterChip, RowsSkeleton, SearchField } from './adminExamUi';
 import { HeadBtn } from './adminAdmitCardUi';
 import { CertRow, TABS, TcRow, monthLabel, monthOptions } from './adminTcUi';
 
 /**
- * TC & Certificate — the panel's three tabs (Achievement, Participation,
- * Transfer Certificate) with their totals, drawn as the student's lists are:
- * a search on the student or the certificate number, the panel's filters as
- * pills (month, class, section), the panel's counts for the tab (issued in
- * all, this month, last month, this week), then a row per certificate, newest
- * first, more as the list scrolls. A row opens the certificate itself, with
- * Download, Edit and Delete; + issues one for the tab.
+ * One of the panel's three tabs (Achievement, Participation, Transfer
+ * Certificate) — the students it has been issued to, drawn as the student's
+ * lists are: a search on the student or the certificate number, the panel's
+ * filters as pills (month, class, section), the panel's counts for the tab
+ * (issued in all, this month, last month, this week), then a row per
+ * certificate, newest first, more as the list scrolls. A row opens its
+ * details; + issues one for the tab.
+ *
+ * Route params: tab.
  */
 
 const PER_PAGE = 20;
 type Row = CertItem | TcItem;
 type Sheet = 'month' | 'class' | 'section' | null;
 
-const AdminTcCertificateListScreen = ({ navigation }: any) => {
-  const [tab, setTab] = useState<TcTab>('achievement');
+const AdminTcCertificateListScreen = ({ navigation, route }: any) => {
+  const tab: TcTab = route?.params?.tab ?? 'achievement';
   const [query, setQuery] = useState('');
   const [month, setMonth] = useState('');
   const [classId, setClassId] = useState<number | null>(null);
@@ -44,7 +45,6 @@ const AdminTcCertificateListScreen = ({ navigation }: any) => {
   const [sheet, setSheet] = useState<Sheet>(null);
 
   const [lookups, setLookups] = useState<TcLookups | null>(null);
-  const [statistics, setStatistics] = useState<TcStatistics | null>(null);
   const [analytics, setAnalytics] = useState<TcAnalytics | null>(null);
   const [rows, setRows] = useState<Row[] | null>(null);
   const [page, setPage] = useState({ current: 1, last: 1 });
@@ -79,7 +79,6 @@ const AdminTcCertificateListScreen = ({ navigation }: any) => {
       if (mine !== seq.current) return;
       setRows(list.data);
       setPage({ current: list.pagination?.current_page ?? 1, last: list.pagination?.last_page ?? 1 });
-      setStatistics(stats.statistics);
       setAnalytics(stats.analytics);
     } catch (e) {
       if (mine === seq.current) setError(apiErr(e, 'Could not load the certificates.'));
@@ -137,15 +136,6 @@ const AdminTcCertificateListScreen = ({ navigation }: any) => {
     }
   };
 
-  // A tab starts afresh, and its search empties, as on the panel.
-  const switchTab = (t: TcTab) => {
-    if (t === tab) return;
-    seq.current++; // the last tab's answer, if still coming, is dropped
-    setRows(null);
-    setQuery('');
-    setTab(t);
-  };
-
   const classes = lookups?.classes ?? [];
   const cls = classes.find(c => c.id === classId) ?? null;
   const sections = cls?.sections ?? [];
@@ -158,7 +148,7 @@ const AdminTcCertificateListScreen = ({ navigation }: any) => {
       ? navigation.navigate('AdminTcForm', { classes })
       : navigation.navigate('AdminCertForm', { type: tab, classes });
 
-  const open = (item: Row) => navigation.navigate('AdminTcView', { kind: isTc ? 'tc' : 'cert', item, classes });
+  const open = (item: Row) => navigation.navigate('AdminTcDetail', { kind: isTc ? 'tc' : 'cert', item, classes });
 
   const sheetProps =
     sheet === 'month'
@@ -190,15 +180,9 @@ const AdminTcCertificateListScreen = ({ navigation }: any) => {
   return (
     <View style={s.root}>
       <DocHeader
-        title="TC & Certificate"
-        onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
+        title={TABS.find(t => t.key === tab)?.label ?? 'TC & Certificate'}
+        onBackPress={() => navigation.goBack()}
         rightSlot={<HeadBtn icon="add" onPress={issue} />}
-      />
-
-      <UnderlineTabs
-        tabs={TABS.map(t => ({ key: t.key, label: t.label, count: statistics?.[t.key] }))}
-        active={tab}
-        onChange={switchTab}
       />
 
       <SearchField value={query} onChangeText={setQuery} placeholder="Student / certificate no…" />

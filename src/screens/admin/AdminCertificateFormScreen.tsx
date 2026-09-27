@@ -71,7 +71,7 @@ const AdminCertificateFormScreen = ({ navigation, route }: any) => {
     try {
       if (isEdit) {
         const done = await updateCert(editing!.id, payload);
-        navigation.popTo('AdminTcView', { kind: 'cert', item: done ?? editing, classes, savedAt: Date.now() });
+        navigation.popTo('AdminTcDetail', { kind: 'cert', item: done ?? editing, classes });
       } else {
         await createCert(payload);
         navigation.goBack();

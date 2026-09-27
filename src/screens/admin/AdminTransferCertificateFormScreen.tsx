@@ -114,7 +114,7 @@ const AdminTransferCertificateFormScreen = ({ navigation, route }: any) => {
     try {
       if (isEdit) {
         const done = await updateTc(editing!.id, payload);
-        navigation.popTo('AdminTcView', { kind: 'tc', item: done ?? editing, classes, savedAt: Date.now() });
+        navigation.popTo('AdminTcDetail', { kind: 'tc', item: done ?? editing, classes });
       } else {
         await createTc(payload);
         navigation.goBack();
