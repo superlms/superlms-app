@@ -92,3 +92,42 @@ export const updateBook = async (id: number, p: BookPayload): Promise<BookRow> =
 export const deleteBook = async (id: number) => {
   await apiClient.delete(`/admin/books/${id}`);
 };
+
+// ─── The app's Books: class → section → subject → the book's PDF ─────────────
+// Added alongside the calls above, which older builds still use.
+
+export interface BookClass {
+  id: number;
+  name: string;
+  /** Every book of the class, whole-class ones included. */
+  books: number;
+  /** Books for the whole class (no section) — every section sees them. */
+  whole_class_books: number;
+  sections: { id: number; name: string; books: number }[];
+}
+
+export const getBookOverview = async (): Promise<{ stats: BookStats; classes: BookClass[] }> => {
+  const { data } = await apiClient.get('/admin/books/overview');
+  return unwrap(data);
+};
+
+export interface BookSubject {
+  id: number;
+  name: string;
+  /** The section's own books and the whole class's, newest first. */
+  books: BookRow[];
+}
+
+export const getBookSubjects = async (
+  standard_id: number,
+  section_id?: number | null,
+): Promise<{
+  standard: { id: number; name: string };
+  section: { id: number; name: string } | null;
+  subjects: BookSubject[];
+}> => {
+  const params: any = { standard_id };
+  if (section_id) params.section_id = section_id;
+  const { data } = await apiClient.get('/admin/books/subjects', { params });
+  return unwrap(data);
+};

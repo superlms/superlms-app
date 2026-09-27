@@ -79,8 +79,12 @@ import AdminContentFormScreen from '../screens/admin/AdminContentFormScreen';
 import AdminQuizScreen from '../screens/admin/AdminQuizScreen';
 import AdminQuizFormScreen from '../screens/admin/AdminQuizFormScreen';
 // Book
-import AdminBookScreen from '../screens/admin/AdminBookScreen';
-import AdminBookFormScreen from '../screens/admin/AdminBookFormScreen';
+import AdminBookClassesScreen from '../screens/admin/AdminBookClassesScreen';
+import AdminBookSectionsScreen from '../screens/admin/AdminBookSectionsScreen';
+import AdminBookSubjectsScreen from '../screens/admin/AdminBookSubjectsScreen';
+import AdminBookListScreen from '../screens/admin/AdminBookListScreen';
+import AdminBookViewScreen from '../screens/admin/AdminBookViewScreen';
+import AdminBookEditorScreen from '../screens/admin/AdminBookEditorScreen';
 // More
 import AdminMoreScreen from '../screens/admin/AdminMoreScreen';
 import AdminUsersScreen from '../screens/admin/AdminUsersScreen';
@@ -290,8 +294,12 @@ export const AdminQuizStack = () => (
 
 export const AdminBookStack = () => (
   <Stack.Navigator screenOptions={opts}>
-    <Stack.Screen name="AdminBookHome" component={AdminBookScreen} />
-    <Stack.Screen name="AdminBookForm" component={AdminBookFormScreen} />
+    <Stack.Screen name="AdminBookHome" component={AdminBookClassesScreen} />
+    <Stack.Screen name="AdminBookSections" component={AdminBookSectionsScreen} />
+    <Stack.Screen name="AdminBookSubjects" component={AdminBookSubjectsScreen} />
+    <Stack.Screen name="AdminBookList" component={AdminBookListScreen} />
+    <Stack.Screen name="AdminBookView" component={AdminBookViewScreen} />
+    <Stack.Screen name="AdminBookForm" component={AdminBookEditorScreen} />
   </Stack.Navigator>
 );
 
