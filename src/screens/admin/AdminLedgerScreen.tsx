@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
 import { Skeleton } from '../../components/Skeleton';
@@ -8,6 +8,9 @@ import { useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { LedgerEntry, LedgerPage, LedgerWindow, getLedger, ledgerStatementUrl } from '../../api/adminLedgerApi';
+import { downloadPdf } from '../../api/pdfDownload';
+import { HeaderIconButton } from '../../components/Header';
+import { AppAlert } from '../../components/AppDialog';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { DateSheet, OptionSheet } from './adminFormUi';
 import { ErrorBox, InfoRow, formatINR } from './adminTransportUi';
@@ -17,12 +20,16 @@ import { ErrorBox, InfoRow, formatINR } from './adminTransportUi';
  * and admission payment and every salary, beside the credits and expenses
  * entered by hand — drawn the way a student's pages are: the period's
  * figures at the top, then the statement day by day, newest first, each line
- * with the balance after it. The period is this month by default, or a month,
- * a range, one day, or all time; the statement for it opens as the panel's
- * PDF. A manual entry can be corrected for 7 days after it was made.
+ * with the balance after it. The period is all time by default, or this month,
+ * a month (April 2026 onwards), a range, or one day; the statement for it
+ * opens as the panel's PDF, or is downloaded straight to the phone from the
+ * header. A manual entry can be corrected for 7 days after it was made.
  */
 
 const TITLE = 'Ledger';
+
+// The Month list starts here: no month before April 2026 is offered.
+const FIRST_MONTH = '2026-04';
 
 const iso = (d: moment.Moment) => d.format('YYYY-MM-DD');
 const thisMonth = (): LedgerWindow => ({ kind: 'range', start: iso(moment().startOf('month')), end: iso(moment()) });
@@ -46,7 +53,9 @@ const Chip = ({ label, active, onPress, icon }: { label: string; active?: boolea
 );
 
 const AdminLedgerScreen = ({ navigation }: any) => {
-  const [win, setWin] = useState<LedgerWindow>(thisMonth);
+  // Opens on Overall — all time.
+  const [win, setWin] = useState<LedgerWindow>({ kind: 'overall' });
+  const [downloading, setDownloading] = useState(false);
   const [page, setPage] = useState<LedgerPage | null>(null);
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +64,8 @@ const AdminLedgerScreen = ({ navigation }: any) => {
   const [error, setError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<null | 'month' | 'day' | 'from' | 'to'>(null);
   const [rangeFrom, setRangeFrom] = useState<string | null>(null);
+  // Set while From hands the range sheet over to To.
+  const handingOver = useRef(false);
   const seq = useRef(0);
 
   const load = useCallback(async (w: LedgerWindow, quiet = false) => {
@@ -100,14 +111,15 @@ const AdminLedgerScreen = ({ navigation }: any) => {
     }
   };
 
-  const months = useMemo(
-    () =>
-      Array.from({ length: 24 }, (_, i) => {
-        const m = moment().startOf('month').subtract(i, 'months');
-        return { key: m.format('YYYY-MM'), label: m.format('MMMM YYYY') };
-      }),
-    [],
-  );
+  // This month back to April 2026, newest first.
+  const months = useMemo(() => {
+    const out: { key: string; label: string }[] = [];
+    const first = moment(FIRST_MONTH, 'YYYY-MM');
+    for (const m = moment().startOf('month'); !m.isBefore(first); m.subtract(1, 'month')) {
+      out.push({ key: m.format('YYYY-MM'), label: m.format('MMMM YYYY') });
+    }
+    return out;
+  }, []);
 
   // The statement as rows: a heading for each day, then its lines.
   const rows: Row[] = useMemo(() => {
@@ -131,6 +143,21 @@ const AdminLedgerScreen = ({ navigation }: any) => {
       payment: { id: 0, receipt_number: windowLabel(win) },
     });
 
+  // The same statement PDF, saved straight to the phone's Downloads — not opened.
+  const downloadStatement = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    const fileName = `Ledger-Statement-${windowLabel(win).replace(/[\\/:*?"<>|\s–]+/g, '-').replace(/-+/g, '-')}.pdf`;
+    try {
+      await downloadPdf(ledgerStatementUrl(win), fileName);
+      if (Platform.OS === 'android') AppAlert.alert('Downloaded', `${fileName} is saved in Downloads.`);
+    } catch {
+      AppAlert.alert('Could not download', 'Please check your connection and try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const sum = page?.summary;
   const isThisMonth = win.kind === 'range' && win.start === iso(moment().startOf('month')) && win.end === iso(moment());
   const isDay = win.kind === 'range' && win.start === win.end && !isThisMonth;
@@ -139,11 +166,11 @@ const AdminLedgerScreen = ({ navigation }: any) => {
   const Head = (
     <View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips}>
+        <Chip label="Overall" active={win.kind === 'overall'} onPress={() => pick({ kind: 'overall' })} />
         <Chip label="This month" active={isThisMonth} onPress={() => pick(thisMonth())} />
         <Chip label={win.kind === 'month' ? windowLabel(win) : 'Month'} active={win.kind === 'month'} icon="chevron-down" onPress={() => setSheet('month')} />
         <Chip label={isRange ? windowLabel(win) : 'Date range'} active={isRange} icon="chevron-down" onPress={() => setSheet('from')} />
         <Chip label={isDay ? windowLabel(win) : 'One day'} active={isDay} icon="chevron-down" onPress={() => setSheet('day')} />
-        <Chip label="Overall" active={win.kind === 'overall'} onPress={() => pick({ kind: 'overall' })} />
       </ScrollView>
 
       {/* The balance, then the period's figures */}
@@ -226,7 +253,20 @@ const AdminLedgerScreen = ({ navigation }: any) => {
 
   return (
     <View style={s.root}>
-      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} rightIcon="document-text-outline" onRightPress={statement} />
+      <DocHeader
+        title={TITLE}
+        onBackPress={() => navigation.goBack()}
+        rightSlot={
+          <View style={s.headActions}>
+            {downloading ? (
+              <ActivityIndicator style={s.headBusy} size="small" color={theme.colors.primary} />
+            ) : (
+              <HeaderIconButton icon="download-outline" onPress={downloadStatement} />
+            )}
+            <HeaderIconButton icon="document-text-outline" onPress={statement} />
+          </View>
+        }
+      />
 
       {error && !page ? (
         <ErrorBox message={error} onRetry={() => load(win)} />
@@ -292,29 +332,41 @@ const AdminLedgerScreen = ({ navigation }: any) => {
         }}
         onClose={() => setSheet(null)}
       />
+      {/* Date range: one sheet that asks From, then To. A day tapped closes a
+          DateSheet by itself, so the sheet stays open when From moves it on
+          to To, and closes once To is picked. */}
       <DateSheet
-        visible={sheet === 'from'}
-        title="From"
-        value={isRange && win.kind === 'range' ? win.start : iso(moment().startOf('month'))}
+        visible={sheet === 'from' || sheet === 'to'}
+        title={sheet === 'to' ? `To · from ${moment(rangeFrom ?? undefined).format('DD MMM YYYY')}` : 'From'}
+        value={
+          sheet === 'to'
+            ? rangeFrom ?? iso(moment())
+            : isRange && win.kind === 'range'
+            ? win.start
+            : iso(moment().startOf('month'))
+        }
         maxDate={iso(moment())}
         onPick={d => {
-          setRangeFrom(d);
-          setSheet('to');
-        }}
-        onClose={() => setSheet(null)}
-      />
-      <DateSheet
-        visible={sheet === 'to'}
-        title="To"
-        value={rangeFrom ?? iso(moment())}
-        maxDate={iso(moment())}
-        onPick={d => {
+          if (sheet === 'from') {
+            setRangeFrom(d);
+            setSheet('to');
+            handingOver.current = true;
+            return;
+          }
           setSheet(null);
           const from = rangeFrom ?? d;
           const [a, b] = from <= d ? [from, d] : [d, from];
           pick({ kind: 'range', start: a, end: b });
         }}
-        onClose={() => setSheet(null)}
+        // The close that follows From's pick is skipped, so To stays open; a
+        // tap outside or Back still closes it, on From or To.
+        onClose={() => {
+          if (handingOver.current) {
+            handingOver.current = false;
+            return;
+          }
+          setSheet(null);
+        }}
       />
     </View>
   );
@@ -324,6 +376,9 @@ export default AdminLedgerScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
+
+  headActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  headBusy: { width: 40 },
 
   chips: { gap: 8, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 4 },
   chip: {
