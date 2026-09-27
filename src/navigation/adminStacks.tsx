@@ -93,6 +93,9 @@ import AdminAdmissionsScreen from '../screens/admin/AdminAdmissionsScreen';
 import AdminAdmissionDetailScreen from '../screens/admin/AdminAdmissionDetailScreen';
 import AdminListsScreen from '../screens/admin/AdminListsScreen';
 import AdminRateLmsScreen from '../screens/admin/AdminRateLmsScreen';
+import AdminContactAdminScreen from '../screens/admin/AdminContactAdminScreen';
+import AdminContactAdminDetailScreen from '../screens/admin/AdminContactAdminDetailScreen';
+import AdminContactAdminFormScreen from '../screens/admin/AdminContactAdminFormScreen';
 // Exam
 import AdminExamScreen from '../screens/admin/AdminExamScreen';
 import AdminExamListScreen from '../screens/admin/AdminExamListScreen';
@@ -312,6 +315,10 @@ export const AdminMoreStack = () => (
     <Stack.Screen name="AdminAdmissionDetail" component={AdminAdmissionDetailScreen} />
     <Stack.Screen name="AdminLists" component={AdminListsScreen} />
     <Stack.Screen name="AdminRateLms" component={AdminRateLmsScreen} />
+    {/* Contact Admin: the school's messages to the Super Admin */}
+    <Stack.Screen name="AdminContactAdmin" component={AdminContactAdminScreen} />
+    <Stack.Screen name="AdminContactAdminDetail" component={AdminContactAdminDetailScreen} />
+    <Stack.Screen name="AdminContactAdminForm" component={AdminContactAdminFormScreen} />
   </Stack.Navigator>
 );
 
