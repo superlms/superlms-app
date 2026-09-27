@@ -143,6 +143,8 @@ export const AdminTeachersStack = () => (
     <Stack.Screen name="AdminTeachersHome" component={AdminTeachersScreen} />
     <Stack.Screen name="AdminTeacherDetail" component={AdminTeacherDetailScreen} />
     <Stack.Screen name="AdminTeacherForm" component={AdminTeacherFormScreen} />
+    {/* A teacher's photo, large, to pinch or double-tap to zoom */}
+    <Stack.Screen name="AdminTeacherPhoto" component={FeeImageScreen} />
   </Stack.Navigator>
 );
 

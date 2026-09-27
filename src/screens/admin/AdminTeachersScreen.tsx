@@ -1,250 +1,298 @@
-import React, { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
-import Header from '../../components/Header';
-import ListRow from '../../components/ListRow';
-import Select from '../../components/Select';
 import AppRefreshControl from '../../components/AppRefreshControl';
-import { useRefresh } from '../../hooks/useRefresh';
-import { theme } from '../../utils/theme';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
-import { saveCsvFile } from '../../api/pdfDownload';
+import { DocHeader, DocNoData } from '../more/docUi';
 import {
+  TeacherLookups,
   TeacherRow,
   TeacherStats,
-  TeacherFilters,
+  getTeacherLookups,
   getTeachers,
 } from '../../api/adminTeacherApi';
-import { AppAlert } from '../../components/AppDialog';
+import { OptionSheet } from './adminFormUi';
+import { FilterBar, FilterChip, SearchField, UnderlineTabs } from './adminExamUi';
+import { ListSkeleton, plural } from './adminStudentsUi';
+import { TeacherListRow } from './adminTeachersUi';
+import TeacherExportSheet from './TeacherExportSheet';
 
-const GENDER_OPTS = [
-  { label: 'All Genders', value: '' },
-  { label: 'Male', value: 'male' },
-  { label: 'Female', value: 'female' },
-  { label: 'Other', value: 'other' },
-];
-const STATUS_OPTS = [
-  { label: 'All Status', value: '' },
-  { label: 'Active', value: '1' },
-  { label: 'Inactive', value: '0' },
+/**
+ * Teachers — the panel's Teachers page, drawn as the Students lists are: a
+ * search (name, email, employee ID, phone), the panel's filters as pills —
+ * class, then a section of it, and gender — and its status as tabs, All,
+ * Active and Inactive, with their counts. Then a count (and, as the panel's
+ * "This Year", how many joined this session) over a row per teacher, newest
+ * first: the photo, the name, the username, employee ID and mobile, and the
+ * class they are class teacher of. A row opens Teacher Detail. The header
+ * holds Export — Excel or PDF, as the panel asks it — and the + that adds one.
+ */
+
+type Tab = 'all' | 'active' | 'inactive';
+type Sheet = 'class' | 'section' | 'gender' | null;
+
+const GENDERS = [
+  { key: '', label: 'All Genders' },
+  { key: 'male', label: 'Male' },
+  { key: 'female', label: 'Female' },
+  { key: 'other', label: 'Other' },
 ];
 
-const csvCell = (v: any) => {
-  const str = v === null || v === undefined ? '' : String(v);
-  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-};
+const HeadBtn = ({ icon, onPress }: { icon: string; onPress: () => void }) => (
+  <TouchableOpacity onPress={onPress} hitSlop={10} activeOpacity={0.6} style={s.headBtn}>
+    <VectorIcon iconSet="Ionicons" iconName={icon} size={19} color={theme.colors.textPrimary} />
+  </TouchableOpacity>
+);
 
 const AdminTeachersScreen = ({ navigation }: any) => {
-  const [rows, setRows] = useState<TeacherRow[]>([]);
+  const [rows, setRows] = useState<TeacherRow[] | null>(null);
   const [stats, setStats] = useState<TeacherStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [lookups, setLookups] = useState<TeacherLookups | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const [search, setSearch] = useState('');
-  const [fGender, setFGender] = useState('');
-  const [fStatus, setFStatus] = useState('');
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [classId, setClassId] = useState<number | null>(null);
+  const [sectionId, setSectionId] = useState<number | null>(null);
+  const [gender, setGender] = useState('');
+  const [tab, setTab] = useState<Tab>('all');
+  const [sheet, setSheet] = useState<Sheet>(null);
 
-  const buildFilters = useCallback(
-    (extra: Partial<TeacherFilters> = {}): TeacherFilters => {
-      const f: TeacherFilters = { ...extra };
-      if (search.trim()) f.search = search.trim();
-      if (fGender) f.gender = fGender;
-      if (fStatus) f.status = fStatus as '0' | '1';
-      return f;
-    },
-    [search, fGender, fStatus],
+  useEffect(() => {
+    getTeacherLookups().then(setLookups).catch(() => {});
+  }, []);
+
+  const seq = useRef(0);
+  const load = useCallback(async () => {
+    const mine = ++seq.current;
+    setError(null);
+    try {
+      const r = await getTeachers({
+        search: search.trim() || undefined,
+        gender: gender || undefined,
+        class: classId ?? undefined,
+        section: classId && sectionId ? sectionId : undefined,
+        // Every teacher at once — the list scrolls rather than pages.
+        per_page: 1000,
+      });
+      if (mine === seq.current) {
+        setRows(r.teachers);
+        setStats(r.stats);
+      }
+    } catch (e) {
+      if (mine === seq.current) setError(apiErr(e, 'Could not load teachers.'));
+    } finally {
+      if (mine === seq.current) setRefreshing(false);
+    }
+  }, [search, gender, classId, sectionId]);
+
+  // Typing waits a moment before it asks, as the panel's search does.
+  useEffect(() => {
+    const t = setTimeout(load, search ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [load, search]);
+
+  // Back from a teacher's page (added, edited or deleted), the list is fresh.
+  // The latest load is held aside so typing does not count as coming back.
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  const loaded = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!loaded.current) {
+        loaded.current = true;
+        return;
+      }
+      loadRef.current();
+    }, []),
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await getTeachers(buildFilters({ per_page: 200 }));
-      setRows(res.teachers);
-      setStats(res.stats);
-    } catch (e) {
-      AppAlert.alert('Error', apiErr(e, 'Could not load teachers.'));
-    } finally {
-      setLoading(false);
+  const list = useMemo(() => rows ?? [], [rows]);
+  const counts = useMemo(() => {
+    const active = list.filter(r => r.is_active).length;
+    return { all: list.length, active, inactive: list.length - active };
+  }, [list]);
+  const visible = tab === 'all' ? list : list.filter(r => (tab === 'active' ? r.is_active : !r.is_active));
+
+  const classes = lookups?.classes ?? [];
+  const sections = (lookups?.sections ?? []).filter(x => x.standard_id === classId);
+  const cls = classes.find(c => c.id === classId);
+  const sec = sections.find(x => x.id === sectionId);
+  const narrowed = !!(classId || gender);
+  const searching = !!search.trim();
+
+  const countLine =
+    searching || narrowed
+      ? `${plural(visible.length, 'teacher')} found`
+      : [
+          plural(visible.length, 'teacher'),
+          tab === 'all' && stats?.this_year != null ? `${stats.this_year} joined this year` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
+
+  const sheetProps =
+    sheet === 'class'
+      ? {
+          title: 'Class',
+          options: [{ key: '', label: 'All Classes' }, ...classes.map(c => ({ key: String(c.id), label: c.name }))],
+          selected: [classId ? String(classId) : ''],
+          onPick: (k: string) => {
+            setClassId(k ? Number(k) : null);
+            setSectionId(null);
+          },
+        }
+      : sheet === 'section'
+      ? {
+          title: `Section · ${cls?.name ?? ''}`,
+          options: [{ key: '', label: 'All Sections' }, ...sections.map(x => ({ key: String(x.id), label: x.name }))],
+          selected: [sectionId ? String(sectionId) : ''],
+          onPick: (k: string) => setSectionId(k ? Number(k) : null),
+        }
+      : {
+          title: 'Gender',
+          options: GENDERS,
+          selected: [gender],
+          onPick: setGender,
+        };
+
+  const body = () => {
+    if (!rows && !error) return <ListSkeleton photo />;
+
+    if (error && !rows) {
+      return (
+        <View style={s.centered}>
+          <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
+          <Text style={s.errorText}>{error}</Text>
+          <TouchableOpacity onPress={load} hitSlop={10}>
+            <Text style={s.link}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      );
     }
-  }, [buildFilters]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
-
-  const { refreshing, onRefresh } = useRefresh(load);
-
-  const activeFilterCount = (fGender ? 1 : 0) + (fStatus ? 1 : 0);
-  const clearFilters = () => { setFGender(''); setFStatus(''); };
-
-  const doExport = async () => {
-    setExporting(true);
-    try {
-      const res = await getTeachers(buildFilters({ per_page: 10000 }));
-      const list = res.teachers;
-      if (list.length === 0) { AppAlert.alert('Export', 'No teachers to export.'); return; }
-      const headers = ['Name', 'Employee ID', 'Email', 'Phone', 'Gender', 'Qualification', 'Status'];
-      const lines = [headers.join(',')];
-      list.forEach(r => {
-        lines.push([
-          r.name, r.employee_id, r.email, r.phone, r.gender, r.qualification,
-          r.is_active ? 'Active' : 'Inactive',
-        ].map(csvCell).join(','));
-      });
-      const stamp = new Date().toISOString().slice(0, 10);
-      await saveCsvFile(`teachers_${stamp}`, lines.join('\n'));
-      AppAlert.alert('Export complete', `${list.length} teachers exported to your Downloads.`);
-    } catch (e) {
-      AppAlert.alert('Export failed', apiErr(e, 'Could not export teachers.'));
-    } finally {
-      setExporting(false);
-    }
+    return (
+      <FlatList
+        data={visible}
+        keyExtractor={i => String(i.id)}
+        contentContainerStyle={[s.list, visible.length === 0 && s.listEmpty]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
+        ListHeaderComponent={visible.length > 0 ? <Text style={s.count}>{countLine}</Text> : null}
+        ListEmptyComponent={
+          searching || narrowed || tab !== 'all' ? (
+            <DocNoData icon="search-outline" title="No teachers found" subtitle="Nothing matches this search or these filters." />
+          ) : (
+            <DocNoData icon="person-add-outline" title="No teachers yet" subtitle="Tap + to add the school’s first teacher." />
+          )
+        }
+        renderItem={({ item, index }) => (
+          <TeacherListRow
+            teacher={item}
+            onOpen={() => navigation.navigate('AdminTeacherDetail', { id: item.id })}
+            isLast={index === visible.length - 1}
+          />
+        )}
+      />
+    );
   };
 
   return (
     <View style={s.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={theme.colors.card} />
-      <Header
+      <DocHeader
         title="Teachers"
         onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
         rightSlot={
           <View style={s.headActions}>
-            <TouchableOpacity style={s.headBtn} onPress={() => setFilterOpen(true)} activeOpacity={0.8}>
-              <VectorIcon iconSet="Ionicons" iconName="filter" size={18} color={theme.colors.primary} />
-              {activeFilterCount > 0 && <View style={s.headDot}><Text style={s.headDotText}>{activeFilterCount}</Text></View>}
-            </TouchableOpacity>
-            <TouchableOpacity style={s.headBtn} onPress={doExport} activeOpacity={0.8} disabled={exporting}>
-              {exporting
-                ? <ActivityIndicator size="small" color={theme.colors.primary} />
-                : <VectorIcon iconSet="Ionicons" iconName="download-outline" size={18} color={theme.colors.primary} />}
-            </TouchableOpacity>
+            <HeadBtn icon="download-outline" onPress={() => setExportOpen(true)} />
+            <HeadBtn icon="add" onPress={() => navigation.navigate('AdminTeacherForm')} />
           </View>
         }
       />
 
-      <View style={s.statRow}>
-        {[
-          { label: 'Total', value: stats?.total, color: '#8B5CF6' },
-          { label: 'Active', value: stats?.active, color: '#22C55E' },
-          { label: 'Inactive', value: stats?.inactive, color: '#EF4444' },
-        ].map(c => (
-          <View key={c.label} style={[s.statCard, { backgroundColor: c.color + '14' }]}>
-            <Text style={[s.statVal, { color: c.color }]}>{c.value ?? '—'}</Text>
-            <Text style={s.statLbl}>{c.label}</Text>
-          </View>
-        ))}
-      </View>
+      <SearchField value={search} onChangeText={setSearch} placeholder="Search name, email, ID, phone" />
 
-      <View style={s.searchRow}>
-        <VectorIcon iconSet="Ionicons" iconName="search" size={16} color={theme.colors.textMuted} />
-        <TextInput style={s.searchInput} placeholder="Search name, email, employee ID"
-          placeholderTextColor={theme.colors.textMuted} value={search} onChangeText={setSearch} returnKeyType="search" />
-        {!!search && <TouchableOpacity onPress={() => setSearch('')}><VectorIcon iconSet="Ionicons" iconName="close-circle" size={16} color={theme.colors.textMuted} /></TouchableOpacity>}
-      </View>
+      <FilterBar
+        onClear={
+          narrowed
+            ? () => {
+                setClassId(null);
+                setSectionId(null);
+                setGender('');
+              }
+            : undefined
+        }
+      >
+        <FilterChip label={cls?.name ?? 'All Classes'} active={!!classId} onPress={() => setSheet('class')} />
+        <FilterChip
+          label={sec ? `Section ${sec.name}` : 'All Sections'}
+          active={!!sectionId}
+          disabled={!classId || sections.length === 0}
+          onPress={() => setSheet('section')}
+        />
+        <FilterChip
+          label={GENDERS.find(g => g.key === gender)?.label ?? 'All Genders'}
+          active={!!gender}
+          onPress={() => setSheet('gender')}
+        />
+      </FilterBar>
 
-      {loading && !refreshing ? (
-        <View style={s.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>
+      {rows ? (
+        <UnderlineTabs
+          tabs={[
+            { key: 'all' as Tab, label: 'All', count: counts.all },
+            { key: 'active' as Tab, label: 'Active', count: counts.active },
+            { key: 'inactive' as Tab, label: 'Inactive', count: counts.inactive },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
       ) : (
-        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-          {rows.length === 0 && <Text style={s.empty}>No teachers found.</Text>}
-          {rows.map(r => (
-            <ListRow
-              key={r.id}
-              color={r.is_active ? '#8B5CF6' : '#EF4444'}
-              title={r.name ?? '—'}
-              subtitle={`${r.employee_id ?? '—'}${r.qualification ? ` · ${r.qualification}` : ''}`}
-              metaIcon="mail-outline"
-              meta={r.email || r.phone || undefined}
-              tag={r.is_active ? 'Active' : 'Inactive'}
-              tagColor={r.is_active ? '#22C55E' : '#EF4444'}
-              onPress={() => navigation.navigate('AdminTeacherDetail', { id: r.id })}
-            />
-          ))}
-          <View style={{ height: 90 }} />
-        </ScrollView>
+        <View style={s.gap} />
       )}
 
-      <TouchableOpacity style={s.fab} onPress={() => navigation.navigate('AdminTeacherForm')} activeOpacity={0.9}>
-        <VectorIcon iconSet="Ionicons" iconName="add" size={28} color="#fff" />
-      </TouchableOpacity>
+      {body()}
 
-      {/* Filter popup (top-right) */}
-      {filterOpen && (
-        <View style={s.filterOverlay}>
-          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setFilterOpen(false)} />
-          <View style={s.filterCard}>
-            <View style={s.filterHead}>
-              <Text style={s.filterTitle}>Filter Teachers</Text>
-              <TouchableOpacity onPress={() => setFilterOpen(false)}><VectorIcon iconSet="Ionicons" iconName="close" size={20} color={theme.colors.textMuted} /></TouchableOpacity>
-            </View>
-            <Select label="Gender" value={fGender} options={GENDER_OPTS} onChange={(v) => setFGender(String(v))} />
-            <Select label="Status" value={fStatus} options={STATUS_OPTS} onChange={(v) => setFStatus(String(v))} />
-            <View style={s.filterActions}>
-              <TouchableOpacity style={[s.fbtn, s.fbtnGhost]} onPress={clearFilters} activeOpacity={0.85}>
-                <Text style={s.fbtnGhostText}>Clear</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.fbtn, s.fbtnPrimary]} onPress={() => setFilterOpen(false)} activeOpacity={0.9}>
-                <Text style={s.fbtnPrimaryText}>Apply</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      )}
+      <OptionSheet
+        visible={sheet !== null}
+        title={sheetProps.title}
+        options={sheetProps.options}
+        selected={sheetProps.selected}
+        onPick={sheetProps.onPick}
+        onClose={() => setSheet(null)}
+      />
+
+      <TeacherExportSheet visible={exportOpen} onClose={() => setExportOpen(false)} />
     </View>
   );
 };
 
 export default AdminTeachersScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  loader: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 40 },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
 
-  headActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
-  headDot: { position: 'absolute', top: -2, right: -2, minWidth: 15, height: 15, paddingHorizontal: 3, borderRadius: 8, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
-  headDotText: { fontSize: 9, fontWeight: '800', color: '#fff' },
+  // Header actions
+  headActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
 
-  statRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 12 },
-  statCard: { flex: 1, borderRadius: 14, paddingVertical: 12, alignItems: 'center' },
-  statVal: { fontSize: 20, fontWeight: '900' },
-  statLbl: { fontSize: 11, color: theme.colors.textSecondary, fontWeight: '600', marginTop: 2 },
+  gap: { height: 8 },
 
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 12, paddingHorizontal: 12, height: 42, borderRadius: 12, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
-  searchInput: { flex: 1, fontSize: 14, color: theme.colors.textPrimary, paddingVertical: 0 },
+  // List
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
+  listEmpty: { flexGrow: 1 },
+  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
 
-  scroll: { paddingHorizontal: 16, paddingTop: 10 },
-  empty: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', marginTop: 40 },
-
-  card: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.card, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 8, borderWidth: 1, borderColor: theme.colors.border },
-  avatar: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  avatarImg: { width: 38, height: 38, borderRadius: 12 },
-  avatarInit: { fontSize: 16, fontWeight: '900', color: '#8B5CF6' },
-  cardTitle: { fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary },
-  cardSub: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
-  inactiveTag: { backgroundColor: '#FEE2E2', borderRadius: theme.radius.full, paddingHorizontal: 8, paddingVertical: 3 },
-  inactiveTagText: { fontSize: 10, fontWeight: '800', color: theme.colors.danger },
-
-  fab: { position: 'absolute', right: 18, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
-
-  filterOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, elevation: 50, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'flex-end', justifyContent: 'flex-start', paddingTop: 66, paddingRight: 12 },
-  filterCard: { width: '86%', maxWidth: 360, backgroundColor: theme.colors.card, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: theme.colors.border, elevation: 8, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
-  filterHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  filterTitle: { fontSize: 16, fontWeight: '800', color: theme.colors.textPrimary },
-  filterActions: { flexDirection: 'row', gap: 10, marginTop: 16 },
-  fbtn: { flex: 1, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  fbtnGhost: { backgroundColor: theme.colors.border },
-  fbtnGhostText: { fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary },
-  fbtnPrimary: { backgroundColor: theme.colors.primary },
-  fbtnPrimaryText: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  // Error
+  centered: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
+  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  link: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });
