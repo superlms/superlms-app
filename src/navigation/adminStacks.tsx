@@ -126,6 +126,11 @@ import AdminTimetableFormScreen from '../screens/admin/AdminTimetableFormScreen'
 import AdminTimetablePdfScreen from '../screens/admin/AdminTimetablePdfScreen';
 import AdminTimetableTeachersScreen from '../screens/admin/AdminTimetableTeachersScreen';
 import AdminTimetableTeacherScreen from '../screens/admin/AdminTimetableTeacherScreen';
+// TC & Certificate
+import AdminTcCertificateListScreen from '../screens/admin/AdminTcCertificateListScreen';
+import AdminTcCertificateViewScreen from '../screens/admin/AdminTcCertificateViewScreen';
+import AdminCertificateFormScreen from '../screens/admin/AdminCertificateFormScreen';
+import AdminTransferCertificateFormScreen from '../screens/admin/AdminTransferCertificateFormScreen';
 
 // Each admin section that has list → detail → form/reply screens gets its own
 // native stack. This gives correct, isolated back navigation (a "Back" inside a
@@ -356,5 +361,14 @@ export const AdminTimetableStack = () => (
     <Stack.Screen name="AdminTimetablePdf" component={AdminTimetablePdfScreen} />
     <Stack.Screen name="AdminTimetableTeachers" component={AdminTimetableTeachersScreen} />
     <Stack.Screen name="AdminTimetableTeacher" component={AdminTimetableTeacherScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminTcCertificateStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminTcHome" component={AdminTcCertificateListScreen} />
+    <Stack.Screen name="AdminTcView" component={AdminTcCertificateViewScreen} />
+    <Stack.Screen name="AdminCertForm" component={AdminCertificateFormScreen} />
+    <Stack.Screen name="AdminTcForm" component={AdminTransferCertificateFormScreen} />
   </Stack.Navigator>
 );

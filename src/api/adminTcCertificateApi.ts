@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import constant from '../utils/constant';
 import { authHeader, downloadPdf } from './pdfDownload';
 
 // TC & Certificate module. Mirrors app/Livewire/Admin/TcCertificate.php over
@@ -181,3 +182,7 @@ export const deleteTc = async (id: number): Promise<void> => {
 
 export const downloadCertificatePdf = (pdfUrl: string, fileName: string): Promise<string> =>
   downloadPdf(pdfUrl, fileName);
+
+/** A certificate's or TC's PDF on the app's own API address (what pdf_url points at). */
+export const certificatePdfUrl = (kind: 'cert' | 'tc', id: number) =>
+  `${constant.API_BASE_URL}/admin/tc-certificate/${kind}/${id}/pdf`;
