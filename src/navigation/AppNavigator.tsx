@@ -72,7 +72,11 @@ import TransportPaymentsScreen from '../screens/transport/TransportPaymentsScree
 import TransportReceiptScreen from '../screens/transport/TransportReceiptScreen';
 import TeacherStudentsScreen from '../screens/teacherStudents/TeacherStudentsScreen';
 import TeacherStudentFormScreen from '../screens/teacherStudents/TeacherStudentFormScreen';
-import AdminProfileScreen from '../screens/admin/AdminProfileScreen';
+import AdminSchoolProfileScreen from '../screens/admin/AdminSchoolProfileScreen';
+import AdminSchoolInfoFormScreen from '../screens/admin/AdminSchoolInfoFormScreen';
+import AdminSchoolMemberFormScreen from '../screens/admin/AdminSchoolMemberFormScreen';
+import AdminSchoolDocumentFormScreen from '../screens/admin/AdminSchoolDocumentFormScreen';
+import AdminChangePasswordScreen from '../screens/admin/AdminChangePasswordScreen';
 import PanelDrawerNavigator from './PanelDrawerNavigator';
 import AdminDrawerNavigator from './AdminDrawerNavigator';
 
@@ -206,7 +210,13 @@ const AppNavigator = () => {
 
       {/* School Admin — dashboard + the web panel's sidebar */}
       <Stack.Screen name="AdminDashboard" component={AdminDrawerNavigator} />
-      <Stack.Screen name="AdminProfile" component={AdminProfileScreen} />
+      {/* Profile — the panel's two tabs (School Details, School Profile), the
+          School Profile form, a member, a document and Change Password */}
+      <Stack.Screen name="AdminProfile" component={AdminSchoolProfileScreen} />
+      <Stack.Screen name="AdminSchoolInfoForm" component={AdminSchoolInfoFormScreen} />
+      <Stack.Screen name="AdminSchoolMemberForm" component={AdminSchoolMemberFormScreen} />
+      <Stack.Screen name="AdminSchoolDocumentForm" component={AdminSchoolDocumentFormScreen} />
+      <Stack.Screen name="AdminChangePassword" component={AdminChangePasswordScreen} />
 
       {/* Accounts (Phase 0) — dashboard + slide-out sidebar */}
       <Stack.Screen

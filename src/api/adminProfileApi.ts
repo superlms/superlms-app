@@ -7,6 +7,14 @@ export interface AdminProfileUser {
   email: string;
   role: string;
   image?: string | null;
+  // A sub-admin's own details and the screens granted to them (by title), as
+  // the panel's Profile shows them. Absent from an older server.
+  mobile_number?: string | null;
+  alternative_mobile?: string | null;
+  gender?: string | null;
+  dob?: string | null;
+  date_of_joining?: string | null;
+  granted_access?: string[];
 }
 
 export interface AdminProfileOrg {
@@ -14,6 +22,21 @@ export interface AdminProfileOrg {
   name: string;
   logo?: string | null;
   school_code?: string | null;
+  // The school as the super-admin added it, and its bank details (the panel's
+  // School Profile tab). Absent from an older server.
+  email?: string | null;
+  mobile_number?: string | null;
+  state?: string | null;
+  education_board?: string | null;
+  affiliation_no?: string | null;
+  udise_number?: string | null;
+  serial_number?: string | null;
+  address?: string | null;
+  bank_name?: string | null;
+  bank_account_no?: string | null;
+  bank_ifsc?: string | null;
+  bank_branch?: string | null;
+  bank_holder_name?: string | null;
 }
 
 export interface CustomSection {
@@ -34,6 +57,8 @@ export interface SchoolInfoData {
   usm_values?: string | null;
   usm_goals?: string | null;
   custom_sections?: CustomSection[];
+  /** When the school info was last saved (read-only; absent from an older server). */
+  updated_at?: string | null;
 }
 
 export interface ManagementMember {
