@@ -21,9 +21,9 @@ import { ErrorBox, InfoRow, formatINR } from './adminTransportUi';
  * entered by hand — drawn the way a student's pages are: the period's
  * figures at the top, then the statement day by day, newest first, each line
  * with the balance after it. The period is all time by default, or this month,
- * a month (April 2026 onwards), a range, or one day; the statement for it
- * opens as the panel's PDF, or is downloaded straight to the phone from the
- * header. A manual entry can be corrected for 7 days after it was made.
+ * a month (April 2026 onwards), a range, or one day; the header's download
+ * saves the panel's PDF statement for it straight to the phone. A manual
+ * entry can be corrected for 7 days after it was made.
  */
 
 const TITLE = 'Ledger';
@@ -135,15 +135,7 @@ const AdminLedgerScreen = ({ navigation }: any) => {
     if (e.manual_id && e.editable) navigation.navigate('AdminLedgerForm', { id: e.manual_id });
   };
 
-  const statement = () =>
-    navigation.navigate('AdminLedgerStatement', {
-      title: 'Statement',
-      url: ledgerStatementUrl(win),
-      namePrefix: 'Ledger-Statement',
-      payment: { id: 0, receipt_number: windowLabel(win) },
-    });
-
-  // The same statement PDF, saved straight to the phone's Downloads — not opened.
+  // The statement PDF, saved straight to the phone's Downloads — not opened.
   const downloadStatement = async () => {
     if (downloading) return;
     setDownloading(true);
@@ -263,7 +255,6 @@ const AdminLedgerScreen = ({ navigation }: any) => {
             ) : (
               <HeaderIconButton icon="download-outline" onPress={downloadStatement} />
             )}
-            <HeaderIconButton icon="document-text-outline" onPress={statement} />
           </View>
         }
       />
