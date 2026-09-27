@@ -72,7 +72,9 @@ import TransportPaymentsScreen from '../screens/transport/TransportPaymentsScree
 import TransportReceiptScreen from '../screens/transport/TransportReceiptScreen';
 import TeacherStudentsScreen from '../screens/teacherStudents/TeacherStudentsScreen';
 import TeacherStudentFormScreen from '../screens/teacherStudents/TeacherStudentFormScreen';
-import AdminSchoolProfileScreen from '../screens/admin/AdminSchoolProfileScreen';
+import AdminProfileHubScreen from '../screens/admin/AdminProfileHubScreen';
+import AdminSchoolDetailsScreen from '../screens/admin/AdminSchoolDetailsScreen';
+import AdminSchoolInfoScreen from '../screens/admin/AdminSchoolInfoScreen';
 import AdminSchoolInfoFormScreen from '../screens/admin/AdminSchoolInfoFormScreen';
 import AdminSchoolMemberFormScreen from '../screens/admin/AdminSchoolMemberFormScreen';
 import AdminSchoolDocumentFormScreen from '../screens/admin/AdminSchoolDocumentFormScreen';
@@ -210,9 +212,12 @@ const AppNavigator = () => {
 
       {/* School Admin — dashboard + the web panel's sidebar */}
       <Stack.Screen name="AdminDashboard" component={AdminDrawerNavigator} />
-      {/* Profile — the panel's two tabs (School Details, School Profile), the
-          School Profile form, a member, a document and Change Password */}
-      <Stack.Screen name="AdminProfile" component={AdminSchoolProfileScreen} />
+      {/* Profile — the school, then the panel's two tabs as rows: School Details
+          and School Profile, each its own page; the School Profile form, a member,
+          a document and Change Password */}
+      <Stack.Screen name="AdminProfile" component={AdminProfileHubScreen} />
+      <Stack.Screen name="AdminSchoolDetails" component={AdminSchoolDetailsScreen} />
+      <Stack.Screen name="AdminSchoolInfo" component={AdminSchoolInfoScreen} />
       <Stack.Screen name="AdminSchoolInfoForm" component={AdminSchoolInfoFormScreen} />
       <Stack.Screen name="AdminSchoolMemberForm" component={AdminSchoolMemberFormScreen} />
       <Stack.Screen name="AdminSchoolDocumentForm" component={AdminSchoolDocumentFormScreen} />

@@ -1,9 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Keyboard, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
+import { useFocusLoad, useRefresh } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
-import type { SchoolInfoData } from '../../api/adminProfileApi';
+import { apiErr } from '../../utils/filePickers';
+import { AdminProfile, SchoolInfoData, getAdminProfile } from '../../api/adminProfileApi';
 
 /**
  * The pieces the admin app's Profile pages share (School Details, School
@@ -11,6 +13,37 @@ import type { SchoolInfoData } from '../../api/adminProfileApi';
  * student app draws a person: a small heading over plain lines on hairlines,
  * and fields that are an outline and nothing else.
  */
+
+// ── Loading ──────────────────────────────────────────────────────────────────
+/**
+ * The admin's profile (GET admin/profile), loaded each time the page comes
+ * into view — back from a form it is fresh. The skeleton only before the first
+ * answer; after that the page stays as it is until the fresh one arrives.
+ */
+export const useSchoolProfile = () => {
+  const [profile, setProfile] = useState<AdminProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const loaded = useRef(false);
+
+  const load = useCallback(async () => {
+    if (!loaded.current) setLoading(true);
+    try {
+      setProfile(await getAdminProfile());
+      loaded.current = true;
+      setError('');
+    } catch (e) {
+      if (!loaded.current) setError(apiErr(e, 'Could not load profile.'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusLoad(load);
+  const { refreshing, onRefresh } = useRefresh(load);
+
+  return { profile, setProfile, loading, error, load, refreshing, onRefresh };
+};
 
 // ── Lines ────────────────────────────────────────────────────────────────────
 export interface Line {
