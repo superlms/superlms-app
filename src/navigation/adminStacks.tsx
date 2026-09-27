@@ -118,6 +118,14 @@ import AdminIdCardViewScreen from '../screens/admin/AdminIdCardViewScreen';
 import AdminPerformanceScreen from '../screens/admin/AdminPerformanceScreen';
 import AdminExamCopyScreen from '../screens/admin/AdminExamCopyScreen';
 import AdminExamCopyDetailScreen from '../screens/admin/AdminExamCopyDetailScreen';
+// Timetable
+import AdminTimetableClassesScreen from '../screens/admin/AdminTimetableClassesScreen';
+import AdminTimetableSectionsScreen from '../screens/admin/AdminTimetableSectionsScreen';
+import AdminTimetableViewScreen from '../screens/admin/AdminTimetableViewScreen';
+import AdminTimetableFormScreen from '../screens/admin/AdminTimetableFormScreen';
+import AdminTimetablePdfScreen from '../screens/admin/AdminTimetablePdfScreen';
+import AdminTimetableTeachersScreen from '../screens/admin/AdminTimetableTeachersScreen';
+import AdminTimetableTeacherScreen from '../screens/admin/AdminTimetableTeacherScreen';
 
 // Each admin section that has list → detail → form/reply screens gets its own
 // native stack. This gives correct, isolated back navigation (a "Back" inside a
@@ -336,5 +344,17 @@ export const AdminExamCopyStack = () => (
   <Stack.Navigator screenOptions={opts}>
     <Stack.Screen name="AdminExamCopyHome" component={AdminExamCopyScreen} />
     <Stack.Screen name="AdminExamCopyDetail" component={AdminExamCopyDetailScreen} />
+  </Stack.Navigator>
+);
+
+export const AdminTimetableStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminTimetableHome" component={AdminTimetableClassesScreen} />
+    <Stack.Screen name="AdminTimetableSections" component={AdminTimetableSectionsScreen} />
+    <Stack.Screen name="AdminTimetableView" component={AdminTimetableViewScreen} />
+    <Stack.Screen name="AdminTimetableForm" component={AdminTimetableFormScreen} />
+    <Stack.Screen name="AdminTimetablePdf" component={AdminTimetablePdfScreen} />
+    <Stack.Screen name="AdminTimetableTeachers" component={AdminTimetableTeachersScreen} />
+    <Stack.Screen name="AdminTimetableTeacher" component={AdminTimetableTeacherScreen} />
   </Stack.Navigator>
 );
