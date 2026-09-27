@@ -40,6 +40,7 @@ export const ADMIN_MODULE_TARGETS: Record<string, Target> = {
   'exam-copy': { route: 'AdminExamCopy' },
   'report-card': { route: 'AdminReportCard' },
   'tc-certificate': { route: 'AdminTcCertificate' },
+  'seating-plan': { route: 'AdminSeating' },
   more: { route: 'AdminMore' },
 };
 

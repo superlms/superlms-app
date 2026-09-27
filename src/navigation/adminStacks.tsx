@@ -156,6 +156,17 @@ import AdminTcCertificateListScreen from '../screens/admin/AdminTcCertificateLis
 import AdminTcCertificateDetailScreen from '../screens/admin/AdminTcCertificateDetailScreen';
 import AdminCertificateFormScreen from '../screens/admin/AdminCertificateFormScreen';
 import AdminTransferCertificateFormScreen from '../screens/admin/AdminTransferCertificateFormScreen';
+// Seating Plan
+import AdminSeatingScreen from '../screens/admin/AdminSeatingScreen';
+import AdminSeatingPlansScreen from '../screens/admin/AdminSeatingPlansScreen';
+import AdminSeatingSessionScreen from '../screens/admin/AdminSeatingSessionScreen';
+import AdminSeatingPdfScreen from '../screens/admin/AdminSeatingPdfScreen';
+import AdminSeatingGenerateScreen from '../screens/admin/AdminSeatingGenerateScreen';
+import AdminSeatingRoomsScreen from '../screens/admin/AdminSeatingRoomsScreen';
+import AdminSeatingRoomScreen from '../screens/admin/AdminSeatingRoomScreen';
+import AdminSeatingRoomFormScreen from '../screens/admin/AdminSeatingRoomFormScreen';
+import AdminSeatingDatesheetScreen from '../screens/admin/AdminSeatingDatesheetScreen';
+import AdminSeatingDatesheetFormScreen from '../screens/admin/AdminSeatingDatesheetFormScreen';
 
 // Each admin section that has list → detail → form/reply screens gets its own
 // native stack. This gives correct, isolated back navigation (a "Back" inside a
@@ -439,5 +450,22 @@ export const AdminTcCertificateStack = () => (
     <Stack.Screen name="AdminTcDetail" component={AdminTcCertificateDetailScreen} />
     <Stack.Screen name="AdminCertForm" component={AdminCertificateFormScreen} />
     <Stack.Screen name="AdminTcForm" component={AdminTransferCertificateFormScreen} />
+  </Stack.Navigator>
+);
+
+// Seating Plan: the panel's three tabs as a list (Seating Plans, Rooms,
+// Datesheet), each with its own pages.
+export const AdminSeatingStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminSeatingHome" component={AdminSeatingScreen} />
+    <Stack.Screen name="AdminSeatingPlans" component={AdminSeatingPlansScreen} />
+    <Stack.Screen name="AdminSeatingSession" component={AdminSeatingSessionScreen} />
+    <Stack.Screen name="AdminSeatingPdf" component={AdminSeatingPdfScreen} />
+    <Stack.Screen name="AdminSeatingGenerate" component={AdminSeatingGenerateScreen} />
+    <Stack.Screen name="AdminSeatingRooms" component={AdminSeatingRoomsScreen} />
+    <Stack.Screen name="AdminSeatingRoom" component={AdminSeatingRoomScreen} />
+    <Stack.Screen name="AdminSeatingRoomForm" component={AdminSeatingRoomFormScreen} />
+    <Stack.Screen name="AdminSeatingDatesheet" component={AdminSeatingDatesheetScreen} />
+    <Stack.Screen name="AdminSeatingDatesheetForm" component={AdminSeatingDatesheetFormScreen} />
   </Stack.Navigator>
 );

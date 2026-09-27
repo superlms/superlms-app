@@ -47,6 +47,7 @@ import {
   AdminHomeworkStack,
   AdminArrangementStack,
   AdminReportCardStack,
+  AdminSeatingStack,
 } from './adminStacks';
 import { logoutCurrentAccount } from '../utils/logoutAccount';
 import { useAdminProfile } from '../screens/admin/useAdminProfile';
@@ -364,6 +365,7 @@ const AdminDrawerNavigator = () => {
       <Drawer.Screen name="AdminExamCopy" component={AdminExamCopyStack} />
       <Drawer.Screen name="AdminReportCard" component={AdminReportCardStack} />
       <Drawer.Screen name="AdminTcCertificate" component={AdminTcCertificateStack} />
+      <Drawer.Screen name="AdminSeating" component={AdminSeatingStack} />
       <Drawer.Screen name="AdminCredit" component={AdminCreditScreen} />
       <Drawer.Screen name="AdminSettings" component={SettingsScreen} />
       <Drawer.Screen name="AdminMore" component={AdminMoreStack} />
