@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import constant from '../utils/constant';
 import { authHeader, downloadPdf } from './pdfDownload';
 
 // Report Card module. Mirrors app/Livewire/Admin/ReportCard.php over /admin/report-card.
@@ -8,8 +9,20 @@ export { authHeader };
 
 const unwrap = (data: any) => data?.data ?? data;
 
-export interface RcSection { id: number; name: string }
-export interface RcClass { id: number; name: string; sections: RcSection[] }
+export interface RcSection {
+  id: number;
+  name: string;
+  /** How many students it has, and how many hold an issued card (newer servers). */
+  students?: number;
+  issued?: number;
+}
+export interface RcClass {
+  id: number;
+  name: string;
+  students?: number;
+  issued?: number;
+  sections: RcSection[];
+}
 
 export interface RcStats {
   total_students: number;
@@ -34,7 +47,15 @@ export interface ReportCardItem {
   issued_at: string | null;
   issued_label: string | null;
   pdf_url: string;
+  /** What the issue form put on the card — blank means worked out from the marks. */
+  standard_id?: number | null;
+  section_id?: number | null;
+  regd_no?: string | null;
+  remark?: string | null;
+  result?: RcResult | null;
 }
+
+export type RcResult = 'PASSED' | 'FAILED';
 
 export interface RcIssueStudent {
   id: number;
@@ -44,6 +65,12 @@ export interface RcIssueStudent {
   marks_complete: boolean;
   already_issued: boolean;
   missing_info: string;
+  image?: string | null;
+  /** Where the issue form's Regd. No starts from. */
+  registration_number?: string | null;
+  /** The card issued here, to open it. */
+  report_card_id?: number | null;
+  issued_label?: string | null;
 }
 
 export interface ReportCardListResponse {
@@ -87,12 +114,29 @@ export const getReportCardIssueStudents = async (
   return unwrap(data)?.students ?? [];
 };
 
+export interface RcIssueDetail {
+  student_id: number;
+  regd_no?: string;
+  remark?: string;
+  /** '' is Auto: the card works it out from the marks. */
+  result?: RcResult | '';
+}
+
 export const issueReportCards = async (p: {
   standard_id: number;
   section_id: number;
   student_ids: number[];
-}): Promise<{ issued: number; skipped: number }> => {
+  /** YYYY-MM-DD — printed as the card's Issue Date. */
+  issue_date?: string;
+  details?: RcIssueDetail[];
+}): Promise<{ issued: number; skipped: number; message?: string }> => {
   const { data } = await apiClient.post('/admin/report-card/issue', p);
+  return { ...unwrap(data), message: data?.message };
+};
+
+/** One card, as the list shows it. */
+export const getReportCard = async (id: number): Promise<ReportCardItem> => {
+  const { data } = await apiClient.get(`/admin/report-card/${id}`);
   return unwrap(data);
 };
 
@@ -102,3 +146,6 @@ export const revokeReportCard = async (id: number): Promise<void> => {
 
 export const downloadReportCardPdf = (pdfUrl: string, fileName: string): Promise<string> =>
   downloadPdf(pdfUrl, fileName);
+
+/** A card's PDF — the panel's own report card, as the list's pdf_url gives it. */
+export const adminReportCardPdfUrl = (id: number) => `${constant.API_BASE_URL}/admin/report-card/${id}/pdf`;

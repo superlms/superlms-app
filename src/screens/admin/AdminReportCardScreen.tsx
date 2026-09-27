@@ -1,346 +1,280 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
-import Header from '../../components/Header';
 import AppRefreshControl from '../../components/AppRefreshControl';
-import { useRefresh } from '../../hooks/useRefresh';
-import { theme } from '../../utils/theme';
+import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
+import { DocHeader, DocNoData } from '../more/docUi';
 import {
   RcClass,
-  RcIssueStudent,
   RcStats,
   ReportCardItem,
-  downloadReportCardPdf,
-  getReportCardIssueStudents,
   getReportCardLookups,
   getReportCardStats,
   getReportCards,
-  issueReportCards,
-  revokeReportCard,
 } from '../../api/adminReportCardApi';
-import { AppAlert } from '../../components/AppDialog';
+import { GroupRow, ListSkeleton, plural } from './adminStudentsUi';
+import { issuedLine } from './adminAdmitCardUi';
+import { RcCardRow } from './adminReportCardUi';
 
-type Tab = 'list' | 'issue';
+/**
+ * Report Card — the panel's Report Card page, drawn as the admin app's
+ * Students list is. The panel's counts (total, active, issued, pending) head
+ * the school's classes, each with its sections and how many of its students
+ * hold an issued card. A class of one section opens straight onto its
+ * students — the panel's Issue screen for that class and section — a class of
+ * more onto its sections first.
+ *
+ * The search is the panel's list: a name or admission number finds the cards
+ * issued (and revoked), newest first, more as the list scrolls; an issued card
+ * opens as the student sees it.
+ */
+
+const SEARCH_PAGE = 30;
 
 const AdminReportCardScreen = ({ navigation }: any) => {
-  const [tab, setTab] = useState<Tab>('list');
-  const [classes, setClasses] = useState<RcClass[]>([]);
+  const [classes, setClasses] = useState<RcClass[] | null>(null);
   const [stats, setStats] = useState<RcStats | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // list
-  const [items, setItems] = useState<ReportCardItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const seq = useRef(0);
+  const load = useCallback(async () => {
+    const mine = ++seq.current;
+    setError(null);
+    try {
+      const [l, st] = await Promise.all([getReportCardLookups(), getReportCardStats({})]);
+      if (mine === seq.current) {
+        setClasses(l.classes);
+        setStats(st);
+      }
+    } catch (e) {
+      if (mine === seq.current) setError(apiErr(e, 'Could not load the classes.'));
+    } finally {
+      if (mine === seq.current) setRefreshing(false);
+    }
+  }, []);
+
+  // ── Search: the panel's list of cards in place of the classes ─────────────
   const [search, setSearch] = useState('');
-  const [fClass, setFClass] = useState<number | null>(null);
-  const [fSection, setFSection] = useState<number | null>(null);
-  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const query = search.trim();
+  const [found, setFound] = useState<ReportCardItem[] | null>(null);
+  const [foundError, setFoundError] = useState<string | null>(null);
+  const [foundMore, setFoundMore] = useState(false);
+  const [foundTotal, setFoundTotal] = useState(0);
+  const foundPage = useRef(1);
+  const foundLast = useRef(1);
+  const foundFor = useRef('');
+  const fseq = useRef(0);
 
-  // issue
-  const [iClass, setIClass] = useState<number | null>(null);
-  const [iSection, setISection] = useState<number | null>(null);
-  const [issueStudents, setIssueStudents] = useState<RcIssueStudent[]>([]);
-  const [issueLoading, setIssueLoading] = useState(false);
-  const [selected, setSelected] = useState<number[]>([]);
-  const [issuing, setIssuing] = useState(false);
-
-  const sectionsFor = (cid: number | null) => classes.find(c => c.id === cid)?.sections ?? [];
-
-  useEffect(() => { getReportCardLookups().then(r => setClasses(r.classes)).catch(() => {}); }, []);
-
-  const loadStats = useCallback(async () => {
-    try { setStats(await getReportCardStats({ standard_id: fClass, section_id: fSection })); } catch {}
-  }, [fClass, fSection]);
-
-  const loadList = useCallback(async () => {
-    setLoading(true);
+  const searchCards = useCallback(async (q: string) => {
+    const mine = ++fseq.current;
+    setFoundError(null);
     try {
-      const res = await getReportCards({ search, standard_id: fClass, section_id: fSection, per_page: 40 });
-      setItems(res.data);
-    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load report cards.')); }
-    finally { setLoading(false); }
-  }, [search, fClass, fSection]);
+      const r = await getReportCards({ search: q, page: 1, per_page: SEARCH_PAGE });
+      if (mine !== fseq.current) return;
+      foundFor.current = q;
+      foundPage.current = r.pagination?.current_page ?? 1;
+      foundLast.current = r.pagination?.last_page ?? 1;
+      setFoundTotal(r.pagination?.total ?? r.data.length);
+      setFound(r.data);
+    } catch (e) {
+      if (mine === fseq.current) setFoundError(apiErr(e, 'Could not search the report cards.'));
+    } finally {
+      if (mine === fseq.current) setRefreshing(false);
+    }
+  }, []);
 
-  useEffect(() => { loadStats(); }, [loadStats]);
-  useEffect(() => { const t = setTimeout(loadList, 300); return () => clearTimeout(t); }, [loadList]);
-  const { refreshing, onRefresh } = useRefresh(async () => { await Promise.all([loadStats(), loadList()]); });
+  // Typing waits a moment before it asks, as the panel's search does.
+  useEffect(() => {
+    if (!query) {
+      fseq.current++;
+      setFound(null);
+      setFoundError(null);
+      return;
+    }
+    const t = setTimeout(() => searchCards(query), 300);
+    return () => clearTimeout(t);
+  }, [query, searchCards]);
 
-  const download = async (rc: ReportCardItem) => {
-    setDownloadingId(rc.id);
+  const loadMoreFound = async () => {
+    if (foundMore || !found || foundPage.current >= foundLast.current) return;
+    setFoundMore(true);
+    const mine = fseq.current;
     try {
-      await downloadReportCardPdf(rc.pdf_url, `Report_Card_${(rc.full_name || 'student').replace(/\s+/g, '_')}`);
-      AppAlert.alert('Downloaded', Platform.OS === 'android' ? 'Saved to your Downloads.' : 'Saved to your device.');
-    } catch (e) { AppAlert.alert('Download failed', apiErr(e, 'Could not download.')); }
-    finally { setDownloadingId(null); }
+      const r = await getReportCards({ search: foundFor.current, page: foundPage.current + 1, per_page: SEARCH_PAGE });
+      if (mine !== fseq.current) return;
+      foundPage.current = r.pagination?.current_page ?? foundPage.current + 1;
+      foundLast.current = r.pagination?.last_page ?? foundLast.current;
+      setFound(prev => [...(prev ?? []), ...r.data]);
+    } catch {
+      // The next scroll tries again.
+    } finally {
+      setFoundMore(false);
+    }
   };
 
-  const revoke = (rc: ReportCardItem) =>
-    AppAlert.alert('Revoke Report Card', `Revoke ${rc.full_name}'s report card?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Revoke', style: 'destructive', onPress: async () => {
-        try { await revokeReportCard(rc.id); await Promise.all([loadStats(), loadList()]); }
-        catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not revoke.')); }
-      } },
-    ]);
+  // Back from issuing or revoking, the counts (and a search) are fresh.
+  const latest = useRef({ load, searchCards, query });
+  latest.current = { load, searchCards, query };
+  useFocusEffect(
+    useCallback(() => {
+      latest.current.load();
+      if (latest.current.query) latest.current.searchCards(latest.current.query);
+    }, []),
+  );
 
-  // ── issue flow ──
-  const loadIssueStudents = useCallback(async () => {
-    if (!iClass || !iSection) { setIssueStudents([]); return; }
-    setIssueLoading(true);
-    setSelected([]);
-    try { setIssueStudents(await getReportCardIssueStudents(iClass, iSection)); }
-    catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not load students.')); }
-    finally { setIssueLoading(false); }
-  }, [iClass, iSection]);
-
-  useEffect(() => { loadIssueStudents(); }, [loadIssueStudents]);
-
-  const toggle = (st: RcIssueStudent) => {
-    if (!st.marks_complete || st.already_issued) return;
-    setSelected(prev => prev.includes(st.id) ? prev.filter(x => x !== st.id) : [...prev, st.id]);
+  const onRefresh = () => {
+    setRefreshing(true);
+    if (query) searchCards(query);
+    else load();
   };
 
-  const selectAllEligible = () => {
-    const eligible = issueStudents.filter(s => s.marks_complete && !s.already_issued).map(s => s.id);
-    setSelected(selected.length === eligible.length ? [] : eligible);
+  // One section: its students at once. None, or more: the sections first.
+  const open = (c: RcClass) => {
+    if (c.sections.length === 1) {
+      const sec = c.sections[0];
+      navigation.navigate('AdminReportCardStudents', { classId: c.id, className: c.name, sectionId: sec.id, sectionName: sec.name });
+    } else {
+      navigation.navigate('AdminReportCardSections', { classItem: c });
+    }
   };
 
-  const doIssue = async () => {
-    if (!iClass || !iSection || selected.length === 0) return AppAlert.alert('Select students', 'Pick at least one eligible student.');
-    setIssuing(true);
-    try {
-      const res = await issueReportCards({ standard_id: iClass, section_id: iSection, student_ids: selected });
-      AppAlert.alert('Done', `Issued ${res.issued} report card(s).` + (res.skipped > 0 ? ` ${res.skipped} skipped (already issued).` : ''));
-      await Promise.all([loadStats(), loadIssueStudents(), loadList()]);
-    } catch (e) { AppAlert.alert('Error', apiErr(e, 'Could not issue.')); }
-    finally { setIssuing(false); }
+  const errorBox = (message: string, retry: () => void) => (
+    <View style={s.centered}>
+      <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
+      <Text style={s.errorText}>{message}</Text>
+      <TouchableOpacity onPress={retry} hitSlop={10}>
+        <Text style={s.link}>Try again</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const searchBody = () => {
+    if (!found && !foundError) return <ListSkeleton />;
+    if (foundError && !found) return errorBox(foundError, () => searchCards(query));
+    const list = found ?? [];
+    return (
+      <FlatList
+        data={list}
+        keyExtractor={i => String(i.id)}
+        contentContainerStyle={[s.list, list.length === 0 && s.listEmpty]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        onEndReached={loadMoreFound}
+        onEndReachedThreshold={0.4}
+        ListHeaderComponent={list.length > 0 ? <Text style={s.count}>{`${plural(foundTotal, 'report card')} found`}</Text> : null}
+        ListFooterComponent={foundMore ? <ActivityIndicator style={s.more} color={theme.colors.primary} /> : null}
+        ListEmptyComponent={
+          <DocNoData icon="search-outline" title="No report cards found" subtitle="No card’s student name or admission number matches the search." />
+        }
+        renderItem={({ item, index }) => (
+          <RcCardRow
+            card={item}
+            isLast={index === list.length - 1}
+            onPress={() => navigation.navigate('AdminReportCardView', { id: item.id, card: item })}
+          />
+        )}
+      />
+    );
   };
 
-  const statCards = [
-    { label: 'Students', value: stats?.total_students, color: '#6366F1' },
-    { label: 'Active', value: stats?.active_students, color: '#0EA5E9' },
-    { label: 'Issued', value: stats?.issued, color: '#22C55E' },
-    { label: 'Pending', value: stats?.pending, color: '#F59E0B' },
-  ];
+  const classesBody = () => {
+    if (!classes && !error) return <ListSkeleton />;
+    if (error && !classes) return errorBox(error, load);
+    const list = classes ?? [];
+    return (
+      <FlatList
+        data={list}
+        keyExtractor={c => String(c.id)}
+        contentContainerStyle={[s.list, list.length === 0 && s.listEmpty]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListHeaderComponent={
+          list.length > 0 && stats ? (
+            <Text style={s.count}>
+              {/* The panel's Total / Active / Issued / Pending */}
+              {`${plural(stats.total_students, 'student')} · ${stats.active_students} active · ${stats.issued} issued · ${stats.pending} pending`}
+            </Text>
+          ) : null
+        }
+        ListEmptyComponent={
+          <DocNoData icon="school-outline" title="No classes yet" subtitle="Add the school’s classes under Standards first." />
+        }
+        renderItem={({ item, index }) => {
+          const secs = item.sections;
+          const meta = [
+            secs.length > 1 ? plural(secs.length, 'section') : secs.length === 1 ? `Section ${secs[0].name}` : 'No sections',
+            item.students != null ? issuedLine(item.issued ?? 0, item.students) : null,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          return (
+            <GroupRow icon="school-outline" title={item.name} meta={meta} isLast={index === list.length - 1} onPress={() => open(item)} />
+          );
+        }}
+      />
+    );
+  };
 
   return (
     <View style={s.root}>
-      <Header title="Report Card" onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))} />
+      <DocHeader
+        title="Report Card"
+        onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
+      />
 
-      <View style={s.statRow}>
-        {statCards.map(c => (
-          <View key={c.label} style={[s.statCard, { backgroundColor: c.color + '14' }]}>
-            <Text style={[s.statVal, { color: c.color }]}>{c.value ?? '—'}</Text>
-            <Text style={s.statLbl}>{c.label}</Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={s.tabRow}>
-        {(['list', 'issue'] as Tab[]).map(t => {
-          const active = tab === t;
-          return (
-            <TouchableOpacity key={t} style={[s.tab, active && s.tabActive]} onPress={() => setTab(t)} activeOpacity={0.8}>
-              <Text style={[s.tabText, active && s.tabTextActive]}>{t === 'list' ? 'Issued' : 'Issue New'}</Text>
+      <View style={s.searchWrap}>
+        <View style={s.searchRow}>
+          <VectorIcon iconSet="Ionicons" iconName="search" size={16} color={theme.colors.textMuted} />
+          <TextInput
+            style={s.searchInput}
+            placeholder="Search name or admission no"
+            placeholderTextColor={theme.colors.textMuted}
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+            autoCorrect={false}
+            autoCapitalize="none"
+          />
+          {!!search && (
+            <TouchableOpacity onPress={() => setSearch('')} hitSlop={8}>
+              <VectorIcon iconSet="Ionicons" iconName="close" size={16} color={theme.colors.textMuted} />
             </TouchableOpacity>
-          );
-        })}
+          )}
+        </View>
       </View>
 
-      {tab === 'list' ? (
-        <>
-          <View style={s.searchRow}>
-            <VectorIcon iconSet="Ionicons" iconName="search" size={16} color={theme.colors.textMuted} />
-            <TextInput style={s.searchInput} placeholder="Search name / admission no" placeholderTextColor={theme.colors.textMuted} value={search} onChangeText={setSearch} />
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterBar} contentContainerStyle={s.filterContent}>
-            {classes.map(c => (
-              <TouchableOpacity key={c.id} style={[s.pchip, fClass === c.id && s.pchipActive]} onPress={() => { setFClass(fClass === c.id ? null : c.id); setFSection(null); }}>
-                <Text style={[s.pchipText, fClass === c.id && s.pchipTextActive]}>{c.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          {!!fClass && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterBar2} contentContainerStyle={s.filterContent}>
-              {sectionsFor(fClass).map(sec => (
-                <TouchableOpacity key={sec.id} style={[s.pchip, fSection === sec.id && s.pchipActive]} onPress={() => setFSection(fSection === sec.id ? null : sec.id)}>
-                  <Text style={[s.pchipText, fSection === sec.id && s.pchipTextActive]}>{sec.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
-
-          {loading ? (
-            <View style={s.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>
-          ) : (
-            <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}
-              refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-              {items.length === 0 && <Text style={s.empty}>No report cards issued yet.</Text>}
-              {items.map(rc => (
-                <View key={rc.id} style={s.card}>
-                  <View style={s.cardTop}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.cardTitle} numberOfLines={1}>{rc.full_name}</Text>
-                      <Text style={s.cardSub}>{[rc.standard, rc.section].filter(Boolean).join(' ')} · {rc.academic_year}</Text>
-                    </View>
-                    <View style={[s.badge, { backgroundColor: rc.status === 'issued' ? '#22C55E1F' : '#EF44441F' }]}>
-                      <Text style={[s.badgeText, { color: rc.status === 'issued' ? '#16A34A' : '#DC2626' }]}>{rc.status === 'issued' ? 'Issued' : 'Revoked'}</Text>
-                    </View>
-                  </View>
-                  <View style={s.cardMeta}>
-                    <Text style={s.cardMetaText}>{rc.issued_by ? `By ${rc.issued_by}` : ''} · {rc.issued_label}</Text>
-                  </View>
-                  <View style={s.rowActions}>
-                    <TouchableOpacity style={s.ghostBtn} onPress={() => download(rc)} disabled={downloadingId === rc.id}>
-                      {downloadingId === rc.id ? <ActivityIndicator size="small" color={theme.colors.primary} /> : <VectorIcon iconSet="Ionicons" iconName="download-outline" size={15} color={theme.colors.primary} />}
-                      <Text style={s.ghostBtnText}>PDF</Text>
-                    </TouchableOpacity>
-                    {rc.status === 'issued' && (
-                      <TouchableOpacity style={[s.ghostBtn, { borderColor: theme.colors.danger }]} onPress={() => revoke(rc)}>
-                        <VectorIcon iconSet="Ionicons" iconName="close-circle-outline" size={15} color={theme.colors.danger} />
-                        <Text style={[s.ghostBtnText, { color: theme.colors.danger }]}>Revoke</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-              ))}
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          )}
-        </>
-      ) : (
-        // ── Issue tab ──
-        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={s.fieldLabel}>Class</Text>
-          <View style={s.wrapChips}>
-            {classes.map(c => (
-              <TouchableOpacity key={c.id} style={[s.selChip, iClass === c.id && s.selChipActive]} onPress={() => { setIClass(c.id); setISection(null); }}>
-                <Text style={[s.selChipText, iClass === c.id && s.selChipTextActive]}>{c.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          {!!iClass && (
-            <>
-              <Text style={s.fieldLabel}>Section</Text>
-              <View style={s.wrapChips}>
-                {sectionsFor(iClass).map(sec => (
-                  <TouchableOpacity key={sec.id} style={[s.selChip, iSection === sec.id && s.selChipActive]} onPress={() => setISection(sec.id)}>
-                    <Text style={[s.selChipText, iSection === sec.id && s.selChipTextActive]}>{sec.name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </>
-          )}
-
-          {issueLoading ? (
-            <View style={{ paddingVertical: 24 }}><ActivityIndicator color={theme.colors.primary} /></View>
-          ) : !iSection ? (
-            <Text style={s.empty}>Pick a class and section to see eligible students.</Text>
-          ) : issueStudents.length === 0 ? (
-            <Text style={s.empty}>No students in this section.</Text>
-          ) : (
-            <>
-              <TouchableOpacity style={s.selectAllRow} onPress={selectAllEligible}>
-                <VectorIcon iconSet="Ionicons" iconName="checkmark-done-outline" size={16} color={theme.colors.primary} />
-                <Text style={s.selectAllText}>Select all eligible</Text>
-              </TouchableOpacity>
-              {issueStudents.map(st => {
-                const disabled = !st.marks_complete || st.already_issued;
-                const on = selected.includes(st.id);
-                return (
-                  <TouchableOpacity key={st.id} style={[s.stCard, disabled && { opacity: 0.6 }]} onPress={() => toggle(st)} activeOpacity={disabled ? 1 : 0.8}>
-                    <VectorIcon iconSet="Ionicons" iconName={on ? 'checkbox' : 'square-outline'} size={20} color={on ? theme.colors.primary : theme.colors.textMuted} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.cardTitle} numberOfLines={1}>{st.full_name}</Text>
-                      <Text style={s.cardSub}>Roll {st.roll_no}{st.admission_no ? ` · ${st.admission_no}` : ''}</Text>
-                      {st.already_issued ? (
-                        <Text style={[s.tagLine, { color: '#16A34A' }]}>Already issued</Text>
-                      ) : !st.marks_complete ? (
-                        <Text style={[s.tagLine, { color: '#D97706' }]}>{st.missing_info}</Text>
-                      ) : (
-                        <Text style={[s.tagLine, { color: theme.colors.primary }]}>Ready to issue</Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-              <TouchableOpacity style={[s.issueBtn, (selected.length === 0 || issuing) && { opacity: 0.6 }]} onPress={doIssue} disabled={selected.length === 0 || issuing} activeOpacity={0.9}>
-                {issuing ? <ActivityIndicator size="small" color="#fff" /> : <VectorIcon iconSet="Ionicons" iconName="document-text-outline" size={18} color="#fff" />}
-                <Text style={s.issueBtnText}>Issue {selected.length > 0 ? `(${selected.length})` : ''}</Text>
-              </TouchableOpacity>
-            </>
-          )}
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      )}
+      {query ? searchBody() : classesBody()}
     </View>
   );
 };
 
 export default AdminReportCardScreen;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  loader: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 40 },
+const __mk_s = () => StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.card },
 
-  statRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 12 },
-  statCard: { flex: 1, borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
-  statVal: { fontSize: 18, fontWeight: '900' },
-  statLbl: { fontSize: 10, color: theme.colors.textSecondary, fontWeight: '700', marginTop: 2 },
+  // Search — as the Students tab has it
+  searchWrap: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 44, paddingHorizontal: 14, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md },
+  searchInput: { flex: 1, fontSize: 15, color: theme.colors.textPrimary, padding: 0 },
 
-  tabRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 12 },
-  tab: { flex: 1, paddingVertical: 9, borderRadius: theme.radius.full, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center' },
-  tabActive: { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primary },
-  tabText: { fontSize: 13, fontWeight: '700', color: theme.colors.textSecondary },
-  tabTextActive: { color: theme.colors.primary },
+  // List
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
+  listEmpty: { flexGrow: 1 },
+  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
+  more: { paddingVertical: 18 },
 
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginTop: 12, paddingHorizontal: 12, height: 42, borderRadius: 12, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
-  searchInput: { flex: 1, fontSize: 14, color: theme.colors.textPrimary, paddingVertical: 0 },
-
-  filterBar: { maxHeight: 46, paddingLeft: 16, marginTop: 10 },
-  filterBar2: { maxHeight: 46, paddingLeft: 16, marginTop: 4 },
-  filterContent: { gap: 8, paddingRight: 16, alignItems: 'center' },
-  pchip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: theme.radius.full, backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border },
-  pchipActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-  pchipText: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
-  pchipTextActive: { color: '#fff' },
-
-  scroll: { paddingHorizontal: 16, paddingTop: 12 },
-  empty: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', marginTop: 30 },
-
-  card: { backgroundColor: theme.colors.card, borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: theme.colors.border },
-  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  cardTitle: { fontSize: 15, fontWeight: '900', color: theme.colors.textPrimary },
-  cardSub: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
-  cardMeta: { marginTop: 8 },
-  cardMetaText: { fontSize: 11, color: theme.colors.textMuted, fontWeight: '600' },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.radius.full },
-  badgeText: { fontSize: 11, fontWeight: '800' },
-
-  rowActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  ghostBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: theme.colors.card, borderRadius: theme.radius.full, borderWidth: 1.5, borderColor: theme.colors.primary, paddingVertical: 10 },
-  ghostBtnText: { fontSize: 13, fontWeight: '700', color: theme.colors.primary },
-
-  fieldLabel: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary, marginTop: 14, marginBottom: 6 },
-  wrapChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  selChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: theme.radius.full, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border },
-  selChipActive: { backgroundColor: theme.colors.primaryLight, borderColor: theme.colors.primary },
-  selChipText: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary },
-  selChipTextActive: { color: theme.colors.primary },
-
-  selectAllRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, marginBottom: 4 },
-  selectAllText: { fontSize: 13, fontWeight: '700', color: theme.colors.primary },
-  stCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.colors.card, borderRadius: 14, padding: 12, marginTop: 8, borderWidth: 1, borderColor: theme.colors.border },
-  tagLine: { fontSize: 11, fontWeight: '700', marginTop: 3 },
-  issueBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.colors.primary, borderRadius: theme.radius.full, paddingVertical: 14, marginTop: 18 },
-  issueBtnText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  // Error
+  centered: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },
+  errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  link: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 });
+
+// Themed stylesheets — rebuilt on light/dark toggle.
+let s = __mk_s();
+onThemeChange(() => { s = __mk_s(); });

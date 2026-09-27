@@ -109,6 +109,12 @@ import AdminAdmitCardViewScreen from '../screens/admin/AdminAdmitCardViewScreen'
 import AdminAdmitCardIssueScreen from '../screens/admin/AdminAdmitCardIssueScreen';
 import AdminAdmitCardPrintScreen from '../screens/admin/AdminAdmitCardPrintScreen';
 import AdminAdmitCardSheetScreen from '../screens/admin/AdminAdmitCardSheetScreen';
+// Report Card
+import AdminReportCardScreen from '../screens/admin/AdminReportCardScreen';
+import AdminReportCardSectionsScreen from '../screens/admin/AdminReportCardSectionsScreen';
+import AdminReportCardStudentsScreen from '../screens/admin/AdminReportCardStudentsScreen';
+import AdminReportCardIssueScreen from '../screens/admin/AdminReportCardIssueScreen';
+import AdminReportCardViewScreen from '../screens/admin/AdminReportCardViewScreen';
 // ID Card
 import AdminIdCardScreen from '../screens/admin/AdminIdCardScreen';
 import AdminIdCardGenerateScreen from '../screens/admin/AdminIdCardGenerateScreen';
@@ -328,6 +334,18 @@ export const AdminAdmitCardStack = () => (
     <Stack.Screen name="AdminAdmitCardIssue" component={AdminAdmitCardIssueScreen} />
     <Stack.Screen name="AdminAdmitCardPrint" component={AdminAdmitCardPrintScreen} />
     <Stack.Screen name="AdminAdmitCardSheet" component={AdminAdmitCardSheetScreen} />
+  </Stack.Navigator>
+);
+
+// Report Card: classes → sections → students (the web's Issue screen) → the
+// issue details, and a card as the student sees it.
+export const AdminReportCardStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminReportCardHome" component={AdminReportCardScreen} />
+    <Stack.Screen name="AdminReportCardSections" component={AdminReportCardSectionsScreen} />
+    <Stack.Screen name="AdminReportCardStudents" component={AdminReportCardStudentsScreen} />
+    <Stack.Screen name="AdminReportCardIssue" component={AdminReportCardIssueScreen} />
+    <Stack.Screen name="AdminReportCardView" component={AdminReportCardViewScreen} />
   </Stack.Navigator>
 );
 
