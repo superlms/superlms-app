@@ -116,7 +116,7 @@ const Answer = ({ text }: { text: string }) => {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 /**
- * LMS Assist: the web panel's Super LMS assistant for the school admin — ask
+ * Super Assist: the web panel's Super LMS assistant for the school admin — ask
  * about the school in plain words (Hinglish too) and get answers from its own
  * data. The day's questions are shared by everyone with the same role.
  */
@@ -138,7 +138,7 @@ const AdminAssistantScreen = ({ navigation }: any) => {
       setStatus(st);
       setQuota(st);
     } catch (e: any) {
-      setLoadError(e?.response?.data?.message ?? 'Could not reach LMS Assist. Please try again.');
+      setLoadError(e?.response?.data?.message ?? 'Could not reach Super Assist. Please try again.');
     }
   }, []);
 
@@ -177,7 +177,7 @@ const AdminAssistantScreen = ({ navigation }: any) => {
   return (
     <View style={s.root}>
       <Header
-        title="LMS Assist"
+        title="Super Assist"
         onBackPress={back}
         divider
         rightSlot={
@@ -202,7 +202,7 @@ const AdminAssistantScreen = ({ navigation }: any) => {
         </View>
       ) : !status.enabled ? (
         <View style={s.center}>
-          <Text style={s.muted}>LMS Assist isn't available right now.</Text>
+          <Text style={s.muted}>Super Assist isn't available right now.</Text>
         </View>
       ) : (
         <Animated.View style={[s.flex, lift]}>

@@ -367,7 +367,7 @@ const AdminDrawerNavigator = () => {
       <Drawer.Screen name="AdminCredit" component={AdminCreditScreen} />
       <Drawer.Screen name="AdminSettings" component={SettingsScreen} />
       <Drawer.Screen name="AdminMore" component={AdminMoreStack} />
-      {/* LMS Assist, from the dashboard's button */}
+      {/* Super Assist, from the dashboard's button */}
       <Drawer.Screen name="AdminAssistant" component={AdminAssistantScreen} />
     </Drawer.Navigator>
   );

@@ -1,6 +1,6 @@
 import apiClient from './apiClient';
 
-// ─── LMS Assist ───────────────────────────────────────────────────────────────
+// ─── Super Assist ─────────────────────────────────────────────────────────────
 // The web panel's Super LMS assistant. It answers about the signed-in admin's
 // own school; the conversation is kept here and sent with each question.
 

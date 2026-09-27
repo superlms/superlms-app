@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Easing, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
 import TopBar from '../../components/TopBar';
@@ -38,6 +38,60 @@ import { AwayRows, Caption, DayColumns, inrShort, listNames, sessionLabel, useAd
 import { useAdminProfile } from './useAdminProfile';
 
 /**
+ * Super Assist's button: the sparkles alone, twinkling — every couple of
+ * seconds they swell and tilt while a soft ring spreads out behind the button.
+ */
+const AssistButton = ({ onPress }: { onPress: () => void }) => {
+  const twinkle = useRef(new Animated.Value(0)).current;
+  const ring = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(twinkle, { toValue: 1, duration: 1300, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+          Animated.delay(1100),
+        ]),
+        Animated.sequence([
+          Animated.timing(ring, { toValue: 1, duration: 1600, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+          Animated.delay(800),
+        ]),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [twinkle, ring]);
+
+  const iconMotion = {
+    transform: [
+      { scale: twinkle.interpolate({ inputRange: [0, 0.35, 0.7, 1], outputRange: [1, 1.25, 0.95, 1] }) },
+      { rotate: twinkle.interpolate({ inputRange: [0, 0.35, 0.7, 1], outputRange: ['0deg', '-15deg', '10deg', '0deg'] }) },
+    ],
+  };
+  const ringMotion = {
+    opacity: ring.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0] }),
+    transform: [{ scale: ring.interpolate({ inputRange: [0, 1], outputRange: [1, 1.6] }) }],
+  };
+
+  return (
+    <View style={s.assist}>
+      <Animated.View pointerEvents="none" style={[s.assistRing, ringMotion]} />
+      <TouchableOpacity
+        style={s.assistButton}
+        activeOpacity={0.85}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel="Super Assist"
+      >
+        <Animated.View style={iconMotion}>
+          <VectorIcon iconSet="Ionicons" iconName="sparkles" size={18} color={theme.colors.white} />
+        </Animated.View>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+/**
  * The admin home, drawn as the student and teacher dashboards are: white cards
  * on the page's grey, four headline figures two by two, then today's
  * attendance (students and teachers), fees, the latest results, exams,
@@ -47,7 +101,7 @@ import { useAdminProfile } from './useAdminProfile';
 const AdminDashboardScreen = ({ navigation }: any) => {
   const [data, setData] = useState<AdminHome | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // LMS Assist's button shows only where the assistant is switched on.
+  // Super Assist's button shows only where the assistant is switched on.
   const [assistant, setAssistant] = useState(false);
   const profile = useAdminProfile();
   const { open } = useAdminLinks(navigation);
@@ -76,12 +130,7 @@ const AdminDashboardScreen = ({ navigation }: any) => {
   // A tab of Analytics; `at` opens it again when the same tab is asked for twice.
   const analytics = (tab: string) => () => navigation.navigate('AdminAnalytics', { tab, at: Date.now() });
 
-  const assist = assistant ? (
-    <TouchableOpacity style={s.assist} activeOpacity={0.85} onPress={() => navigation.navigate('AdminAssistant')}>
-      <VectorIcon iconSet="Ionicons" iconName="sparkles" size={18} color={theme.colors.white} />
-      <Text style={s.assistText}>LMS Assist</Text>
-    </TouchableOpacity>
-  ) : null;
+  const assist = assistant ? <AssistButton onPress={() => navigation.navigate('AdminAssistant')} /> : null;
 
   // The student and teacher top bar, with the school in place of the person:
   // account switch, notifications, messages
@@ -466,16 +515,14 @@ const __mk_s = () => StyleSheet.create({
   alertStrong: { fontWeight: '600', color: theme.colors.danger },
   amount: { fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary },
 
-  // LMS Assist, at the bottom right
-  assist: {
-    position: 'absolute',
-    right: 16,
-    bottom: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  // Super Assist, at the bottom right: a round button with the sparkles alone
+  assist: { position: 'absolute', right: 16, bottom: 16, width: 48, height: 48 },
+  assistRing: { position: 'absolute', top: 0, left: 0, width: 48, height: 48, borderRadius: 24, backgroundColor: theme.colors.primary },
+  assistButton: {
+    width: 48,
     height: 48,
-    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 24,
     backgroundColor: theme.colors.primary,
     shadowColor: theme.colors.shadow,
@@ -484,7 +531,6 @@ const __mk_s = () => StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
-  assistText: { color: theme.colors.white, fontSize: 14, fontWeight: '600' },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.
