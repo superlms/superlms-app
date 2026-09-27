@@ -43,6 +43,11 @@ export interface HomeworkItem {
   teacher: string;
   created_at: string | null;
   created_label: string | null;
+  // The panel's "Set by": who entered it, and whether a teacher or the
+  // school's admin ("d M Y, h:i A" for when). Absent from an older server.
+  set_by?: string | null;
+  set_by_role?: string | null;
+  created_time_label?: string | null;
 }
 
 export interface HomeworkListResponse {
@@ -89,6 +94,10 @@ export const getHomeworks = async (p: {
   subject_id?: number | null;
   per_page?: number;
   page?: number;
+  /** The day it was assigned (YYYY-MM-DD). */
+  date?: string;
+  /** A teacher's user id, read as the panel's teacher filter (their subjects too). */
+  teacher?: number | null;
 }): Promise<HomeworkListResponse> => {
   const { data } = await apiClient.get('/admin/homework', { params: p });
   // paginated() → success({ items, pagination }) → { data: { items, pagination } }
@@ -155,5 +164,89 @@ export const getHomeworkStatus = async (p: {
   days?: number;
 }): Promise<{ student: any; days: number; rows: StatusRow[] }> => {
   const { data } = await apiClient.get('/admin/homework/status', { params: p });
+  return unwrap(data);
+};
+
+// ── The panel's Homework tab and Status register, in full ──────────────────
+
+/** How many homework each of the last 30 days holds under the list's filters (bar the day). */
+export const getHomeworkDays = async (p: {
+  standard_id: number;
+  section_id: number;
+  subject_id?: number | null;
+  teacher?: number | null;
+  search?: string;
+}): Promise<Record<string, number>> => {
+  const { data } = await apiClient.get('/admin/homework/days', { params: p });
+  return unwrap(data)?.dates ?? {};
+};
+
+export interface StatusStudentRow {
+  student_id: number;
+  name: string;
+  roll_no: string | null;
+  items: { subject: string; title: string; date: string; complete: boolean }[];
+  completed: number;
+  total: number;
+}
+
+export interface HomeworkRegister {
+  /** by_day: one student, day by day; by_student: every student in the section. */
+  mode: 'by_day' | 'by_student';
+  scope: string;
+  date: string | null;
+  window_start: string;
+  student: { id: number; name: string; roll_no: string | null } | null;
+  days: number;
+  rows: StatusRow[] | StatusStudentRow[];
+  students: { id: number; name: string; roll_no: string | null }[];
+  subjects: HwSubject[];
+}
+
+/**
+ * The panel's Homework Status register: a class and a section, narrowed by a
+ * student (day by day), a subject and a day (within the last 30).
+ */
+export const getHomeworkRegister = async (p: {
+  standard_id: number;
+  section_id: number;
+  student_id?: number | null;
+  subject_id?: number | null;
+  date?: string | null;
+  days?: number;
+}): Promise<HomeworkRegister> => {
+  const { data } = await apiClient.get('/admin/homework/status', {
+    params: {
+      standard_id: p.standard_id,
+      section_id: p.section_id,
+      student_id: p.student_id || undefined,
+      subject_id: p.subject_id || undefined,
+      date: p.date || undefined,
+      days: p.days,
+    },
+  });
+  return unwrap(data);
+};
+
+/**
+ * "All subjects" create as the panel makes it — each filled-in subject with its
+ * own attachment (≤1 MB), sent as `files[<subject_id>]`.
+ */
+export const createHomeworkAll = async (p: {
+  standard_id: number;
+  section_id?: number | null;
+  items: { subject_id: number; title: string; description: string; file?: PickedFile | null }[];
+}): Promise<{ created: number }> => {
+  const form = new FormData();
+  form.append('mode', 'all');
+  form.append('standard_id', String(p.standard_id));
+  if (p.section_id) form.append('section_id', String(p.section_id));
+  form.append('items', JSON.stringify(p.items.map(({ subject_id, title, description }) => ({ subject_id, title, description }))));
+  p.items.forEach(it => {
+    if (!it.file) return;
+    const isPdf = (it.file.type || '').includes('pdf') || (it.file.name || '').toLowerCase().endsWith('.pdf');
+    form.append(`files[${it.subject_id}]`, filePart(it.file, isPdf ? 'homework.pdf' : 'homework.jpg', isPdf ? 'application/pdf' : 'image/jpeg'));
+  });
+  const { data } = await apiClient.post('/admin/homework', form, MULTIPART);
   return unwrap(data);
 };

@@ -21,7 +21,6 @@ import AdminTabNavigator from './AdminTabNavigator';
 import { ADMIN_MODULE_TARGETS, openAdminModule } from './adminRoutes';
 import AdminAnalyticsScreen from '../screens/admin/AdminAnalyticsScreen';
 import AdminArrangementScreen from '../screens/admin/AdminArrangementScreen';
-import AdminHomeworkScreen from '../screens/admin/AdminHomeworkScreen';
 import AdminCreditScreen from '../screens/admin/AdminCreditScreen';
 import AdminListsScreen from '../screens/admin/AdminListsScreen';
 import AdminAssistantScreen from '../screens/admin/AdminAssistantScreen';
@@ -46,6 +45,7 @@ import {
   AdminExamCopyStack,
   AdminTimetableStack,
   AdminTcCertificateStack,
+  AdminHomeworkStack,
   AdminReportCardStack,
 } from './adminStacks';
 import { logoutCurrentAccount } from '../utils/logoutAccount';
@@ -346,7 +346,7 @@ const AdminDrawerNavigator = () => {
       <Drawer.Screen name="AdminTransport" component={AdminTransportStack} />
       <Drawer.Screen name="AdminLedger" component={AdminLedgerStack} />
       <Drawer.Screen name="AdminPayroll" component={AdminPayrollStack} />
-      <Drawer.Screen name="AdminHomework" component={AdminHomeworkScreen} />
+      <Drawer.Screen name="AdminHomework" component={AdminHomeworkStack} />
       <Drawer.Screen name="AdminTimetable" component={AdminTimetableStack} />
       <Drawer.Screen name="AdminArrangement" component={AdminArrangementScreen} />
       <Drawer.Screen name="AdminAnnouncement" component={AdminAnnouncementStack} />

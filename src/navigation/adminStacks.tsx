@@ -79,6 +79,12 @@ import AdminContentFormScreen from '../screens/admin/AdminContentFormScreen';
 import AdminQuizScreen from '../screens/admin/AdminQuizScreen';
 import AdminQuizFormScreen from '../screens/admin/AdminQuizFormScreen';
 // Book
+import AdminHomeworkHubScreen from '../screens/admin/AdminHomeworkHubScreen';
+import AdminHomeworkListScreen from '../screens/admin/AdminHomeworkListScreen';
+import AdminHomeworkDetailScreen from '../screens/admin/AdminHomeworkDetailScreen';
+import AdminHomeworkFormScreen from '../screens/admin/AdminHomeworkFormScreen';
+import AdminHomeworkStatusScreen from '../screens/admin/AdminHomeworkStatusScreen';
+
 import AdminBookClassesScreen from '../screens/admin/AdminBookClassesScreen';
 import AdminBookSectionsScreen from '../screens/admin/AdminBookSectionsScreen';
 import AdminBookSubjectsScreen from '../screens/admin/AdminBookSubjectsScreen';
@@ -294,6 +300,18 @@ export const AdminQuizStack = () => (
   <Stack.Navigator screenOptions={opts}>
     <Stack.Screen name="AdminQuizHome" component={AdminQuizScreen} />
     <Stack.Screen name="AdminQuizForm" component={AdminQuizFormScreen} />
+  </Stack.Navigator>
+);
+
+// Homework — the panel's two tabs as a list (Homework, Homework Status); the
+// day's homework, a homework's details and its form; the completion register.
+export const AdminHomeworkStack = () => (
+  <Stack.Navigator screenOptions={opts}>
+    <Stack.Screen name="AdminHomeworkHome" component={AdminHomeworkHubScreen} />
+    <Stack.Screen name="AdminHomeworkList" component={AdminHomeworkListScreen} />
+    <Stack.Screen name="AdminHomeworkDetail" component={AdminHomeworkDetailScreen} />
+    <Stack.Screen name="AdminHomeworkForm" component={AdminHomeworkFormScreen} />
+    <Stack.Screen name="AdminHomeworkStatus" component={AdminHomeworkStatusScreen} />
   </Stack.Navigator>
 );
 

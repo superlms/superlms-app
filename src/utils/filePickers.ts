@@ -80,7 +80,7 @@ export const pickDocument = async (): Promise<PickedFile | null> => {
     const results = await DocPicker.pick({ type: types.length ? types : ['*/*'], allowMultiSelection: false });
     const f = Array.isArray(results) ? results[0] : results;
     if (!f?.uri) return null;
-    return { uri: f.uri, type: f.type ?? 'application/octet-stream', name: f.name ?? 'document' };
+    return { uri: f.uri, type: f.type ?? 'application/octet-stream', name: f.name ?? 'document', size: f.size };
   } catch (e: any) {
     if (String(e?.code ?? e?.message ?? '').toLowerCase().includes('cancel')) return null;
     AppAlert.alert('Could not pick file', e?.message ?? 'Please try again.');

@@ -38,10 +38,10 @@ export const HOMEWORK_DAYS = 15;
 export const dayKey = (d: moment.Moment) => d.format('YYYY-MM-DD');
 export const todayKey = () => dayKey(moment());
 
-// The last fortnight, ending today.
-const recentDays = () =>
-  Array.from({ length: HOMEWORK_DAYS }, (_, i) =>
-    moment().startOf('day').subtract(HOMEWORK_DAYS - 1 - i, 'days'),
+// The last fortnight (or `count` days), ending today.
+const recentDays = (count = HOMEWORK_DAYS) =>
+  Array.from({ length: count }, (_, i) =>
+    moment().startOf('day').subtract(count - 1 - i, 'days'),
   );
 
 // "Today, 13 September", "Yesterday, 12 September", "Friday, 11 September".
@@ -98,10 +98,13 @@ export const DateStrip = ({
   selected,
   onSelect,
   marked,
+  days,
 }: {
   selected: string;
   onSelect: (key: string) => void;
   marked: Set<string>;
+  /** How many days, ending today — the fortnight when not given. */
+  days?: number;
 }) => {
   const ref = useRef<ScrollView>(null);
   const today = todayKey();
@@ -116,7 +119,7 @@ export const DateStrip = ({
       contentContainerStyle={s.strip}
       onContentSizeChange={() => ref.current?.scrollToEnd({ animated: false })}
     >
-      {recentDays().map(d => {
+      {recentDays(days).map(d => {
         const key = dayKey(d);
         const active = key === selected;
         const isToday = key === today;
