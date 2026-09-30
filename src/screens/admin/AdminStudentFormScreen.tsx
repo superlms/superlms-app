@@ -73,6 +73,8 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
   const [form, setForm] = useState<StudentPayload>(emptyForm);
   const [lookups, setLookups] = useState<StudentLookups | null>(null);
   const [formSections, setFormSections] = useState<StudentLookups['sections']>([]);
+  // The class last picked, so a slower answer for an earlier pick is dropped.
+  const pickedClass = useRef(0);
   const [photo, setPhoto] = useState<PickedFile | null>(null);
   const [savedPhoto, setSavedPhoto] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
@@ -151,9 +153,16 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
   const onClassChange = async (id: number) => {
     set('standard_id', id);
     set('section_id', 0);
+    pickedClass.current = id;
     try {
       const lk = await getStudentLookups(id);
-      setFormSections(lk.sections);
+      // The answer for a class picked before this one is dropped, and only
+      // this class's own sections are offered.
+      if (pickedClass.current !== id) return;
+      const own = lk.sections.filter(x => Number(x.standard_id) === Number(id));
+      setFormSections(own);
+      // A class with a single section: that one, without asking.
+      if (own.length === 1) set('section_id', own[0].id);
     } catch {
       setFormSections([]);
     }
