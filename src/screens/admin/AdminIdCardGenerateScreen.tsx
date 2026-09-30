@@ -27,10 +27,11 @@ const AdminIdCardGenerateScreen = ({ navigation, route }: any) => {
   const type: CardType = route.params?.type ?? 'student';
   const standards: { id: number; name: string }[] = route.params?.standards ?? [];
 
+  // Cards run to the end of the session: 31 March (the session starts in April).
   const [expiry, setExpiry] = useState<string>(() => {
-    const d = new Date();
-    d.setFullYear(d.getFullYear() + 1);
-    return d.toISOString().slice(0, 10);
+    const now = new Date();
+    const endYear = now.getMonth() >= 3 ? now.getFullYear() + 1 : now.getFullYear();
+    return `${endYear}-03-31`;
   });
   const [classes, setClasses] = useState<number[]>([]);
   const [focused, setFocused] = useState(false);
