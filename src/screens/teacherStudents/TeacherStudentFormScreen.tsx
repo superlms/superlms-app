@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -37,9 +37,10 @@ import {
  * student, their family, the school's numbers, where they live and the bus.
  *
  * The class is not asked for. A class teacher has one, and the student goes
- * into it; the line under the photo says which. The photo is taken with the
- * camera there and then, or picked from the gallery. Editing also offers to
- * remove the student.
+ * into it; the line under the photo says which. A class teacher of two or
+ * more sections is asked which of them a new student goes into. The photo is
+ * taken with the camera there and then, or picked from the gallery. Editing
+ * also offers to remove the student.
  *
  * Route params: id (edit), classes (what the list already knows they own).
  */
@@ -62,6 +63,9 @@ const emptyForm: StudentPayload = {
 const classLabel = (c?: TeacherClass | null) =>
   c ? [c.class, c.section].filter(Boolean).join(' · ') : '';
 
+// One class-and-section, as the section picker tells its options apart.
+const sectionKey = (standardId: number, sectionId?: number | null) => `${standardId}:${sectionId || 0}`;
+
 const TeacherStudentFormScreen = ({ navigation, route }: any) => {
   const editId: number | undefined = route?.params?.id;
 
@@ -82,6 +86,24 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
   // more than one, the first — the class is never asked for here.
   const own = classes[0] ?? null;
 
+  // Every section a new student may go into: one per section they are class
+  // teacher of, and each section of a class that is theirs whole.
+  const choices = useMemo(() => {
+    const all: TeacherClass[] = [];
+    classes.forEach(c => {
+      const sections = c.section_id
+        ? []
+        : (lookups?.sections ?? []).filter(x => Number(x.standard_id) === Number(c.standard_id));
+      if (sections.length === 0) all.push(c);
+      else sections.forEach(x => all.push({ ...c, section_id: x.id, section: x.name }));
+    });
+    const keys = all.map(c => sectionKey(c.standard_id, c.section_id));
+    return all.filter((_, i) => keys.indexOf(keys[i]) === i);
+  }, [classes, lookups]);
+  // With two or more the teacher says which; with one it is never asked.
+  const asksSection = !editId && choices.length > 1;
+  const oneClass = choices.every(c => c.standard_id === choices[0].standard_id);
+
   useEffect(() => {
     getStudentLookups().then(setLookups).catch(() => {});
     if (!route?.params?.classes) getMyClasses().then(setClasses).catch(() => {});
@@ -93,6 +115,11 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
     if (c.section_id) return;
     try {
       const lk = await getStudentLookups(c.standard_id);
+      // A whole class of several sections: the form asks which, below.
+      if (lk.sections.length > 1) {
+        setLookups(prev => prev ?? lk);
+        return;
+      }
       const first = lk.sections[0];
       if (first) setForm(prev => ({ ...prev, section_id: first.id }));
     } catch {
@@ -102,8 +129,18 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
 
   useEffect(() => {
     if (editId || !own) return;
+    // Class teacher of several sections: the form asks which, below.
+    if (choices.length > 1) return;
     fillClass(own);
-  }, [editId, own, fillClass]);
+  }, [editId, own, choices.length, fillClass]);
+
+  const chosenKey = form.standard_id ? sectionKey(form.standard_id, form.section_id) : null;
+  const chosen = asksSection ? choices.find(c => sectionKey(c.standard_id, c.section_id) === chosenKey) ?? null : null;
+
+  const pickSection = (key: string | number) => {
+    const c = choices.find(x => sectionKey(x.standard_id, x.section_id) === key);
+    if (c) setForm(prev => ({ ...prev, standard_id: c.standard_id, section_id: c.section_id ?? 0 }));
+  };
 
   useEffect(() => {
     if (!editId) return;
@@ -148,6 +185,9 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
       !form.gender || !form.dob || !form.father_name.trim()
     ) {
       return AppAlert.alert('Something is missing', 'Name, email, mobile, date of birth, gender and father’s name are needed.');
+    }
+    if (asksSection && !chosen) {
+      return AppAlert.alert('Section', 'Select the section this student goes into.');
     }
     if (!form.standard_id || !form.section_id) {
       return AppAlert.alert('No class', 'Your class could not be read. Pull the list to refresh and try again.');
@@ -205,7 +245,17 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
   }
 
   const shown = photo?.uri ?? savedPhoto;
-  const inClass = classLabel(editId ? classes.find(c => c.standard_id === form.standard_id) ?? own : own);
+  // The line under the photo: the student's own section when editing, the one
+  // picked when the form asks, and the teacher's only one otherwise.
+  const inClass = asksSection
+    ? chosen ? classLabel(chosen) : (oneClass ? choices[0].class ?? '' : '')
+    : classLabel(
+        editId
+          ? classes.find(c => c.standard_id === form.standard_id && c.section_id === form.section_id) ??
+              classes.find(c => c.standard_id === form.standard_id) ??
+              own
+          : own,
+      );
 
   return (
     <View style={s.root}>
@@ -244,6 +294,26 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
           <View style={s.select}>
             <Select plain label="Gender" placeholder="Select gender" value={form.gender || null} options={GENDERS} onChange={v => set('gender', v)} />
           </View>
+
+          {/* Class teacher of two or more sections: which one the student goes into */}
+          {asksSection && (
+            <>
+              <FormSection title="Class" />
+              <View style={s.select}>
+                <Select
+                  plain
+                  label={oneClass ? 'Section' : 'Class & Section'}
+                  placeholder="Select section"
+                  value={chosen ? chosenKey : null}
+                  options={choices.map(c => ({
+                    label: oneClass ? c.section ?? c.class ?? '' : classLabel(c),
+                    value: sectionKey(c.standard_id, c.section_id),
+                  }))}
+                  onChange={pickSection}
+                />
+              </View>
+            </>
+          )}
 
           <FormSection title="Family" />
           <FormField label="Father’s Name" value={form.father_name} onChangeText={(v: string) => set('father_name', v)} placeholder="Father’s name" />
