@@ -2,7 +2,10 @@ import React from 'react';
 import ReactTestRenderer, { act } from 'react-test-renderer';
 import { Text, TextInput, TouchableOpacity } from 'react-native';
 import Select from '../src/components/Select';
-import { AppAlert } from '../src/components/AppDialog';
+import { AppAlert, AppDialog } from '../src/components/AppDialog';
+import PhotoCropper from '../src/components/PhotoCropper';
+import CroppedPhoto from '../src/components/CroppedPhoto';
+import * as pickers from '../src/utils/filePickers';
 import * as api from '../src/api/teacherStudentApi';
 import TeacherStudentFormScreen from '../src/screens/teacherStudents/TeacherStudentFormScreen';
 
@@ -16,6 +19,8 @@ jest.mock('../src/components/AppDialog', () => ({
   AppAlert: { alert: jest.fn() },
   AppDialog: () => null,
 }));
+// The cropper (gesture handler + reanimated) is stood in for: its props are what the form gives it.
+jest.mock('../src/components/PhotoCropper', () => () => null);
 jest.mock('../src/utils/filePickers', () => ({
   apiErr: (_e: any, fallback: string) => fallback,
   pickImage: jest.fn(),
@@ -214,5 +219,77 @@ describe('TeacherStudentFormScreen — one student however often Add is pressed'
 
     await press(r, 'Save changes');
     expect(mocked.updateStudent.mock.calls[0][1].client_ref).toBeUndefined();
+  });
+});
+
+describe('TeacherStudentFormScreen — the photo fitted in its circle', () => {
+  const picked = { uri: 'file:///photo.jpg', type: 'image/jpeg', name: 'photo.jpg' };
+  const square = { x: 0.1, y: 0.2, w: 0.5, h: 0.6 };
+  const cropper = (r: Renderer) => r.root.findByType(PhotoCropper);
+  const fromGallery = async (r: Renderer) => {
+    const dialog = r.root.findAllByType(AppDialog).find(d => d.props.title === 'Student photo')!;
+    await act(async () => dialog.props.actions.find((a: any) => a.text === 'Gallery').onPress());
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mocked.createStudent.mockResolvedValue({} as any);
+    mocked.updateStudent.mockResolvedValue({} as any);
+    (pickers.pickImage as jest.Mock).mockResolvedValue(picked);
+  });
+
+  it('opens a picked photo in the cropper and adds it with the square framed', async () => {
+    const r = await open({ classes: [A] }, [A]);
+    fill(r);
+
+    await fromGallery(r);
+    expect(pickers.pickImage).toHaveBeenCalledWith({ maxSide: 1600 });
+    expect(cropper(r).props.uri).toBe(picked.uri);
+    // Not the form's photo until Use photo.
+    expect(r.root.findAllByType(CroppedPhoto)).toHaveLength(0);
+
+    act(() => cropper(r).props.onDone(square));
+    expect(cropper(r).props.uri).toBeNull();
+    expect(r.root.findByType(CroppedPhoto).props).toEqual(expect.objectContaining({ uri: picked.uri, crop: square }));
+
+    await press(r, 'Add student');
+    expect(mocked.createStudent).toHaveBeenCalledWith(expect.objectContaining({ image: picked, crop: square }));
+  });
+
+  it('keeps no photo when the cropper is cancelled', async () => {
+    const r = await open({ classes: [A] }, [A]);
+    fill(r);
+
+    await fromGallery(r);
+    act(() => cropper(r).props.onCancel());
+
+    await press(r, 'Add student');
+    const sent = mocked.createStudent.mock.calls[0][0];
+    expect(sent.image).toBeNull();
+    expect(sent.crop).toBeNull();
+  });
+
+  it('crops the saved photo, sent with the edit without a new one', async () => {
+    mocked.getStudent.mockResolvedValue({
+      full_name: 'Aarav Sharma', email: 'aarav@example.com', phone: '9876543210',
+      dob: '2015-04-12', gender: 'male', standard_id: 5, section_id: 11,
+      father_name: 'Rakesh Sharma', is_active: true, transportation_required: false,
+      image: 'https://cdn.test/aarav.jpg',
+    } as any);
+    const r = await open({ id: 7, classes: [A] }, [A]);
+
+    await press(r, 'Crop');
+    expect(cropper(r).props.uri).toBe('https://cdn.test/aarav.jpg');
+    act(() => cropper(r).props.onDone(square));
+
+    await press(r, 'Save changes');
+    const [, sent] = mocked.updateStudent.mock.calls[0];
+    expect(sent.crop).toEqual(square);
+    expect(sent.image).toBeNull();
+  });
+
+  it('offers no Crop without a photo', async () => {
+    const r = await open({ classes: [A] }, [A]);
+    expect(texts(r)).not.toContain('Crop');
   });
 });

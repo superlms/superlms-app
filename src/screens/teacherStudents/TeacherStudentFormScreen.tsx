@@ -13,6 +13,8 @@ import {
 import VectorIcon from '../../components/VectorIcon';
 import Select from '../../components/Select';
 import { AppAlert, AppDialog } from '../../components/AppDialog';
+import PhotoCropper, { type CropRect } from '../../components/PhotoCropper';
+import CroppedPhoto from '../../components/CroppedPhoto';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr, pickImage, takePhoto } from '../../utils/filePickers';
 import { fromApiDate, toApiDate, typeDate } from '../../utils/dayMonthYear';
@@ -40,8 +42,10 @@ import {
  * The class is not asked for. A class teacher has one, and the student goes
  * into it; the line under the photo says which. A class teacher of two or
  * more sections is asked which of them a new student goes into. The photo is
- * taken with the camera there and then, or picked from the gallery. Editing
- * also offers to remove the student.
+ * taken with the camera there and then, or picked from the gallery, and fitted
+ * in its circle (PhotoCropper, as the teacher's own profile photo is); the
+ * photo already saved can be fitted again with Crop. The server cuts the photo
+ * to the square framed. Editing also offers to remove the student.
  *
  * Route params: id (edit), classes (what the list already knows they own).
  */
@@ -61,6 +65,10 @@ const emptyForm: StudentPayload = {
   is_active: true, transportation_required: false, route_id: null, image: null,
 };
 
+// A photo is picked no bigger than this on its longest side (as the profile
+// photo is); the square cut from it is at most 512.
+const PHOTO_SIDE = 1600;
+
 const classLabel = (c?: TeacherClass | null) =>
   c ? [c.class, c.section].filter(Boolean).join(' · ') : '';
 
@@ -76,6 +84,10 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
   const [photo, setPhoto] = useState<PickedFile | null>(null);
   const [savedPhoto, setSavedPhoto] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  // The photo in the cropper: one just picked (file), or the one shown.
+  const [cropping, setCropping] = useState<{ uri: string; file: PickedFile | null } | null>(null);
+  // The square framed for the photo shown — sent with the save.
+  const [crop, setCrop] = useState<CropRect | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
@@ -177,13 +189,23 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
     })();
   }, [editId, navigation]);
 
-  // The photo: the camera, or the gallery.
+  // The photo: the camera, or the gallery — then fitted in its circle.
   const choose = async (from: 'camera' | 'gallery') => {
     setAsking(false);
-    const f = from === 'camera' ? await takePhoto() : await pickImage();
+    const f = from === 'camera' ? await takePhoto({ maxSide: PHOTO_SIDE }) : await pickImage({ maxSide: PHOTO_SIDE });
     if (!f) return;
-    setPhoto(f);
-    set('image', f);
+    setCropping({ uri: f.uri, file: f });
+  };
+
+  // Use photo: a photo just picked becomes the one shown; the square goes
+  // with the save. Cancel leaves everything as it was.
+  const cropped = (rect: CropRect) => {
+    if (cropping?.file) {
+      setPhoto(cropping.file);
+      set('image', cropping.file);
+    }
+    setCrop(rect);
+    setCropping(null);
   };
 
   const save = async () => {
@@ -209,7 +231,7 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
     if (admitted === null) {
       return AppAlert.alert('Date of admission', 'Write it as DD/MM/YYYY, or leave it empty.');
     }
-    const payload = { ...form, dob, date_of_admission: admitted };
+    const payload = { ...form, dob, date_of_admission: admitted, crop };
     busy.current = true;
     setSaving(true);
     try {
@@ -255,6 +277,8 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
   }
 
   const shown = photo?.uri ?? savedPhoto;
+  // Fit the photo shown again: a new one from the file picked, the saved one as it is.
+  const cropShown = () => shown && setCropping({ uri: shown, file: photo });
   // The line under the photo: the student's own section when editing, the one
   // picked when the form asks, and the teacher's only one otherwise.
   const inClass = asksSection
@@ -276,7 +300,9 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
           {/* The photo, and the class the student goes into */}
           <View style={s.photoBlock}>
             <TouchableOpacity activeOpacity={0.8} onPress={() => setAsking(true)}>
-              {shown ? (
+              {shown && crop ? (
+                <CroppedPhoto uri={shown} crop={crop} size={88} style={s.photo} />
+              ) : shown ? (
                 <Image source={{ uri: shown }} style={s.photo} />
               ) : (
                 <View style={[s.photo, s.photoEmpty]}>
@@ -288,9 +314,19 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => setAsking(true)} hitSlop={8} activeOpacity={0.6}>
-              <Text style={s.photoText}>{shown ? 'Change photo' : 'Add a photo'}</Text>
-            </TouchableOpacity>
+            <View style={s.photoLinks}>
+              <TouchableOpacity onPress={() => setAsking(true)} hitSlop={8} activeOpacity={0.6}>
+                <Text style={s.photoText}>{shown ? 'Change photo' : 'Add a photo'}</Text>
+              </TouchableOpacity>
+              {!!shown && (
+                <>
+                  <Text style={s.photoDot}>·</Text>
+                  <TouchableOpacity onPress={cropShown} hitSlop={8} activeOpacity={0.6}>
+                    <Text style={s.photoText}>Crop</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
             {!!inClass && <Text style={s.inClass}>{inClass}</Text>}
           </View>
 
@@ -406,6 +442,8 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
         onRequestClose={() => setAsking(false)}
       />
 
+      <PhotoCropper uri={cropping?.uri ?? null} onCancel={() => setCropping(null)} onDone={cropped} />
+
       <AppDialog
         visible={confirming}
         title="Remove this student?"
@@ -452,6 +490,8 @@ const __mk_s = () => StyleSheet.create({
     borderColor: theme.colors.card,
   },
   photoText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary, marginTop: 10 },
+  photoLinks: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  photoDot: { fontSize: 13, color: theme.colors.textMuted, marginTop: 10 },
   inClass: { fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
 
   // Select sits in the fields' rhythm

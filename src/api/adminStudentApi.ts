@@ -2,6 +2,7 @@ import apiClient from './apiClient';
 import constant from '../utils/constant';
 import { PickedFile } from './adminProfileApi';
 import { authHeader, downloadFile } from './pdfDownload';
+import type { CropRect } from '../components/PhotoCropper';
 
 // Students module. Mirrors app/Livewire/Admin/Student.php over /admin/students.
 
@@ -128,6 +129,11 @@ export interface StudentPayload {
    * rather than adding them again.
    */
   client_ref?: string;
+  /**
+   * The square framed in PhotoCropper (the class teacher's form): the server
+   * cuts the photo sent — or, with none sent, the saved one — to it.
+   */
+  crop?: CropRect | null;
 }
 
 /** A fresh mark for one Add Student form. */
@@ -165,6 +171,12 @@ export const studentForm = (p: StudentPayload) => {
   if (p.transportation_required && p.route_id) append('route_id', p.route_id);
   if (p.image) form.append('image', filePart(p.image));
   append('client_ref', p.client_ref);
+  if (p.crop) {
+    form.append('crop_x', p.crop.x.toFixed(6));
+    form.append('crop_y', p.crop.y.toFixed(6));
+    form.append('crop_w', p.crop.w.toFixed(6));
+    form.append('crop_h', p.crop.h.toFixed(6));
+  }
   return form;
 };
 
