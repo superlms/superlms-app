@@ -13,7 +13,7 @@ import {
 import VectorIcon from '../../components/VectorIcon';
 import Select from '../../components/Select';
 import { AppAlert, AppDialog } from '../../components/AppDialog';
-import PhotoCropper, { type CropRect } from '../../components/PhotoCropper';
+import PhotoEditor, { type PhotoEdit } from '../../components/PhotoEditor';
 import CroppedPhoto from '../../components/CroppedPhoto';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr, pickImage, takePhoto } from '../../utils/filePickers';
@@ -42,10 +42,11 @@ import {
  * The class is not asked for. A class teacher has one, and the student goes
  * into it; the line under the photo says which. A class teacher of two or
  * more sections is asked which of them a new student goes into. The photo is
- * taken with the camera there and then, or picked from the gallery, and fitted
- * in its circle (PhotoCropper, as the teacher's own profile photo is); the
- * photo already saved can be fitted again with Crop. The server cuts the photo
- * to the square framed. Editing also offers to remove the student.
+ * taken with the camera there and then, or picked from the gallery, and cropped
+ * from any side in the photo editor (PhotoEditor, which shows the circle the
+ * lists will show); the photo already saved can be cropped again with Crop.
+ * The server cuts the photo to the part kept. Editing also offers to remove
+ * the student.
  *
  * Route params: id (edit), classes (what the list already knows they own).
  */
@@ -86,8 +87,8 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
   const [asking, setAsking] = useState(false);
   // The photo in the cropper: one just picked (file), or the one shown.
   const [cropping, setCropping] = useState<{ uri: string; file: PickedFile | null } | null>(null);
-  // The square framed for the photo shown — sent with the save.
-  const [crop, setCrop] = useState<CropRect | null>(null);
+  // The part kept of the photo shown (and its circle, for the preview) — sent with the save.
+  const [crop, setCrop] = useState<PhotoEdit | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
@@ -197,14 +198,14 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
     setCropping({ uri: f.uri, file: f });
   };
 
-  // Use photo: a photo just picked becomes the one shown; the square goes
+  // Use photo: a photo just picked becomes the one shown; the part kept goes
   // with the save. Cancel leaves everything as it was.
-  const cropped = (rect: CropRect) => {
+  const cropped = (edit: PhotoEdit) => {
     if (cropping?.file) {
       setPhoto(cropping.file);
       set('image', cropping.file);
     }
-    setCrop(rect);
+    setCrop(edit);
     setCropping(null);
   };
 
@@ -231,7 +232,7 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
     if (admitted === null) {
       return AppAlert.alert('Date of admission', 'Write it as DD/MM/YYYY, or leave it empty.');
     }
-    const payload = { ...form, dob, date_of_admission: admitted, crop };
+    const payload = { ...form, dob, date_of_admission: admitted, crop: crop?.crop ?? null };
     busy.current = true;
     setSaving(true);
     try {
@@ -301,7 +302,7 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
           <View style={s.photoBlock}>
             <TouchableOpacity activeOpacity={0.8} onPress={() => setAsking(true)}>
               {shown && crop ? (
-                <CroppedPhoto uri={shown} crop={crop} size={88} style={s.photo} />
+                <CroppedPhoto uri={shown} crop={crop.circle} size={88} style={s.photo} />
               ) : shown ? (
                 <Image source={{ uri: shown }} style={s.photo} />
               ) : (
@@ -442,7 +443,7 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
         onRequestClose={() => setAsking(false)}
       />
 
-      <PhotoCropper uri={cropping?.uri ?? null} onCancel={() => setCropping(null)} onDone={cropped} />
+      <PhotoEditor uri={cropping?.uri ?? null} doneLabel="Use photo" onCancel={() => setCropping(null)} onDone={cropped} />
 
       <AppDialog
         visible={confirming}

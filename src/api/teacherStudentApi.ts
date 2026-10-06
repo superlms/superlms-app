@@ -1,4 +1,5 @@
 import apiClient from './apiClient';
+import type { CropRect } from '../components/PhotoCropper';
 import {
   ADD_STUDENT_TIMEOUT,
   Pagination,
@@ -81,4 +82,18 @@ export const updateStudent = async (id: number, p: StudentPayload): Promise<Stud
 
 export const deleteStudent = async (id: number) => {
   await apiClient.delete(`/teacher/students/${id}`);
+};
+
+/**
+ * The student's saved photo cut to the part kept in the photo editor (from
+ * the list's large photo, Save). Returns the new photo's address.
+ */
+export const cropStudentPhoto = async (id: number, crop: CropRect): Promise<string | null> => {
+  const form = new FormData();
+  form.append('crop_x', crop.x.toFixed(6));
+  form.append('crop_y', crop.y.toFixed(6));
+  form.append('crop_w', crop.w.toFixed(6));
+  form.append('crop_h', crop.h.toFixed(6));
+  const { data } = await apiClient.post(`/teacher/students/${id}/photo`, form, MULTIPART);
+  return unwrap(data)?.image ?? null;
 };

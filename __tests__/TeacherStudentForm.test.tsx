@@ -3,7 +3,7 @@ import ReactTestRenderer, { act } from 'react-test-renderer';
 import { Text, TextInput, TouchableOpacity } from 'react-native';
 import Select from '../src/components/Select';
 import { AppAlert, AppDialog } from '../src/components/AppDialog';
-import PhotoCropper from '../src/components/PhotoCropper';
+import PhotoEditor from '../src/components/PhotoEditor';
 import CroppedPhoto from '../src/components/CroppedPhoto';
 import * as pickers from '../src/utils/filePickers';
 import * as api from '../src/api/teacherStudentApi';
@@ -19,8 +19,8 @@ jest.mock('../src/components/AppDialog', () => ({
   AppAlert: { alert: jest.fn() },
   AppDialog: () => null,
 }));
-// The cropper (gesture handler + reanimated) is stood in for: its props are what the form gives it.
-jest.mock('../src/components/PhotoCropper', () => () => null);
+// The photo editor is stood in for: its props are what the form gives it.
+jest.mock('../src/components/PhotoEditor', () => () => null);
 jest.mock('../src/utils/filePickers', () => ({
   apiErr: (_e: any, fallback: string) => fallback,
   pickImage: jest.fn(),
@@ -224,8 +224,11 @@ describe('TeacherStudentFormScreen — one student however often Add is pressed'
 
 describe('TeacherStudentFormScreen — the photo fitted in its circle', () => {
   const picked = { uri: 'file:///photo.jpg', type: 'image/jpeg', name: 'photo.jpg' };
+  // Cropped from the sides: the part kept, and its middle square (the list's circle).
   const square = { x: 0.1, y: 0.2, w: 0.5, h: 0.6 };
-  const cropper = (r: Renderer) => r.root.findByType(PhotoCropper);
+  const circle = { x: 0.1, y: 0.25, w: 0.5, h: 0.5 };
+  const edit = { crop: square, circle };
+  const cropper = (r: Renderer) => r.root.findByType(PhotoEditor);
   const fromGallery = async (r: Renderer) => {
     const dialog = r.root.findAllByType(AppDialog).find(d => d.props.title === 'Student photo')!;
     await act(async () => dialog.props.actions.find((a: any) => a.text === 'Gallery').onPress());
@@ -248,9 +251,10 @@ describe('TeacherStudentFormScreen — the photo fitted in its circle', () => {
     // Not the form's photo until Use photo.
     expect(r.root.findAllByType(CroppedPhoto)).toHaveLength(0);
 
-    act(() => cropper(r).props.onDone(square));
+    act(() => cropper(r).props.onDone(edit));
     expect(cropper(r).props.uri).toBeNull();
-    expect(r.root.findByType(CroppedPhoto).props).toEqual(expect.objectContaining({ uri: picked.uri, crop: square }));
+    // The form shows the circle the list will; the part kept goes with the save.
+    expect(r.root.findByType(CroppedPhoto).props).toEqual(expect.objectContaining({ uri: picked.uri, crop: circle }));
 
     await press(r, 'Add student');
     expect(mocked.createStudent).toHaveBeenCalledWith(expect.objectContaining({ image: picked, crop: square }));
@@ -280,7 +284,7 @@ describe('TeacherStudentFormScreen — the photo fitted in its circle', () => {
 
     await press(r, 'Crop');
     expect(cropper(r).props.uri).toBe('https://cdn.test/aarav.jpg');
-    act(() => cropper(r).props.onDone(square));
+    act(() => cropper(r).props.onDone(edit));
 
     await press(r, 'Save changes');
     const [, sent] = mocked.updateStudent.mock.calls[0];

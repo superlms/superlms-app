@@ -9,13 +9,15 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { StudentRow, TeacherClass, getMyClasses, getStudents } from '../../api/teacherStudentApi';
+import StudentPhotoModal from './StudentPhotoModal';
 
 /**
  * A class teacher's own students, in the More screen — the admin panel's
  * Students module for the class they are class teacher of, drawn as Subjects
  * is: a count, then a row per student with their photo, their name and their
  * numbers, in name order. The header's + adds one and a row opens it to edit,
- * where it can also be removed.
+ * where it can also be removed. A photo, tapped, opens large, to be cropped
+ * and saved there (StudentPhotoModal).
  *
  * A teacher who is class teacher of no class sees that, and adds no one.
  */
@@ -68,15 +70,24 @@ const Row = ({
   student,
   meta,
   onOpen,
+  onPhoto,
   isLast,
 }: {
   student: StudentRow;
   meta: string;
   onOpen: () => void;
+  /** The photo tapped: shown large. */
+  onPhoto: () => void;
   isLast: boolean;
 }) => (
   <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onOpen}>
-    <Avatar uri={student.image} name={student.full_name} />
+    {student.image ? (
+      <TouchableOpacity onPress={onPhoto} activeOpacity={0.7} hitSlop={6}>
+        <Avatar uri={student.image} name={student.full_name} />
+      </TouchableOpacity>
+    ) : (
+      <Avatar uri={student.image} name={student.full_name} />
+    )}
 
     <View style={s.body}>
       <Text style={s.name} numberOfLines={1}>
@@ -119,6 +130,8 @@ const TeacherStudentsScreen = ({ navigation }: any) => {
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // The student whose photo is shown large.
+  const [viewing, setViewing] = useState<StudentRow | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -210,6 +223,7 @@ const TeacherStudentsScreen = ({ navigation }: any) => {
               .filter(Boolean)
               .join(' · ')}
             onOpen={() => navigation.navigate('TeacherStudentForm', { id: item.id, classes })}
+            onPhoto={() => setViewing(item)}
             isLast={index === students.length - 1}
           />
         )}
@@ -225,6 +239,13 @@ const TeacherStudentsScreen = ({ navigation }: any) => {
         rightSlot={isClassTeacher ? <HeaderIconButton icon="add" onPress={add} /> : undefined}
       />
       {body()}
+
+      <StudentPhotoModal
+        student={viewing}
+        onClose={() => setViewing(null)}
+        // The cropped photo stands in the list at once.
+        onSaved={(id, image) => setStudents(prev => prev.map(x => (x.id === id ? { ...x, image } : x)))}
+      />
     </View>
   );
 };
