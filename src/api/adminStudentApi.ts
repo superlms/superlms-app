@@ -122,7 +122,17 @@ export interface StudentPayload {
   transportation_required?: boolean;
   route_id?: number | null;
   image?: PickedFile | null;
+  /**
+   * This Add Student form's own mark (newClientRef), the same however often
+   * it is sent: the server hands back the student it already added for it
+   * rather than adding them again.
+   */
+  client_ref?: string;
 }
+
+/** A fresh mark for one Add Student form. */
+export const newClientRef = () =>
+  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 10)}`;
 
 /** The multipart body both the admin's and the class teacher's form send. */
 export const studentForm = (p: StudentPayload) => {
@@ -154,11 +164,19 @@ export const studentForm = (p: StudentPayload) => {
   form.append('transportation_required', p.transportation_required ? '1' : '0');
   if (p.transportation_required && p.route_id) append('route_id', p.route_id);
   if (p.image) form.append('image', filePart(p.image));
+  append('client_ref', p.client_ref);
   return form;
 };
 
+/**
+ * Adding a student, a photo and all, can take longer than other calls on a
+ * slow network; given up on too soon, the student was often saved while the
+ * phone said it was not.
+ */
+export const ADD_STUDENT_TIMEOUT = 60000;
+
 export const createStudent = async (p: StudentPayload): Promise<StudentRow> => {
-  const { data } = await apiClient.post('/admin/students', studentForm(p), MULTIPART);
+  const { data } = await apiClient.post('/admin/students', studentForm(p), { ...MULTIPART, timeout: ADD_STUDENT_TIMEOUT });
   return unwrap(data);
 };
 

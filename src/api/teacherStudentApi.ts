@@ -1,5 +1,6 @@
 import apiClient from './apiClient';
 import {
+  ADD_STUDENT_TIMEOUT,
   Pagination,
   StudentDetail,
   StudentFilters,
@@ -7,6 +8,7 @@ import {
   StudentPayload,
   StudentRow,
   StudentStats,
+  newClientRef,
   studentForm,
 } from './adminStudentApi';
 
@@ -19,6 +21,8 @@ import {
 
 const unwrap = (data: any) => data?.data ?? data;
 const MULTIPART = { headers: { 'Content-Type': 'multipart/form-data' } };
+
+export { newClientRef };
 
 export type {
   Pagination,
@@ -66,7 +70,7 @@ export const getStudent = async (id: number): Promise<StudentDetail> => {
 };
 
 export const createStudent = async (p: StudentPayload): Promise<StudentRow> => {
-  const { data } = await apiClient.post('/teacher/students', studentForm(p), MULTIPART);
+  const { data } = await apiClient.post('/teacher/students', studentForm(p), { ...MULTIPART, timeout: ADD_STUDENT_TIMEOUT });
   return unwrap(data);
 };
 

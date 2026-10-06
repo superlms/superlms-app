@@ -27,6 +27,7 @@ import {
   createStudent,
   getStudent,
   getStudentLookups,
+  newClientRef,
   updateStudent,
 } from '../../api/adminStudentApi';
 
@@ -80,6 +81,12 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
   const [asking, setAsking] = useState(false);
   const [loading, setLoading] = useState(!!editId);
   const [saving, setSaving] = useState(false);
+  // Held from the moment Add is pressed until the answer comes, before the
+  // button has had time to grey out: a quick second tap does nothing.
+  const busy = useRef(false);
+  // This form's mark, sent with every Add: pressed again after the network
+  // lost the answer, the server hands back the student it already added.
+  const clientRef = useRef(newClientRef());
 
   const set = (k: keyof StudentPayload, v: any) => setForm(prev => ({ ...prev, [k]: v }));
 
@@ -178,6 +185,7 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
   };
 
   const save = async () => {
+    if (busy.current) return;
     if (
       !form.name.trim() || !form.email.trim() || !form.mobile.trim() ||
       !form.gender || !form.dob || !form.father_name.trim()
@@ -204,13 +212,14 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
 
     // Checked above: the date of birth is a real one by now.
     const payload = { ...form, email: form.email.trim(), mobile: form.mobile.trim(), dob: dob as string, date_of_admission: admitted || '' };
+    busy.current = true;
     setSaving(true);
     try {
       if (editId) {
         await updateStudent(editId, payload);
         AppAlert.alert('Saved', 'The student has been updated.');
       } else {
-        await createStudent(payload);
+        await createStudent({ ...payload, client_ref: clientRef.current });
         AppAlert.alert('Added', 'The student has been added. Their login has been emailed to them.');
       }
       // An edit goes back to the student's page, which shows what was saved.
@@ -218,6 +227,7 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
     } catch (e) {
       AppAlert.alert('Not saved', apiErr(e, 'Could not save this student.'));
     } finally {
+      busy.current = false;
       setSaving(false);
     }
   };

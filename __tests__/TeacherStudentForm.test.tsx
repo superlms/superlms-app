@@ -22,6 +22,7 @@ jest.mock('../src/utils/filePickers', () => ({
   takePhoto: jest.fn(),
 }));
 jest.mock('../src/api/teacherStudentApi', () => ({
+  newClientRef: jest.fn(() => `ref-${Math.random()}`),
   createStudent: jest.fn(),
   updateStudent: jest.fn(),
   deleteStudent: jest.fn(),
@@ -159,5 +160,59 @@ describe('TeacherStudentFormScreen — which section a new student goes into', (
 
     await press(r, 'Save changes');
     expect(mocked.updateStudent).toHaveBeenCalledWith(7, expect.objectContaining({ standard_id: 5, section_id: 12 }));
+  });
+});
+
+describe('TeacherStudentFormScreen — one student however often Add is pressed', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('sends one Add for two quick taps', async () => {
+    let answer!: (v: any) => void;
+    mocked.createStudent.mockReturnValue(new Promise(res => { answer = res; }) as any);
+    const r = await open({ classes: [A] }, [A]);
+    fill(r);
+
+    const b = r.root
+      .findAllByType(TouchableOpacity)
+      .find(x => x.findAllByType(Text).some(t => t.props.children === 'Add student'))!;
+    // Both taps land before the button has re-rendered as busy.
+    await act(async () => {
+      b.props.onPress();
+      b.props.onPress();
+    });
+    expect(mocked.createStudent).toHaveBeenCalledTimes(1);
+
+    await act(async () => answer({}));
+    expect(navigation.goBack).toHaveBeenCalled();
+  });
+
+  it('sends the same mark again when Add is pressed again after a failure', async () => {
+    mocked.createStudent.mockRejectedValueOnce(new Error('Network Error')).mockResolvedValueOnce({} as any);
+    const r = await open({ classes: [A] }, [A]);
+    fill(r);
+
+    await press(r, 'Add student');
+    expect(alert).toHaveBeenCalledWith('Not saved', expect.any(String));
+    await press(r, 'Add student');
+
+    expect(mocked.createStudent).toHaveBeenCalledTimes(2);
+    const [first, again] = mocked.createStudent.mock.calls.map(c => c[0].client_ref);
+    expect(first).toEqual(expect.any(String));
+    expect(again).toBe(first);
+  });
+
+  it('sends no mark with an edit', async () => {
+    mocked.updateStudent.mockResolvedValue({} as any);
+    mocked.getStudent.mockResolvedValue({
+      full_name: 'Aarav Sharma', email: 'aarav@example.com', phone: '9876543210',
+      dob: '2015-04-12', gender: 'male', standard_id: 5, section_id: 11,
+      father_name: 'Rakesh Sharma', is_active: true, transportation_required: false,
+    } as any);
+    const r = await open({ id: 7, classes: [A] }, [A]);
+
+    await press(r, 'Save changes');
+    expect(mocked.updateStudent.mock.calls[0][1].client_ref).toBeUndefined();
   });
 });
