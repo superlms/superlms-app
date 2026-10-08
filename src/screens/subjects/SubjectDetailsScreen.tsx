@@ -19,9 +19,11 @@ const SubjectDetailsScreen = ({ navigation, route }: any) => {
       subtitle={combo ? comboClass(combo) : null}
       image={combo ? combo.subjectImage : route?.params?.subjectImage}
       fetchChapters={() => (combo ? comboChapters(combo) : getChapters({ subject_id: subjectId }))}
+      // The syllabus has no topics (the user's ask of 8 Oct 2026): chapters only.
+      hideTopics
       emptyChapters={
         combo
-          ? { title: 'No chapters yet', subtitle: 'Add chapters and topics from Syllabus.' }
+          ? { title: 'No chapters yet', subtitle: 'Add chapters from Syllabus.' }
           : {
               title: 'No chapters yet',
               subtitle: `Chapters for ${subjectName} will appear here once your teacher adds them.`,

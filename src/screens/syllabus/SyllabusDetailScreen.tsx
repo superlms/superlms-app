@@ -6,9 +6,10 @@ import { OutlineScreen, comboChapters, comboClass } from '../subjects/outlineUi'
 import { AddToSyllabusSheet } from './AddToSyllabusSheet';
 
 /**
- * One subject's syllabus. A student arrives with the subject; a teacher
- * arrives with a class-and-subject pair, can add a chapter or a topic with +,
- * and can go on to manage it with the pencil.
+ * One subject's syllabus — its chapters (no topics, the user's ask of 8 Oct
+ * 2026). A student arrives with the subject; a teacher arrives with a
+ * class-and-subject pair, can add a chapter with +, and can go on to manage it
+ * with the pencil.
  */
 const SyllabusDetailScreen = ({ navigation, route }: any) => {
   const combo: TeacherCombo | undefined = route?.params?.combo;
@@ -24,6 +25,7 @@ const SyllabusDetailScreen = ({ navigation, route }: any) => {
       subtitle={combo ? comboClass(combo) : null}
       image={combo ? combo.subjectImage : route?.params?.subjectImage}
       fetchChapters={() => (combo ? comboChapters(combo) : getChapters({ subject_id: subjectId }))}
+      hideTopics
       rightSlot={
         combo ? (
           <View style={s.headActions}>
@@ -41,6 +43,7 @@ const SyllabusDetailScreen = ({ navigation, route }: any) => {
             visible={adding}
             combo={combo}
             chapters={outline.chapters ?? []}
+            chapterOnly
             onClose={() => setAdding(false)}
             onAdded={(kind, chapterId) => {
               setAdding(false);
@@ -56,7 +59,7 @@ const SyllabusDetailScreen = ({ navigation, route }: any) => {
       }
       emptyChapters={
         combo
-          ? { title: 'No chapters yet', subtitle: 'Add chapters and topics with the edit button above.' }
+          ? { title: 'No chapters yet', subtitle: 'Add chapters with the + above.' }
           : {
               title: 'No chapters yet',
               subtitle: `Chapters for ${subjectName} will appear here once your teacher adds them.`,

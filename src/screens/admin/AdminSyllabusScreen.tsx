@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import VectorIcon from '../../components/VectorIcon';
 import { AppAlert } from '../../components/AppDialog';
 import { useFocusLoad, useRefresh } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
@@ -10,17 +9,15 @@ import { getAcademicLookups, LookupClass } from '../../api/adminStandardApi';
 import { getCurriculumSubjects, CurriculumSubject } from '../../api/adminCurriculumApi';
 import {
   OutlineChapter,
-  OutlineTopic,
   SyllabusOutline,
   SyllabusStats,
   deleteChapter,
-  deleteTopic,
   getSyllabusOutline,
 } from '../../api/adminSyllabusApi';
 import type { SyllabusChapter } from '../../api/contentApi';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { useChapters } from '../subjects/useChapters';
-import { ChapterOutline, TopicLine } from '../subjects/outlineUi';
+import { ChapterOutline } from '../subjects/outlineUi';
 import { confirmDestructive, OptionSheet } from './adminFormUi';
 import { DropPill } from './adminTransportUi';
 import type { CurriculumSelection } from './AdminCurriculumFilter';
@@ -29,12 +26,12 @@ import type { CurriculumSelection } from './AdminCurriculumFilter';
  * The school's Syllabus, as the admin panel keeps it and a teacher's Manage
  * Syllabus draws it. A class, a section (or all of them) and a subject the
  * class is taught are picked from the pills; the subject then opens as its
- * outline — every chapter it has, in order, each opening onto its topics.
+ * outline — every chapter it has, in order. The syllabus has no topics (the
+ * user's ask of 8 Oct 2026): a chapter opens onto Edit chapter and Delete only.
  *
  * The + in the header opens the subject's chapters as one set to add to,
- * rename, reorder or take off, as the panel's chapter manager does; an open
- * chapter's Topics does the same for its topics. A topic is shown, renamed or
- * removed from its own row, and a chapter edited on its own or removed.
+ * rename, reorder or take off, as the panel's chapter manager does; a chapter
+ * is edited on its own or removed from its row.
  */
 
 const TITLE = 'Syllabus';
@@ -142,12 +139,6 @@ const AdminSyllabusScreen = ({ navigation }: any) => {
     navigation.navigate('AdminSyllabusChapterForm', { sel, chapters: raw });
   };
 
-  const manageTopics = (chapterId: number) => {
-    const c = raw.find(x => x.id === chapterId);
-    if (!c) return;
-    navigation.navigate('AdminSyllabusTopicForm', { chapterId: c.id, chapterName: c.name, topics: c.topics });
-  };
-
   const editChapter = (chapterId: number) => {
     const c = raw.find(x => x.id === chapterId);
     if (c) navigation.navigate('AdminSyllabusChapterForm', { chapter: c });
@@ -166,34 +157,8 @@ const AdminSyllabusScreen = ({ navigation }: any) => {
       }
     });
 
-  // A topic's own row: where it sits, as the panel's View shows it.
-  const viewTopic = (c: SyllabusChapter, t: { name: string }) =>
-    AppAlert.alert(
-      quietCaps(t.name),
-      [
-        cls ? `${cls.name}${sec ? ` / ${sec.name}` : ''}` : null,
-        subject?.name ?? sub?.name,
-        quietCaps(c.name),
-      ]
-        .filter(Boolean)
-        .join(' · '),
-    );
-
-  const editTopic = (t: OutlineTopic | { id: number; name: string }) =>
-    navigation.navigate('AdminSyllabusTopicForm', { topic: { id: t.id, name: t.name } });
-
-  const removeTopic = (t: { id: number; name: string }) =>
-    confirmDestructive('Delete topic?', `"${quietCaps(t.name)}" will be removed.`, 'Delete', async () => {
-      try {
-        await deleteTopic(t.id);
-        await outline.load();
-      } catch (e) {
-        AppAlert.alert('Not deleted', apiErr(e, 'Could not delete this topic.'));
-      }
-    });
-
   const statLine = stats
-    ? [plural(stats.standards, 'class', 'classes'), plural(stats.subjects, 'subject'), plural(stats.chapters, 'chapter'), plural(stats.topics, 'topic')].join(' · ')
+    ? [plural(stats.standards, 'class', 'classes'), plural(stats.subjects, 'subject'), plural(stats.chapters, 'chapter')].join(' · ')
     : null;
 
   return (
@@ -215,7 +180,7 @@ const AdminSyllabusScreen = ({ navigation }: any) => {
       {!!statLine && <Text style={s.stats}>{statLine}</Text>}
 
       {!picked ? (
-        <DocNoData icon="library-outline" title="Pick a class and subject" subtitle="Its chapters and topics show here, to add to and change." />
+        <DocNoData icon="library-outline" title="Pick a class and subject" subtitle="Its chapters show here, to add to and change." />
       ) : outline.chapters !== null && !subject ? (
         <DocNoData icon="library-outline" title="Not taught here" subtitle="This subject isn't taught in the class or section picked." />
       ) : (
@@ -227,36 +192,13 @@ const AdminSyllabusScreen = ({ navigation }: any) => {
           refreshing={refreshing}
           onRefresh={onRefresh}
           emptyChapters={{ title: 'No chapters yet', subtitle: 'Add them with + above.' }}
-          // Every chapter opens here, even an empty one — its topics are managed from inside.
+          // Every chapter opens here — onto its own Edit and Delete; no topics.
+          hideTopics
           chapterExpandable={() => true}
           renderTrailing={c => (busyId === c.id ? <ActivityIndicator size="small" color={theme.colors.primary} /> : undefined)}
-          renderTopics={(chapter, number) => (
+          renderTopics={chapter => (
             <>
-              {chapter.topics.length === 0 && <Text style={s.noTopics}>No topics yet.</Text>}
-              {chapter.topics.map((topic, i) => (
-                <React.Fragment key={topic.id}>
-                  {i > 0 && <View style={s.topicDivider} />}
-                  <TopicLine
-                    label={`${number}.${i + 1}`}
-                    name={topic.name}
-                    onPress={() => viewTopic(chapter, topic)}
-                    right={
-                      <View style={s.topicActions}>
-                        <TouchableOpacity hitSlop={8} activeOpacity={0.6} onPress={() => editTopic(topic)}>
-                          <VectorIcon iconSet="Ionicons" iconName="create-outline" size={17} color={theme.colors.textMuted} />
-                        </TouchableOpacity>
-                        <TouchableOpacity hitSlop={8} activeOpacity={0.6} onPress={() => removeTopic(topic)}>
-                          <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={17} color={theme.colors.textMuted} />
-                        </TouchableOpacity>
-                      </View>
-                    }
-                  />
-                </React.Fragment>
-              ))}
               <View style={s.chapterActions}>
-                <TouchableOpacity hitSlop={8} activeOpacity={0.6} onPress={() => manageTopics(chapter.id)}>
-                  <Text style={s.actionPrimary}>{chapter.topics.length ? 'Topics' : 'Add topics'}</Text>
-                </TouchableOpacity>
                 <TouchableOpacity hitSlop={8} activeOpacity={0.6} onPress={() => editChapter(chapter.id)}>
                   <Text style={s.action}>Edit chapter</Text>
                 </TouchableOpacity>

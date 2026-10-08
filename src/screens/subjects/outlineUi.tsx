@@ -103,6 +103,7 @@ export const ChapterRow = ({
   trailing,
   showDescription,
   skeleton,
+  hideTopics,
   children,
 }: {
   number: number;
@@ -120,9 +121,11 @@ export const ChapterRow = ({
   children?: React.ReactNode;
   /** Every line a bar as long as its words, the arrow a grey box. */
   skeleton?: boolean;
+  /** The syllabus without topics: no topic count, and nothing to open onto but what `children` brings. */
+  hideTopics?: boolean;
 }) => {
   const count = chapter.topics.length;
-  const canOpen = expandable ?? count > 0;
+  const canOpen = expandable ?? (hideTopics ? false : count > 0);
   const Line = skeleton ? SkeletonText : Text;
 
   return (
@@ -136,7 +139,7 @@ export const ChapterRow = ({
               {chapter.description}
             </Text>
           )}
-          <Line style={s.meta}>{count > 0 ? plural(count, 'topic') : 'No topics yet'}</Line>
+          {!hideTopics && <Line style={s.meta}>{count > 0 ? plural(count, 'topic') : 'No topics yet'}</Line>}
         </View>
         {trailing ??
           (canOpen &&
@@ -155,11 +158,12 @@ export const ChapterRow = ({
 
       {open && canOpen && (
         <View style={s.topics}>
-          {children ?? (
-            <Line style={s.topicsInline}>
-              {chapter.topics.map(topic => quietCaps(topic.name)).join('  ·  ')}
-            </Line>
-          )}
+          {children ??
+            (!hideTopics && (
+              <Line style={s.topicsInline}>
+                {chapter.topics.map(topic => quietCaps(topic.name)).join('  ·  ')}
+              </Line>
+            ))}
         </View>
       )}
     </View>
@@ -210,6 +214,7 @@ const DrawnOutline = ({
   openIds,
   renderTopics,
   chapterExpandable,
+  hideTopics,
 }: {
   chapters: SyllabusChapter[];
   title: string;
@@ -217,6 +222,7 @@ const DrawnOutline = ({
   openIds: number[];
   renderTopics?: ChapterOutlineProps['renderTopics'];
   chapterExpandable?: (chapter: SyllabusChapter) => boolean;
+  hideTopics?: boolean;
 }) => (
   <ScrollView style={s.fill} showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
     <View style={s.head}>
@@ -237,6 +243,7 @@ const DrawnOutline = ({
           onToggle={() => {}}
           isLast={i === chapters.length - 1}
           expandable={chapterExpandable?.(chapter)}
+          hideTopics={hideTopics}
           skeleton
         >
           {renderTopics?.(chapter, i + 1, true)}
@@ -273,12 +280,13 @@ const sizeLine = (
   chapters: SyllabusChapter[],
   subtitle?: string | null,
   summaryExtra?: (chapters: SyllabusChapter[]) => string | null,
+  hideTopics?: boolean,
 ) => {
   const topicCount = chapters.reduce((sum, c) => sum + c.topics.length, 0);
   return [
     subtitle,
     chapters.length === 0 ? 'No chapters yet' : plural(chapters.length, 'chapter'),
-    chapters.length > 0 ? plural(topicCount, 'topic') : null,
+    chapters.length > 0 && !hideTopics ? plural(topicCount, 'topic') : null,
     chapters.length > 0 ? summaryExtra?.(chapters) : null,
   ]
     .filter(Boolean)
@@ -304,6 +312,8 @@ export interface ChapterOutlineProps {
   renderTrailing?: (chapter: SyllabusChapter) => React.ReactNode;
   /** Chapter descriptions under their names — only where the syllabus is edited. */
   showDescriptions?: boolean;
+  /** The syllabus without topics (its screens): chapters only, no topic counts. Content keeps them. */
+  hideTopics?: boolean;
   /**
    * The chapters to draw as the skeleton while loading — those on screen, or
    * those kept from last time (OutlineScreen's `keep`). A plain skeleton without.
@@ -324,6 +334,7 @@ export const ChapterOutline = ({
   chapterExpandable,
   renderTrailing,
   showDescriptions,
+  hideTopics,
   drawn,
 }: ChapterOutlineProps) => {
   const { chapters, error, load, openIds, toggle } = outline;
@@ -347,17 +358,18 @@ export const ChapterOutline = ({
       <DrawnOutline
         chapters={drawn}
         title={title}
-        size={sizeLine(drawn, subtitle, summaryExtra)}
+        size={sizeLine(drawn, subtitle, summaryExtra, hideTopics)}
         openIds={openIds}
         renderTopics={renderTopics}
         chapterExpandable={chapterExpandable}
+        hideTopics={hideTopics}
       />
     ) : (
       <OutlineSkeleton rows={chapters?.length ?? 0} />
     );
   }
 
-  const size = sizeLine(chapters, subtitle, summaryExtra);
+  const size = sizeLine(chapters, subtitle, summaryExtra, hideTopics);
 
   return (
     <ScrollView
@@ -392,6 +404,7 @@ export const ChapterOutline = ({
               expandable={chapterExpandable?.(chapter)}
               trailing={renderTrailing?.(chapter)}
               showDescription={showDescriptions}
+              hideTopics={hideTopics}
             >
               {renderTopics?.(chapter, i + 1)}
             </ChapterRow>

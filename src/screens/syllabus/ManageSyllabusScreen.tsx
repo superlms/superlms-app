@@ -19,7 +19,6 @@ import {
   deleteChapter,
   createTopic,
   updateTopic,
-  deleteTopic,
   contentErrorMessage,
   type TeacherCombo,
   type SyllabusChapter,
@@ -28,7 +27,6 @@ import {
 import { useChapters } from '../subjects/useChapters';
 import {
   ChapterOutline,
-  TopicLine,
   comboChapters,
   comboClass,
   comboLabel,
@@ -254,28 +252,6 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
     }
   };
 
-  const confirmDeleteTopic = (chapter: SyllabusChapter, topic: SyllabusTopic) => {
-    AppAlert.alert('Delete Topic', `Delete "${topic.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteTopic(topic.id);
-            outline.setChapters(prev =>
-              (prev ?? []).map(c =>
-                c.id === chapter.id ? { ...c, topics: c.topics.filter(t => t.id !== topic.id) } : c,
-              ),
-            );
-          } catch (e: any) {
-            AppAlert.alert('Error', contentErrorMessage(e));
-          }
-        },
-      },
-    ]);
-  };
-
   // ── Render ───────────────────────────────────────────────────────────────
   if (!combo) {
     return (
@@ -306,51 +282,18 @@ const ManageSyllabusScreen = ({ navigation, route }: any) => {
           title: 'No chapters yet',
           subtitle: 'Add the first chapter with the button below.',
         }}
-        // Every chapter opens here, even an empty one — that is where its first
-        // topic gets added.
+        // Every chapter opens here — onto its own Edit and Delete; the syllabus
+        // has no topics (the user's ask of 8 Oct 2026).
+        hideTopics
         chapterExpandable={() => true}
         renderTrailing={chapter =>
           busyChapterId === chapter.id ? (
             <ActivityIndicator size="small" color={theme.colors.primary} />
           ) : undefined
         }
-        renderTopics={(chapter, number) => (
+        renderTopics={chapter => (
           <>
-            {chapter.topics.length === 0 && <Text style={s.noTopics}>No topics yet.</Text>}
-
-            {chapter.topics.map((topic, i) => (
-              <React.Fragment key={topic.id}>
-                {/* A line between one topic and the next */}
-                {i > 0 && <View style={s.topicDivider} />}
-                <TopicLine
-                  label={`${number}.${i + 1}`}
-                  name={topic.name}
-                  right={
-                    <View style={s.topicActions}>
-                      <TouchableOpacity
-                        hitSlop={8}
-                        activeOpacity={0.6}
-                        onPress={() => setTopicModal({ mode: 'edit', chapter, topic })}
-                      >
-                        <VectorIcon iconSet="Ionicons" iconName="create-outline" size={17} color={theme.colors.textMuted} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        hitSlop={8}
-                        activeOpacity={0.6}
-                        onPress={() => confirmDeleteTopic(chapter, topic)}
-                      >
-                        <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={17} color={theme.colors.textMuted} />
-                      </TouchableOpacity>
-                    </View>
-                  }
-                />
-              </React.Fragment>
-            ))}
-
             <View style={s.chapterActions}>
-              <TouchableOpacity hitSlop={8} activeOpacity={0.6} onPress={() => setTopicModal({ mode: 'add', chapter })}>
-                <Text style={s.actionPrimary}>Add topic</Text>
-              </TouchableOpacity>
               <TouchableOpacity hitSlop={8} activeOpacity={0.6} onPress={() => setChapterModal({ mode: 'edit', chapter })}>
                 <Text style={s.action}>Edit chapter</Text>
               </TouchableOpacity>

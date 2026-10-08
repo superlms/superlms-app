@@ -41,12 +41,15 @@ export const AddToSyllabusSheet = ({
   visible,
   combo,
   chapters,
+  chapterOnly,
   onClose,
   onAdded,
 }: {
   visible: boolean;
   combo: TeacherCombo;
   chapters: SyllabusChapter[];
+  /** A chapter only — no Chapter / Topic switch (the syllabus has no topics). */
+  chapterOnly?: boolean;
   onClose: () => void;
   onAdded: (kind: SyllabusAddKind, chapterId: number) => void;
 }) => {
@@ -150,27 +153,29 @@ export const AddToSyllabusSheet = ({
 
         <Animated.View style={liftStyle}>
           <View style={[s.sheet, { paddingBottom: insets.bottom + 28 }]}>
-            <Text style={s.sheetTitle}>Add to syllabus</Text>
+            <Text style={s.sheetTitle}>{chapterOnly ? 'Add chapter' : 'Add to syllabus'}</Text>
             <Text style={s.sheetSub} numberOfLines={1}>
               {comboLabel(combo)}
             </Text>
 
             {/* Chapter or topic */}
-            <View style={s.segment}>
-              {KINDS.map(k => {
-                const active = kind === k.key;
-                return (
-                  <TouchableOpacity
-                    key={k.key}
-                    activeOpacity={0.7}
-                    onPress={() => switchKind(k.key)}
-                    style={[s.segmentItem, active && s.segmentItemActive]}
-                  >
-                    <Text style={[s.segmentText, active && s.segmentTextActive]}>{k.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            {!chapterOnly && (
+              <View style={s.segment}>
+                {KINDS.map(k => {
+                  const active = kind === k.key;
+                  return (
+                    <TouchableOpacity
+                      key={k.key}
+                      activeOpacity={0.7}
+                      onPress={() => switchKind(k.key)}
+                      style={[s.segmentItem, active && s.segmentItemActive]}
+                    >
+                      <Text style={[s.segmentText, active && s.segmentTextActive]}>{k.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
 
             {/* A topic's chapter */}
             {isTopic && (
