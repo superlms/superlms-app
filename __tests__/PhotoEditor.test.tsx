@@ -104,6 +104,27 @@ describe('PhotoEditor — cropped from any side', () => {
   });
 });
 
+describe('PhotoEditor — the list circle at the top of the part kept', () => {
+  it('lays the circle at the top of a tall part, in the middle across a wide one', async () => {
+    const onDone = jest.fn();
+    const r = await openEditor(onDone);
+
+    // The right side in to 100 × 200: a tall part; its circle is its top square.
+    await drag('e', -300, 0);
+    await press(r, 'Save');
+    near(onDone.mock.calls[0][0].crop, { x: 0, y: 0, w: 0.25, h: 1 });
+    near(onDone.mock.calls[0][0].circle, { x: 0, y: 0, w: 0.25, h: 0.5 });
+    near(r.root.findByType(CroppedPhoto).props.crop, { x: 0, y: 0, w: 0.25, h: 0.5 });
+
+    // Moved down and right: still the top of the part kept.
+    await drag('move', 100, 0);
+    await drag('n', 0, 50);
+    await press(r, 'Save');
+    near(onDone.mock.calls[1][0].crop, { x: 0.25, y: 0.25, w: 0.25, h: 0.75 });
+    near(onDone.mock.calls[1][0].circle, { x: 0.25, y: 0.25, w: 0.25, h: 0.5 });
+  });
+});
+
 describe('StudentPhotoModal — the list photo large, cropped and saved there', () => {
   const student = { id: 7, user_id: 70, full_name: 'Aarav Sharma', image: 'https://cdn.test/a.jpg', is_active: true } as any;
 

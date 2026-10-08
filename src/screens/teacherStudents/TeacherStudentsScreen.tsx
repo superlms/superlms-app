@@ -37,14 +37,20 @@ const classOf = (s: { class?: string | null; section?: string | null }) =>
 // photos are full camera shots (4000 px), and a class of them decoded whole
 // ran out of image memory, so some rows lost theirs at random. One that still
 // misses is asked for twice more before the initial stands in.
+// The circle shows the top of the photo, where the face is — as the photo
+// editor's dotted circle and the web panel's lists show it: once the photo's
+// shape is known it is drawn the circle's width (or height) and laid from the
+// top; until then, filled from the middle as before.
 const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
   const [failed, setFailed] = useState(false);
   const [tries, setTries] = useState(0);
+  const [shape, setShape] = useState<{ w: number; h: number } | null>(null);
   const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setFailed(false);
     setTries(0);
+    setShape(null);
   }, [uri]);
   useEffect(() => () => {
     if (retry.current) clearTimeout(retry.current);
@@ -56,7 +62,27 @@ const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
   };
 
   if (uri && !failed) {
-    return <Image key={tries} source={{ uri }} style={s.photo} resizeMethod="resize" onError={onError} />;
+    const size = s.photo.width as number;
+    const top = shape
+      ? shape.h >= shape.w
+        ? { position: 'absolute' as const, left: 0, top: 0, width: size, height: (size * shape.h) / shape.w }
+        : { position: 'absolute' as const, top: 0, height: size, width: (size * shape.w) / shape.h, left: (size - (size * shape.w) / shape.h) / 2 }
+      : null;
+    return (
+      <View style={[s.photo, s.photoClip]}>
+        <Image
+          key={tries}
+          source={{ uri }}
+          style={top ?? s.photo}
+          resizeMethod="resize"
+          onError={onError}
+          onLoad={e => {
+            const src: any = e?.nativeEvent?.source;
+            if (src?.width > 0 && src?.height > 0) setShape({ w: src.width, h: src.height });
+          }}
+        />
+      </View>
+    );
   }
 
   return (
@@ -264,6 +290,7 @@ const __mk_s = () => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12 },
   rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   photo: { width: 34, height: 34, borderRadius: 17, backgroundColor: theme.colors.background },
+  photoClip: { overflow: 'hidden' },
   initialBox: { alignItems: 'center', justifyContent: 'center' },
   initial: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
   body: { flex: 1, gap: 3 },

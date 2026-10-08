@@ -19,11 +19,11 @@ import type { CropRect } from './PhotoCropper';
  * A photo cropped from any side before it is saved — the web panel's photo
  * editor, on the phone. The whole photo is kept to begin with; a handle on an
  * edge or a corner crops from that side, and a finger inside the part kept
- * moves it. The dotted circle in it — the middle square's — is what the round
- * photos in the lists show, and the preview under it shows that circle as a
- * list will. Nothing is cut on the phone: `crop` (the part kept) goes to the
- * server as fractions of the upright photo, and `circle` (its middle square)
- * lets a form show the cut photo before it is saved.
+ * moves it. The dotted circle in it — its top square's, where the face is — is
+ * what the round photos in the lists show, and the preview under it shows that
+ * circle as a list will. Nothing is cut on the phone: `crop` (the part kept)
+ * goes to the server as fractions of the upright photo, and `circle` (its top
+ * square) lets a form show the cut photo before it is saved.
  */
 
 export interface PhotoEdit {
@@ -136,9 +136,9 @@ export const PhotoEditorView = ({
     return all;
   }, []);
 
-  // The circle the lists show: the middle square of the part kept.
+  // The circle the lists show: the top square of the part kept (across, the middle).
   const side = Math.min(box.w, box.h);
-  const circleBox = { x: box.x + (box.w - side) / 2, y: box.y + (box.h - side) / 2, s: side };
+  const circleBox = { x: box.x + (box.w - side) / 2, y: box.y, s: side };
 
   const edit = (): PhotoEdit | null => {
     if (!disp || box.w <= 0 || box.h <= 0) return null;
