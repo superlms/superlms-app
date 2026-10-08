@@ -2,6 +2,7 @@ import React from 'react';
 import ReactTestRenderer, { act } from 'react-test-renderer';
 import { Image, PanResponder, Text, TouchableOpacity, View } from 'react-native';
 import { PhotoEditorView } from '../src/components/PhotoEditor';
+import { PhotoCircleView } from '../src/components/PhotoCircle';
 import CroppedPhoto from '../src/components/CroppedPhoto';
 import StudentPhotoModal from '../src/screens/teacherStudents/StudentPhotoModal';
 import * as api from '../src/api/teacherStudentApi';
@@ -12,7 +13,7 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('../src/components/VectorIcon', () => () => null);
 jest.mock('../src/components/AppDialog', () => ({ AppAlert: { alert: jest.fn() }, AppDialog: () => null }));
 jest.mock('../src/utils/filePickers', () => ({ apiErr: (_e: any, fallback: string) => fallback }));
-jest.mock('../src/api/teacherStudentApi', () => ({ cropStudentPhoto: jest.fn() }));
+jest.mock('../src/api/teacherStudentApi', () => ({ cropStudentPhoto: jest.fn(), setStudentPhotoCircle: jest.fn() }));
 
 type Renderer = ReactTestRenderer.ReactTestRenderer;
 
@@ -151,5 +152,160 @@ describe('StudentPhotoModal — the list photo large, cropped and saved there', 
     // Back to the large photo, now the new one.
     expect(r.root.findAllByType(PhotoEditorView)).toHaveLength(0);
     expect(r.root.findAllByType(Image).some(i => i.props.source?.uri === 'https://cdn.test/a-cut.jpg')).toBe(true);
+  });
+});
+describe('PhotoEditor — crop only (the large photo from the list)', () => {
+  it('shows no circle and no list preview, and still crops', async () => {
+    const onDone = jest.fn();
+    let r!: Renderer;
+    await act(async () => {
+      r = ReactTestRenderer.create(
+        <PhotoEditorView uri="file:///p.jpg" doneLabel="Save" showCircle={false} onCancel={jest.fn()} onDone={onDone} />,
+      );
+    });
+    const stage = r.root.findAllByType(View).find(v => typeof v.props.onLayout === 'function')!;
+    await act(async () => stage.props.onLayout({ nativeEvent: { layout: { width: 432, height: 232 } } }));
+
+    expect(r.root.findAllByType(CroppedPhoto)).toHaveLength(0);
+    expect(r.root.findAllByType(Text).some(t => t.props.children === 'In the list')).toBe(false);
+    const dashed = r.root
+      .findAllByType(View)
+      .filter(v => ([] as any[]).concat(v.props.style).flat().some((x: any) => x?.borderStyle === 'dashed'));
+    expect(dashed).toHaveLength(0);
+
+    await drag('w', 100, 0);
+    await press(r, 'Save');
+    near(onDone.mock.calls[0][0].crop, { x: 0.25, y: 0, w: 0.75, h: 1 });
+  });
+});
+
+describe('PhotoCircle — the list circle set by moving and zooming the photo', () => {
+  /** The tool laid out 300 square: the circle 260 across. The photo is 400 × 200. */
+  const openCircle = async (onDone = jest.fn(), circle: any = null) => {
+    let r!: Renderer;
+    await act(async () => {
+      r = ReactTestRenderer.create(
+        <PhotoCircleView uri="file:///p.jpg" circle={circle} onCancel={jest.fn()} onDone={onDone} />,
+      );
+    });
+    const stage = r.root.findAllByType(View).find(v => typeof v.props.onLayout === 'function')!;
+    await act(async () => stage.props.onLayout({ nativeEvent: { layout: { width: 300, height: 300 } } }));
+    return r;
+  };
+  const zoomBtn = async (r: Renderer, label: string) => {
+    const b = r.root.findAllByType(TouchableOpacity).find(x => x.props.accessibilityLabel === label)!;
+    await act(async () => b.props.onPress());
+  };
+  const move = async (e: any, g: any) => {
+    await act(async () => handlers[0].onPanResponderMove(e, g));
+  };
+
+  it('opens at the top of the photo, as the list shows it with none set', async () => {
+    const onDone = jest.fn();
+    const r = await openCircle(onDone);
+    await press(r, 'Save');
+    near(onDone.mock.calls[0][0], { x: 0.25, y: 0, w: 0.5, h: 1 });
+    near(r.root.findByType(CroppedPhoto).props.crop, { x: 0.25, y: 0, w: 0.5, h: 1 });
+  });
+
+  it('opens where the circle was set before', async () => {
+    const onDone = jest.fn();
+    const r = await openCircle(onDone, { x: 0.5, y: 0.25, w: 0.25, h: 0.5 });
+    await press(r, 'Save');
+    near(onDone.mock.calls[0][0], { x: 0.5, y: 0.25, w: 0.25, h: 0.5 });
+  });
+
+  it('zooms in and out with + and −, about the middle, never past the photo', async () => {
+    const onDone = jest.fn();
+    const r = await openCircle(onDone);
+
+    // In: the circle takes 160 of the photo, about its middle (200, 100).
+    await zoomBtn(r, 'Zoom in');
+    await press(r, 'Save');
+    near(onDone.mock.calls[0][0], { x: 0.3, y: 0.1, w: 0.4, h: 0.8 });
+
+    // Out twice: back to the whole height — no further.
+    await zoomBtn(r, 'Zoom out');
+    await zoomBtn(r, 'Zoom out');
+    await press(r, 'Save');
+    near(onDone.mock.calls[1][0], { x: 0.25, y: 0, w: 0.5, h: 1 });
+  });
+
+  it('moves the photo under the circle with a finger and zooms with two', async () => {
+    const onDone = jest.fn();
+    const r = await openCircle(onDone);
+
+    // The photo dragged right by 26 on screen (1.3 to a photo pixel): the circle 20 further left.
+    await act(async () => handlers[0].onPanResponderGrant({}, {}));
+    await move({ nativeEvent: { touches: [{ pageX: 0, pageY: 0 }] } }, { dx: 26, dy: 0 });
+    await press(r, 'Save');
+    near(onDone.mock.calls[0][0], { x: 0.2, y: 0, w: 0.5, h: 1 });
+
+    // Fingers twice as far apart: half the circle, about its middle (180, 100).
+    await act(async () => handlers[0].onPanResponderGrant({}, {}));
+    await move({ nativeEvent: { touches: [{ pageX: 0, pageY: 0 }, { pageX: 100, pageY: 0 }] } }, { dx: 0, dy: 0 });
+    await move({ nativeEvent: { touches: [{ pageX: 0, pageY: 0 }, { pageX: 200, pageY: 0 }] } }, { dx: 0, dy: 0 });
+    await press(r, 'Save');
+    near(onDone.mock.calls[1][0], { x: 0.325, y: 0.25, w: 0.25, h: 0.5 });
+
+    // Dragged far off: it stops at the photo's edge.
+    await act(async () => handlers[0].onPanResponderGrant({}, {}));
+    await move({ nativeEvent: { touches: [{ pageX: 0, pageY: 0 }] } }, { dx: -5000, dy: -5000 });
+    await press(r, 'Save');
+    near(onDone.mock.calls[2][0], { x: 0.75, y: 0.5, w: 0.25, h: 0.5 });
+  });
+});
+
+describe('StudentPhotoModal — Profile sets the list circle, the photo left as it is', () => {
+  const student = {
+    id: 7,
+    user_id: 70,
+    full_name: 'Aarav Sharma',
+    image: 'https://cdn.test/a.jpg',
+    is_active: true,
+    photo_circle: { x: 0.1, y: 0, w: 0.5, h: 1 },
+  } as any;
+
+  it('shows Crop, Profile and Close; Crop is crop only; Profile saves the circle', async () => {
+    (api.setStudentPhotoCircle as jest.Mock).mockResolvedValue({ x: 0.2, y: 0, w: 0.5, h: 1 });
+    (api.cropStudentPhoto as jest.Mock).mockClear();
+    const onSaved = jest.fn();
+    const onCircleSaved = jest.fn();
+    let r!: Renderer;
+    await act(async () => {
+      r = ReactTestRenderer.create(
+        <StudentPhotoModal student={student} onClose={jest.fn()} onSaved={onSaved} onCircleSaved={onCircleSaved} />,
+      );
+    });
+
+    // The whole photo, not cut to a square.
+    const big = r.root.findAllByType(Image).find(i => i.props.source?.uri === 'https://cdn.test/a.jpg')!;
+    expect(big.props.resizeMode).toBe('contain');
+    const buttons = r.root.findAllByType(TouchableOpacity);
+    expect(buttons).toHaveLength(3);
+
+    // Crop: the editor without the circle.
+    await act(async () => buttons[0].props.onPress());
+    expect(r.root.findByType(PhotoEditorView).props.showCircle).toBe(false);
+    await act(async () => r.root.findByType(PhotoEditorView).props.onCancel());
+
+    // Profile: the circle tool, at the circle set before.
+    const profile = r.root.findAllByType(TouchableOpacity).find(b => b.props.accessibilityLabel === 'Profile photo')!;
+    await act(async () => profile.props.onPress());
+    const tool = r.root.findByType(PhotoCircleView);
+    expect(tool.props.uri).toBe('https://cdn.test/a.jpg');
+    expect(tool.props.circle).toEqual({ x: 0.1, y: 0, w: 0.5, h: 1 });
+
+    await act(async () => tool.props.onDone({ x: 0.2, y: 0, w: 0.5, h: 1 }));
+    expect(api.setStudentPhotoCircle).toHaveBeenCalledWith(7, { x: 0.2, y: 0, w: 0.5, h: 1 });
+    expect(onCircleSaved).toHaveBeenCalledWith(7, { x: 0.2, y: 0, w: 0.5, h: 1 });
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(api.cropStudentPhoto).not.toHaveBeenCalled();
+
+    // Back to the large photo; opened again, Profile starts at the new circle.
+    expect(r.root.findAllByType(PhotoCircleView)).toHaveLength(0);
+    const again = r.root.findAllByType(TouchableOpacity).find(b => b.props.accessibilityLabel === 'Profile photo')!;
+    await act(async () => again.props.onPress());
+    expect(r.root.findByType(PhotoCircleView).props.circle).toEqual({ x: 0.2, y: 0, w: 0.5, h: 1 });
   });
 });

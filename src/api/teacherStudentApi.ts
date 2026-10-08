@@ -97,3 +97,17 @@ export const cropStudentPhoto = async (id: number, crop: CropRect): Promise<stri
   const { data } = await apiClient.post(`/teacher/students/${id}/photo`, form, MULTIPART);
   return unwrap(data)?.image ?? null;
 };
+
+/**
+ * The circle the lists show of the student's photo (Profile on the list's
+ * large photo); the photo itself is left as it is. Returns the circle saved.
+ */
+export const setStudentPhotoCircle = async (id: number, circle: CropRect): Promise<CropRect | null> => {
+  const { data } = await apiClient.post(`/teacher/students/${id}/photo-circle`, {
+    circle_x: Number(circle.x.toFixed(6)),
+    circle_y: Number(circle.y.toFixed(6)),
+    circle_w: Number(circle.w.toFixed(6)),
+    circle_h: Number(circle.h.toFixed(6)),
+  });
+  return unwrap(data)?.photo_circle ?? null;
+};

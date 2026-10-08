@@ -48,6 +48,7 @@ export const PhotoEditorView = ({
   uri,
   doneLabel = 'Use photo',
   busy = false,
+  showCircle = true,
   onCancel,
   onDone,
 }: {
@@ -55,6 +56,11 @@ export const PhotoEditorView = ({
   doneLabel?: string;
   /** Saving: the buttons wait. */
   busy?: boolean;
+  /**
+   * false: crop only — no dotted circle and no "In the list" preview (the
+   * list's large photo, whose circle is set apart with Profile, PhotoCircle).
+   */
+  showCircle?: boolean;
   onCancel: () => void;
   onDone: (edit: PhotoEdit) => void;
 }) => {
@@ -180,13 +186,15 @@ export const PhotoEditorView = ({
               style={[c.box, { left: PAD + box.x, top: PAD + box.y, width: box.w, height: box.h }]}
               {...responders.move.panHandlers}
             >
-              <View
-                pointerEvents="none"
-                style={[
-                  c.circle,
-                  { left: circleBox.x - box.x, top: circleBox.y - box.y, width: side, height: side, borderRadius: side / 2 },
-                ]}
-              />
+              {showCircle && (
+                <View
+                  pointerEvents="none"
+                  style={[
+                    c.circle,
+                    { left: circleBox.x - box.x, top: circleBox.y - box.y, width: side, height: side, borderRadius: side / 2 },
+                  ]}
+                />
+              )}
             </View>
 
             {HANDLES.map(h => (
@@ -204,12 +212,13 @@ export const PhotoEditorView = ({
 
       {/* How it will show in the list */}
       <View style={c.previewRow}>
-        {current ? (
-          <CroppedPhoto uri={uri} crop={current.circle} size={56} style={c.preview} />
-        ) : (
-          <View style={[c.preview, { width: 56, height: 56 }]} />
-        )}
-        <Text style={c.previewText}>In the list</Text>
+        {showCircle &&
+          (current ? (
+            <CroppedPhoto uri={uri} crop={current.circle} size={56} style={c.preview} />
+          ) : (
+            <View style={[c.preview, { width: 56, height: 56 }]} />
+          ))}
+        {showCircle && <Text style={c.previewText}>In the list</Text>}
         <TouchableOpacity
           onPress={() => disp && setBox({ x: 0, y: 0, w: disp.w, h: disp.h })}
           disabled={!disp || busy}

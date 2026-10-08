@@ -26,6 +26,11 @@ export interface StudentRow {
   section?: string | null;
   image?: string | null;
   is_active: boolean;
+  /**
+   * The circle the lists show of the photo (Profile), as fractions of the
+   * upright photo — none set (or set on an earlier photo): null.
+   */
+  photo_circle?: { x: number; y: number; w: number; h: number } | null;
 }
 
 export interface StudentStats {

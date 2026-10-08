@@ -4,33 +4,44 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import VectorIcon from '../../components/VectorIcon';
 import { AppAlert } from '../../components/AppDialog';
 import { PhotoEditorView, type PhotoEdit } from '../../components/PhotoEditor';
+import { PhotoCircleView } from '../../components/PhotoCircle';
+import type { CropRect } from '../../components/PhotoCropper';
 import { apiErr } from '../../utils/filePickers';
-import { StudentRow, cropStudentPhoto } from '../../api/teacherStudentApi';
+import { StudentRow, cropStudentPhoto, setStudentPhotoCircle } from '../../api/teacherStudentApi';
 
 /**
- * A student's photo from the list, shown large — as the web panel's Students
- * list does it. Crop turns the same screen into the photo editor (cropped from
- * any side, with the list's circle shown); Save cuts the saved photo there and
- * then, and the large photo and the list take the new one.
+ * A student's photo from the list, shown large and whole — as the web panel's
+ * Students list does it. Crop turns the same screen into the photo editor
+ * (cropped from any side — crop only); Save cuts the saved photo there and
+ * then, and the large photo and the list take the new one. Profile sets the
+ * round circle the list shows of the photo (moved and zoomed under it,
+ * PhotoCircle); the photo itself is left as it is.
  */
 const StudentPhotoModal = ({
   student,
   onClose,
   onSaved,
+  onCircleSaved,
 }: {
   student: StudentRow | null;
   onClose: () => void;
   /** The student's new photo, once saved. */
   onSaved: (id: number, image: string) => void;
+  /** The circle the list shows of the photo, once set with Profile. */
+  onCircleSaved?: (id: number, circle: CropRect | null) => void;
 }) => {
   const insets = useSafeAreaInsets();
   const [image, setImage] = useState<string | null>(null);
   const [cropping, setCropping] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [circling, setCircling] = useState(false);
+  const [circle, setCircle] = useState<CropRect | null>(null);
 
   useEffect(() => {
     setImage(student?.image ?? null);
     setCropping(false);
+    setCircling(false);
+    setCircle(student?.photo_circle ?? null);
   }, [student]);
 
   const save = async (edit: PhotoEdit) => {
@@ -40,6 +51,8 @@ const StudentPhotoModal = ({
       const url = await cropStudentPhoto(student.id, edit.crop);
       if (url) {
         setImage(url);
+        // A circle set on the uncut photo is not this one's.
+        setCircle(null);
         onSaved(student.id, url);
       }
       setCropping(false);
@@ -50,16 +63,34 @@ const StudentPhotoModal = ({
     }
   };
 
+  const saveCircle = async (picked: CropRect) => {
+    if (!student || saving) return;
+    setSaving(true);
+    try {
+      const saved = (await setStudentPhotoCircle(student.id, picked)) ?? picked;
+      setCircle(saved);
+      onCircleSaved?.(student.id, saved);
+      setCircling(false);
+    } catch (e) {
+      AppAlert.alert('Not saved', apiErr(e, 'Could not set the profile photo.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const back = () => {
     if (saving) return;
     if (cropping) setCropping(false);
+    else if (circling) setCircling(false);
     else onClose();
   };
 
   return (
     <Modal visible={!!student} animationType="fade" statusBarTranslucent onRequestClose={back}>
       {!!student && !!image && cropping ? (
-        <PhotoEditorView uri={image} doneLabel="Save" busy={saving} onCancel={back} onDone={save} />
+        <PhotoEditorView uri={image} doneLabel="Save" busy={saving} showCircle={false} onCancel={back} onDone={save} />
+      ) : !!student && !!image && circling ? (
+        <PhotoCircleView uri={image} circle={circle} doneLabel="Save" busy={saving} onCancel={back} onDone={saveCircle} />
       ) : (
         <View style={[s.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }]}>
           <View style={s.top}>
@@ -69,6 +100,17 @@ const StudentPhotoModal = ({
             {!!image && (
               <TouchableOpacity style={s.btn} onPress={() => setCropping(true)} hitSlop={8} activeOpacity={0.7}>
                 <VectorIcon iconSet="Ionicons" iconName="crop-outline" size={20} color="#fff" />
+              </TouchableOpacity>
+            )}
+            {!!image && (
+              <TouchableOpacity
+                style={s.btn}
+                onPress={() => setCircling(true)}
+                hitSlop={8}
+                activeOpacity={0.7}
+                accessibilityLabel="Profile photo"
+              >
+                <VectorIcon iconSet="Ionicons" iconName="person-circle-outline" size={22} color="#fff" />
               </TouchableOpacity>
             )}
             <TouchableOpacity style={s.btn} onPress={onClose} hitSlop={8} activeOpacity={0.7}>

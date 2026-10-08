@@ -40,8 +40,17 @@ const classOf = (s: { class?: string | null; section?: string | null }) =>
 // The circle shows the top of the photo, where the face is — as the photo
 // editor's dotted circle and the web panel's lists show it: once the photo's
 // shape is known it is drawn the circle's width (or height) and laid from the
-// top; until then, filled from the middle as before.
-const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
+// top; until then, filled from the middle as before. A circle set with
+// Profile on the large photo (photo_circle) is drawn as it was set instead.
+const Avatar = ({
+  uri,
+  name,
+  circle,
+}: {
+  uri?: string | null;
+  name: string;
+  circle?: StudentRow['photo_circle'];
+}) => {
   const [failed, setFailed] = useState(false);
   const [tries, setTries] = useState(0);
   const [shape, setShape] = useState<{ w: number; h: number } | null>(null);
@@ -63,6 +72,17 @@ const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
 
   if (uri && !failed) {
     const size = s.photo.width as number;
+    // The photo laid so the circle set fills the round box.
+    const set =
+      circle && circle.w > 0 && circle.h > 0
+        ? {
+            position: 'absolute' as const,
+            width: size / circle.w,
+            height: size / circle.h,
+            left: (-circle.x * size) / circle.w,
+            top: (-circle.y * size) / circle.h,
+          }
+        : null;
     const top = shape
       ? shape.h >= shape.w
         ? { position: 'absolute' as const, left: 0, top: 0, width: size, height: (size * shape.h) / shape.w }
@@ -73,7 +93,7 @@ const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
         <Image
           key={tries}
           source={{ uri }}
-          style={top ?? s.photo}
+          style={set ?? top ?? s.photo}
           resizeMethod="resize"
           onError={onError}
           onLoad={e => {
@@ -109,7 +129,7 @@ const Row = ({
   <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onOpen}>
     {student.image ? (
       <TouchableOpacity onPress={onPhoto} activeOpacity={0.7} hitSlop={6}>
-        <Avatar uri={student.image} name={student.full_name} />
+        <Avatar uri={student.image} name={student.full_name} circle={student.photo_circle} />
       </TouchableOpacity>
     ) : (
       <Avatar uri={student.image} name={student.full_name} />
@@ -269,8 +289,14 @@ const TeacherStudentsScreen = ({ navigation }: any) => {
       <StudentPhotoModal
         student={viewing}
         onClose={() => setViewing(null)}
-        // The cropped photo stands in the list at once.
-        onSaved={(id, image) => setStudents(prev => prev.map(x => (x.id === id ? { ...x, image } : x)))}
+        // The cropped photo stands in the list at once (its top, till a circle is set on it).
+        onSaved={(id, image) =>
+          setStudents(prev => prev.map(x => (x.id === id ? { ...x, image, photo_circle: null } : x)))
+        }
+        // So does the circle set with Profile.
+        onCircleSaved={(id, circle) =>
+          setStudents(prev => prev.map(x => (x.id === id ? { ...x, photo_circle: circle } : x)))
+        }
       />
     </View>
   );
