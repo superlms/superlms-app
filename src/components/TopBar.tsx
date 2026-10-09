@@ -159,7 +159,7 @@ const TopBar = ({ userName, onBellPress, onAvatarPress, onMessagePress, school }
           </TouchableOpacity>
         ) : avatarUri && !avatarBroken ? (
           <TouchableOpacity onPress={onAvatarPress} activeOpacity={0.7} style={styles.avatar}>
-            <Image source={{ uri: avatarUri }} onError={() => setAvatarBroken(true)} style={styles.avatarImg} />
+            <Image source={{ uri: avatarUri }} onError={() => setAvatarBroken(true)} style={styles.avatarImg} resizeMethod="resize" />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity onPress={onAvatarPress} activeOpacity={0.6} hitSlop={8} style={styles.iconBtn}>

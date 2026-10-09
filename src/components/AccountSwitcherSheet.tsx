@@ -87,7 +87,7 @@ const labelForType = (type: AccountType) => {
 const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
   const [broken, setBroken] = useState(false);
   if (uri && !broken) {
-    return <Image source={{ uri }} onError={() => setBroken(true)} style={s.avatar} />;
+    return <Image source={{ uri }} onError={() => setBroken(true)} style={s.avatar} resizeMethod="resize" />;
   }
   return (
     <View style={[s.avatar, s.avatarFallback]}>

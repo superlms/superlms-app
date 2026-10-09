@@ -151,7 +151,7 @@ export const PeriodRow = ({
   <View style={[s.row, !isLast && s.rowDivider]}>
     {avatarName !== undefined &&
       (avatar ? (
-        <Image source={{ uri: avatar }} style={s.avatar} />
+        <Image source={{ uri: avatar }} style={s.avatar} resizeMethod="resize" />
       ) : (
         <View style={[s.avatar, s.avatarFallback]}>
           <Text style={s.avatarInitials}>{initialsOf(avatarName)}</Text>

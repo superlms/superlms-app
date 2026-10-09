@@ -204,7 +204,7 @@ export const DocPeople = ({
           onPress={tappable ? () => onPressPerson!(p) : undefined}
         >
           {p.photo_url ? (
-            <Image source={{ uri: p.photo_url }} style={s.avatar} />
+            <Image source={{ uri: p.photo_url }} style={s.avatar} resizeMethod="resize" />
           ) : (
             <View style={[s.avatar, s.avatarFallback]}>
               <Text style={s.avatarInitial}>{p.name.charAt(0).toUpperCase()}</Text>

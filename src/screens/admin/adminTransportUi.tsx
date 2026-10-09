@@ -39,7 +39,7 @@ export const MONTH_STATUS: Record<YearMonthStatus['status'], string> = {
 // ── A photo, or the initials in its place ────────────────────────────────────
 export const Avatar = ({ uri, name, size = 40 }: { uri?: string | null; name?: string | null; size?: number }) =>
   uri ? (
-    <Image source={{ uri }} style={[s.avatar, { width: size, height: size, borderRadius: size / 2 }]} />
+    <Image source={{ uri }} style={[s.avatar, { width: size, height: size, borderRadius: size / 2 }]} resizeMethod="resize" />
   ) : (
     <View style={[s.avatar, s.avatarFallback, { width: size, height: size, borderRadius: size / 2 }]}>
       <Text style={[s.initials, { fontSize: size * 0.35 }]}>{initialsOf(name)}</Text>

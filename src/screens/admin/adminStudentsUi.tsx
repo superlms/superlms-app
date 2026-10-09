@@ -56,7 +56,7 @@ const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
   const [failed, setFailed] = useState(false);
 
   if (uri && !failed) {
-    return <Image source={{ uri }} style={s.photo} onError={() => setFailed(true)} />;
+    return <Image source={{ uri }} style={s.photo} resizeMethod="resize" onError={() => setFailed(true)} />;
   }
   return (
     <View style={[s.photo, s.initialBox]}>
