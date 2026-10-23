@@ -17,7 +17,11 @@ const AnalyticsScreen = ({ navigation, route }: any) => {
   return (
     <View style={s.root}>
       <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
-      {role === 'teacher' ? <TeacherAnalytics navigation={navigation} /> : <StudentAnalytics navigation={navigation} />}
+      {role === 'teacher' ? (
+        <TeacherAnalytics navigation={navigation} tab={route?.params?.tab} />
+      ) : (
+        <StudentAnalytics navigation={navigation} />
+      )}
     </View>
   );
 };

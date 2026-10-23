@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ScrollView, StyleSheet } from 'react-native';
 import moment from 'moment';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
@@ -14,12 +14,10 @@ import {
   Columns,
   DashError,
   DashSkeleton,
-  Initial,
   KpiGrid,
   LOW_ATTENDANCE,
-  LineRow,
+  MiniStats,
   NEUTRAL,
-  Note,
   PASS_MARK,
   PRESENT,
   PctRow,
@@ -27,7 +25,7 @@ import {
   SplitBar,
   bandFor,
 } from '../home/dashboardUi';
-import { ClassAttendanceRows } from '../home/dashTeacher';
+import { ClassAttendanceRows, WatchRows, attendanceOf, className, weekAverage } from '../home/dashTeacher';
 import { FigureRow, Legend, LineChart } from './charts';
 import { Hero, Tabs, changeText, monthShort, pctOrDash, plural } from './analyticsUi';
 
@@ -42,15 +40,10 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'timetable', label: 'Timetable' },
 ];
 
+const isTab = (t: unknown): t is Tab => TABS.some(x => x.key === t);
+
 // Today across the teacher's classes: present out of those marked.
-const today = (d: Data) => {
-  const rows = d.attendance.by_class;
-  const present = rows.reduce((n, c) => n + c.present, 0);
-  const marked = rows.reduce((n, c) => n + (c.marked ?? 0), 0);
-  const roster = rows.reduce((n, c) => n + c.total, 0);
-  const unmarked = rows.filter(c => !c.holiday && (c.marked ?? 0) === 0).length;
-  return { present, marked, roster, unmarked, pct: marked > 0 ? Math.round((present / marked) * 100) : null };
-};
+const today = (d: Data) => attendanceOf(d.attendance.by_class);
 
 // The class average across every class-subject's latest exam, weighted by students.
 const classAverage = (d: Data, key: 'average' | 'previous_average') => {
@@ -59,16 +52,30 @@ const classAverage = (d: Data, key: 'average' | 'previous_average') => {
   return n > 0 ? Math.round(rows.reduce((t, p) => t + (p[key] as number) * p.students, 0) / n) : null;
 };
 
+// "Class 2 Section A · Hindi"
+const classSubject = (cls: string, subject: string) => `${className(cls)} · ${quietCaps(subject)}`;
+
 /**
  * A teacher's Analytics: an overview, then a tab each for their classes'
  * attendance (and their own), the marks in their subjects, the homework and
  * quiz questions they have set, and their week of periods — graphs over time,
  * class set against class, and each exam against the one before.
+ *
+ * `tab` opens a tab straight away — the dashboard's "Details" and "All" links.
  */
-const TeacherAnalytics = ({ navigation }: { navigation: any }) => {
-  const [tab, setTab] = useState<Tab>('overview');
+const TeacherAnalytics = ({ navigation, tab: asked }: { navigation: any; tab?: string }) => {
+  const [tab, setTab] = useState<Tab>(isTab(asked) ? asked : 'overview');
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Analytics stays mounted in the drawer, so a link asking for a tab arrives
+  // as a new param: open it, then let the param go so the next visit is free.
+  useEffect(() => {
+    if (isTab(asked)) {
+      setTab(asked);
+      navigation.setParams({ tab: undefined });
+    }
+  }, [asked, navigation]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -108,7 +115,7 @@ const TeacherAnalytics = ({ navigation }: { navigation: any }) => {
       case 'timetable':
         return <TimetableTab data={data} navigation={navigation} />;
       default:
-        return <Overview data={data} go={go} />;
+        return <Overview data={data} go={go} navigation={navigation} />;
     }
   })();
 
@@ -129,14 +136,20 @@ const TeacherAnalytics = ({ navigation }: { navigation: any }) => {
 export default TeacherAnalytics;
 
 // ── Overview ─────────────────────────────────────────────────────────────────
-const Overview = ({ data, go }: { data: Data; go: (t: Tab) => () => void }) => {
+const Overview = ({ data, go, navigation }: { data: Data; go: (t: Tab) => () => void; navigation: any }) => {
   const t = today(data);
   const avg = classAverage(data, 'average');
   const prevAvg = classAverage(data, 'previous_average');
   const up = data.marks.upload;
   const hw = data.homework;
   const week = data.attendance.week;
+  const weekAvg = weekAverage(week);
   const watch = data.attendance.watch;
+  const months = data.attendance.months;
+  const classesMonth = months[months.length - 1]?.percentage ?? null;
+  const mine = data.my_attendance.this_month?.percentage ?? null;
+  // The class-subjects whose marks are still to go in, emptiest first.
+  const toEnter = (up?.items ?? []).filter(it => it.students > 0 && it.marks < it.students).sort((a, b) => a.marks / a.students - b.marks / b.students);
 
   return (
     <>
@@ -145,16 +158,23 @@ const Overview = ({ data, go }: { data: Data; go: (t: Tab) => () => void }) => {
           {
             icon: 'people-outline',
             label: 'Attendance',
-            value: pctOrDash(t.pct),
-            note: t.pct != null ? `${t.present} of ${t.marked} present today` : `${t.roster} students · not marked`,
+            value: t.pct != null ? `${t.pct}%` : 'Pending',
+            muted: t.pct == null,
+            note:
+              t.pct != null
+                ? `${t.present} of ${t.marked} present today`
+                : weekAvg != null
+                ? `Not marked · week ${weekAvg}%`
+                : `${t.roster} students · not marked`,
             low: t.pct != null && t.pct < LOW_ATTENDANCE,
             onPress: go('attendance'),
           },
           {
             icon: 'stats-chart-outline',
             label: 'Class average',
-            value: pctOrDash(avg),
-            note: avg != null ? 'Latest exams, your subjects' : 'No marks yet',
+            value: avg != null ? `${avg}%` : 'No marks',
+            muted: avg == null,
+            note: avg != null ? 'Latest exams, your subjects' : 'Once marks are in',
             delta:
               avg != null && prevAvg != null
                 ? { text: changeText(avg, prevAvg, 'previous') ?? '', good: avg >= prevAvg }
@@ -165,28 +185,60 @@ const Overview = ({ data, go }: { data: Data; go: (t: Tab) => () => void }) => {
           {
             icon: 'create-outline',
             label: 'Marks entered',
-            value: up ? `${up.done}/${up.total}` : '—',
-            note: up ? up.exam_name ?? 'Current exam' : 'No exam under way',
+            value: up ? `${up.done}/${up.total}` : 'None due',
+            muted: !up,
+            note: up ? quietCaps(up.exam_name) || 'Current exam' : 'No exam under way',
             onPress: go('marks'),
           },
           {
             icon: 'book-outline',
             label: 'Homework done',
-            value: pctOrDash(hw.completion),
+            value: hw.total > 0 ? pctOrDash(hw.completion) : 'None set',
+            muted: hw.total === 0 || hw.completion == null,
             note: `${hw.total} set · ${hw.this_week} this week`,
             onPress: go('homework'),
           },
         ]}
       />
 
+      {/* What is still to go in for the exam under way */}
+      {!!up && toEnter.length > 0 && (
+        <Card>
+          <CardHead
+            icon="create-outline"
+            title={`Marks to enter · ${quietCaps(up.exam_name) || 'Current exam'}`}
+            sub={`${toEnter.length} of ${up.total} still to enter`}
+            action="Upload"
+            onAction={() => navigation.navigate('UploadMarks')}
+          />
+          {toEnter.slice(0, 4).map((it, i, list) => (
+            <PctRow
+              key={`${it.class}-${it.subject}`}
+              label={classSubject(it.class, it.subject)}
+              pct={Math.round((it.marks / it.students) * 100)}
+              value={`${it.marks}/${it.students}`}
+              empty={it.marks === 0}
+              meta={it.marks === 0 ? `No marks yet · ${plural(it.students, 'student')}` : `${it.students - it.marks} students left`}
+              isLast={i === list.length - 1}
+            />
+          ))}
+        </Card>
+      )}
+
       {week.length > 0 && (
         <Card>
-          <CardHead icon="bar-chart-outline" title="Attendance, last 7 days" sub="All your classes together" action="More" onAction={go('attendance')} />
+          <CardHead
+            icon="bar-chart-outline"
+            title="Attendance, last 7 days"
+            sub={weekAvg != null ? `All your classes · average ${weekAvg}%` : 'All your classes together'}
+            action="More"
+            onAction={go('attendance')}
+          />
           <Columns
             data={week.map(d => ({
               key: d.date,
               label: moment(d.date, 'YYYY-MM-DD').format('ddd'),
-              sub: d.holiday ? 'Holiday' : moment(d.date, 'YYYY-MM-DD').format('D'),
+              sub: d.holiday ? 'Off' : moment(d.date, 'YYYY-MM-DD').format('D'),
               value: d.percentage,
               low: d.percentage != null && d.percentage < LOW_ATTENDANCE,
             }))}
@@ -194,11 +246,24 @@ const Overview = ({ data, go }: { data: Data; go: (t: Tab) => () => void }) => {
         </Card>
       )}
 
+      {/* The month in four figures */}
+      <Card flush>
+        <CardHead icon="calendar-outline" title={`${moment().format('MMMM')} so far`} sub="Your classes, and you" />
+        <MiniStats
+          items={[
+            { label: 'Class attendance', value: pctOrDash(classesMonth), low: classesMonth != null && classesMonth < LOW_ATTENDANCE },
+            { label: 'My attendance', value: pctOrDash(mine), low: mine != null && mine < LOW_ATTENDANCE },
+            { label: 'Periods a week', value: String(data.timetable.periods) },
+            { label: 'Under 75%', value: String(watch.total), low: watch.total > 0 },
+          ]}
+        />
+      </Card>
+
       {data.marks.exams.length > 0 && (
         <Card>
           <CardHead icon="trending-up-outline" title="Class average by exam" sub="Your subjects, all your classes" action="More" onAction={go('marks')} />
           <LineChart
-            labels={data.marks.exams.map(e => e.exam_name || 'Exam')}
+            labels={data.marks.exams.map(e => quietCaps(e.exam_name) || 'Exam')}
             subs={data.marks.exams.map(e => (e.date ? moment(e.date, 'YYYY-MM-DD').format('MMM') : null))}
             series={[{ key: 'avg', label: 'Average', points: data.marks.exams.map(e => e.average) }]}
           />
@@ -208,30 +273,12 @@ const Overview = ({ data, go }: { data: Data; go: (t: Tab) => () => void }) => {
       {watch.total > 0 && (
         <Card>
           <CardHead icon="alert-circle-outline" title="Students to watch" sub={`${watch.total} under ${LOW_ATTENDANCE}% this month`} action="All" onAction={go('attendance')} />
-          <WatchRows rows={watch.students.slice(0, 3)} more={0} />
+          <WatchRows rows={watch.students.slice(0, 3)} />
         </Card>
       )}
     </>
   );
 };
-
-const WatchRows = ({ rows, more }: { rows: Data['attendance']['watch']['students']; more: number }) => (
-  <>
-    {rows.map((st, i) => (
-      <LineRow
-        key={`${st.name}-${st.class}-${i}`}
-        lead={<Initial text={st.name} />}
-        title={st.name || 'Student'}
-        meta={[st.class, st.roll_no != null && st.roll_no !== '' ? `Roll ${st.roll_no}` : null, `${st.present_days} of ${st.working_days} days`]
-          .filter(Boolean)
-          .join(' · ')}
-        trailing={<Text style={[s.trailValue, s.low]}>{st.percentage}%</Text>}
-        isLast={i === rows.length - 1 && more === 0}
-      />
-    ))}
-    {more > 0 && <Note>and {more} more</Note>}
-  </>
-);
 
 // ── Attendance ───────────────────────────────────────────────────────────────
 const AttendanceTab = ({ data, navigation }: { data: Data; navigation: any }) => {
@@ -239,6 +286,7 @@ const AttendanceTab = ({ data, navigation }: { data: Data; navigation: any }) =>
   const t = today(data);
   const me = data.my_attendance;
   const mine = me.this_month;
+  const weekAvg = weekAverage(a.week);
 
   if (a.by_class.length === 0) {
     return <Hero kicker="Attendance" value="No classes yet" caption="Your classes’ attendance appears here once you’re assigned classes with students." />;
@@ -259,13 +307,13 @@ const AttendanceTab = ({ data, navigation }: { data: Data; navigation: any }) =>
           .join(' · ')}
         stats={[
           { label: 'Students', value: String(a.total_students) },
-          { label: 'Classes', value: String(a.by_class.length) },
+          { label: 'Week average', value: pctOrDash(weekAvg), low: weekAvg != null && weekAvg < LOW_ATTENDANCE },
           { label: 'Under 75%', value: String(a.watch.total), low: a.watch.total > 0 },
         ]}
       />
 
       <Card>
-        <CardHead icon="people-outline" title="Today by class" action="Mark" onAction={() => navigation.navigate('MarkAttendance')} />
+        <CardHead icon="people-outline" title="Today by class" sub={plural(a.by_class.length, 'class', 'classes')} action="Mark" onAction={() => navigation.navigate('MarkAttendance')} />
         <ClassAttendanceRows rows={a.by_class} />
       </Card>
 
@@ -276,7 +324,7 @@ const AttendanceTab = ({ data, navigation }: { data: Data; navigation: any }) =>
             data={a.week.map(d => ({
               key: d.date,
               label: moment(d.date, 'YYYY-MM-DD').format('ddd'),
-              sub: d.holiday ? 'Holiday' : moment(d.date, 'YYYY-MM-DD').format('D MMM'),
+              sub: d.holiday ? 'Off' : moment(d.date, 'YYYY-MM-DD').format('D MMM'),
               value: d.percentage,
               low: d.percentage != null && d.percentage < LOW_ATTENDANCE,
             }))}
@@ -299,7 +347,7 @@ const AttendanceTab = ({ data, navigation }: { data: Data; navigation: any }) =>
             return (
               <PctRow
                 key={c.class}
-                label={c.class}
+                label={className(c.class)}
                 pct={c.percentage ?? 0}
                 empty={c.percentage == null}
                 value={c.percentage == null ? 'Not marked' : undefined}
@@ -386,7 +434,7 @@ const MarksTab = ({ data, navigation }: { data: Data; navigation: any }) => {
         <Card>
           <CardHead
             icon="create-outline"
-            title={`Marks entry · ${m.upload.exam_name ?? 'Current exam'}`}
+            title={`Marks entry · ${quietCaps(m.upload.exam_name) || 'Current exam'}`}
             sub={`Complete for ${m.upload.done} of ${plural(m.upload.total, 'class and subject', 'classes and subjects')}`}
             action="Upload"
             onAction={() => navigation.navigate('UploadMarks')}
@@ -396,7 +444,7 @@ const MarksTab = ({ data, navigation }: { data: Data; navigation: any }) => {
             return (
               <PctRow
                 key={`${it.class}-${it.subject}`}
-                label={`${it.class} · ${quietCaps(it.subject)}`}
+                label={classSubject(it.class, it.subject)}
                 pct={pct}
                 value={`${it.marks}/${it.students}`}
                 empty={it.marks === 0}
@@ -413,7 +461,7 @@ const MarksTab = ({ data, navigation }: { data: Data; navigation: any }) => {
         <Card>
           <CardHead icon="trending-up-outline" title="Class average by exam" sub="Your subjects, all your classes" />
           <LineChart
-            labels={m.exams.map(e => e.exam_name || 'Exam')}
+            labels={m.exams.map(e => quietCaps(e.exam_name) || 'Exam')}
             subs={m.exams.map(e => (e.date ? moment(e.date, 'YYYY-MM-DD').format('MMM') : null))}
             series={[{ key: 'avg', label: 'Average', points: m.exams.map(e => e.average) }]}
           />
@@ -429,7 +477,7 @@ const MarksTab = ({ data, navigation }: { data: Data; navigation: any }) => {
             return (
               <PctRow
                 key={`${p.class}-${p.subject}-${i}`}
-                label={`${p.class} · ${quietCaps(p.subject)}`}
+                label={classSubject(p.class, p.subject)}
                 pct={p.average}
                 low={p.average < m.pass_percentage}
                 mark={p.previous_average}
@@ -479,7 +527,7 @@ const HomeworkTab = ({ data, navigation }: { data: Data; navigation: any }) => {
     <>
       <Hero
         kicker="Homework marked done"
-        value={pctOrDash(hw.completion)}
+        value={hw.total > 0 ? pctOrDash(hw.completion) : 'None set yet'}
         caption={hw.total > 0 ? `By students, across ${plural(hw.total, 'homework', 'homework')} you have set` : 'Homework you set, and how much of it students mark done, appears here.'}
         stats={[
           { label: 'Set in all', value: String(hw.total) },
@@ -497,8 +545,10 @@ const HomeworkTab = ({ data, navigation }: { data: Data; navigation: any }) => {
           {hw.by_class.map((c, i) => (
             <PctRow
               key={c.class}
-              label={c.class || 'Class'}
+              label={className(c.class)}
               pct={c.percentage ?? 0}
+              empty={c.percentage == null}
+              value={c.percentage == null ? 'None yet' : undefined}
               low={c.percentage != null && c.percentage < 50}
               meta={`${plural(c.set, 'homework', 'homework')} set · ${plural(c.students, 'student')} · ${c.done} marked done`}
               isLast={i === hw.by_class.length - 1}
@@ -517,7 +567,7 @@ const QuizTab = ({ data, navigation }: { data: Data; navigation: any }) => {
     <>
       <Hero
         kicker="Assignments · students’ accuracy"
-        value={pctOrDash(q.accuracy)}
+        value={q.accuracy != null ? `${q.accuracy}%` : q.questions > 0 ? 'No answers yet' : 'None set yet'}
         low={q.accuracy != null && q.accuracy < PASS_MARK}
         band={q.accuracy != null ? bandFor(q.accuracy) : null}
         caption={q.questions > 0 ? `On the ${plural(q.questions, 'question')} you have written` : 'Assignment questions you write, and how students answer them, appear here.'}
@@ -537,7 +587,7 @@ const QuizTab = ({ data, navigation }: { data: Data; navigation: any }) => {
           {q.by_class.map((c, i) => (
             <PctRow
               key={c.class}
-              label={c.class}
+              label={className(c.class)}
               pct={c.accuracy ?? 0}
               empty={c.accuracy == null}
               value={c.accuracy == null ? 'No answers' : undefined}
@@ -561,6 +611,7 @@ const TimetableTab = ({ data, navigation }: { data: Data; navigation: any }) => 
   const most = Math.max(1, ...t.by_day.map(d => d.periods));
   const busiest = [...t.by_day].sort((a, b) => b.periods - a.periods)[0];
   const classes = t.by_class ?? [];
+  const subjects = t.by_subject ?? [];
   const hours = Math.floor(t.minutes / 60);
   const mins = t.minutes % 60;
 
@@ -586,11 +637,26 @@ const TimetableTab = ({ data, navigation }: { data: Data; navigation: any }) => 
           {classes.map((c, i) => (
             <PctRow
               key={c.name}
-              label={c.name || 'Class'}
+              label={className(c.name)}
               pct={Math.round((c.periods / t.periods) * 100)}
               value={plural(c.periods, 'period')}
               meta={`${Math.round((c.periods / t.periods) * 100)}% of your week`}
               isLast={i === classes.length - 1}
+            />
+          ))}
+        </Card>
+      )}
+      {subjects.length > 0 && (
+        <Card>
+          <CardHead icon="albums-outline" title="By subject" sub="Periods a week in each subject" />
+          {subjects.map((sub, i) => (
+            <PctRow
+              key={sub.name}
+              label={quietCaps(sub.name) || 'Subject'}
+              pct={Math.round((sub.periods / t.periods) * 100)}
+              value={plural(sub.periods, 'period')}
+              meta={`${Math.round((sub.periods / t.periods) * 100)}% of your week`}
+              isLast={i === subjects.length - 1}
             />
           ))}
         </Card>
@@ -601,8 +667,6 @@ const TimetableTab = ({ data, navigation }: { data: Data; navigation: any }) => 
 
 const __mk_s = () => StyleSheet.create({
   scroll: { paddingBottom: 32 },
-  low: { color: theme.colors.danger },
-  trailValue: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

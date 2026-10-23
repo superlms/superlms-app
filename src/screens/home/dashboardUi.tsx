@@ -97,6 +97,8 @@ export interface Kpi {
   /** "▲ 2% vs Aug" — good or not decides its colour. */
   delta?: { text: string; good: boolean } | null;
   low?: boolean;
+  /** Nothing to count yet ("Pending", "No marks"): the value in a smaller grey. */
+  muted?: boolean;
   onPress?: () => void;
 }
 
@@ -111,7 +113,7 @@ const KpiTile = ({ k }: { k: Kpi }) => {
           {k.label}
         </Text>
       </View>
-      <Text style={[s.kpiValue, k.low && s.bad]} numberOfLines={1}>
+      <Text style={[s.kpiValue, k.low && s.bad, k.muted && s.kpiValueMuted]} numberOfLines={1}>
         {k.value}
       </Text>
       {!!k.note && (
@@ -716,6 +718,8 @@ const __mk_s = () => StyleSheet.create({
   },
   kpiLabel: { flex: 1, fontSize: 13, fontWeight: '500', color: theme.colors.textSecondary },
   kpiValue: { fontSize: 24, fontWeight: '700', lineHeight: 30, color: theme.colors.textPrimary, marginTop: 10 },
+  // Same line height as a figure, so a tile with a word in it stays level with its neighbour.
+  kpiValueMuted: { fontSize: 17, fontWeight: '600', color: theme.colors.textMuted },
   kpiNote: { fontSize: 12, color: theme.colors.textMuted, marginTop: 1 },
   kpiDelta: { fontSize: 11, fontWeight: '600', marginTop: 4 },
 

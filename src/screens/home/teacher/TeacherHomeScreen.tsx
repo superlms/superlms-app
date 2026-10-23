@@ -32,8 +32,16 @@ import {
   periodStates,
 } from '../dashboardUi';
 import { ExamRows, examSoon } from '../dashExams';
-import { ClassAttendanceRows, attendanceToday } from '../dashTeacher';
+import { Callout, ClassAttendanceRows, WatchRows, attendanceToday, className, weekAverage } from '../dashTeacher';
 
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * A teacher's day at a glance: what is still to do (today's register), four
+ * headline figures, then the day's periods, each class's attendance and the
+ * week behind it, the students slipping under 75%, how the last exams went,
+ * and the homework, exams and notices.
+ */
 const TeacherHomeScreen = () => {
   const navigation = useNavigation<any>();
   const [data, setData] = useState<TeacherDashboard | null>(null);
@@ -70,7 +78,7 @@ const TeacherHomeScreen = () => {
     );
   }
 
-  const { totals, profile, notices } = data;
+  const { totals, notices } = data;
   const classes = data.today_classes ?? [];
   const states = periodStates(classes);
   const doneCount = states.filter(st => st === 'done').length;
@@ -80,21 +88,40 @@ const TeacherHomeScreen = () => {
   const today = attendanceToday(data);
   const homework = data.homework?.recent ?? [];
   const week = data.class_attendance?.week ?? [];
+  const weekAvg = weekAverage(week);
+  const watch = data.class_attendance?.watch;
   const performance = data.class_performance ?? [];
   const exams = data.exams?.upcoming ?? [];
+  const students = totals?.total_students || today.roster;
 
-  // "Friday, 18 September · EMP-012"
-  const dateLine = [moment().format('dddd, D MMMM'), profile?.employee_id].filter(Boolean).join(' · ');
+  const toAnalytics = (tab?: string) => () => navigation.navigate('Analytics', { userRole: 'teacher', tab });
+  const toMark = () => navigation.navigate('MarkAttendance');
 
-  // "Now: English, 10 A" · "Next at 11:30 AM" · "All done for today"
+  // "Friday, 23 October · 1 class · 46 students"
+  const dateLine = [
+    moment().format('dddd, D MMMM'),
+    byClass.length > 0 ? plural(byClass.length, 'class', 'classes') : null,
+    students > 0 ? plural(students, 'student') : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  // "Now · Class 10 A" · "Next at 11:30 AM" · "All done for today"
   const classesNote =
     classes.length === 0
       ? 'None today'
       : nowIndex >= 0
-      ? `Now · ${classes[nowIndex].class || quietCaps(classes[nowIndex].subject)}`
+      ? `Now · ${classes[nowIndex].class ? className(classes[nowIndex].class) : quietCaps(classes[nowIndex].subject)}`
       : nextIndex >= 0
       ? `Next at ${clock12(classes[nextIndex].time)}`
       : 'All done for today';
+
+  // The register still to take: one class by name, several by count.
+  const pending = today.pending;
+  const pendingText =
+    pending.length === 1
+      ? `${className(pending[0].class)} · ${plural(pending[0].total, 'student')}`
+      : pending.map(c => className(c.class)).join(', ');
 
   return (
     <View style={s.root}>
@@ -107,28 +134,40 @@ const TeacherHomeScreen = () => {
       >
         <PageLine text={dateLine} />
 
+        {pending.length > 0 && (
+          <Callout
+            icon="checkbox-outline"
+            title={pending.length === 1 ? 'Attendance not marked' : `${pending.length} classes not marked`}
+            text={pendingText}
+            action="Mark now"
+            onAction={toMark}
+          />
+        )}
+
         {/* The four numbers worth checking, each saying what it means */}
         <KpiGrid
           items={[
             {
               icon: 'time-outline',
               label: 'Classes today',
-              value: classes.length > 0 ? `${doneCount}/${classes.length}` : '0',
+              value: classes.length > 0 ? `${doneCount}/${classes.length}` : 'None',
+              muted: classes.length === 0,
               note: classesNote,
               onPress: () => navigation.navigate('Timetable'),
             },
             {
               icon: 'people-outline',
               label: 'Attendance',
-              value: today.pct != null ? `${today.pct}%` : '—',
+              value: today.pct != null ? `${today.pct}%` : byClass.length > 0 ? 'Pending' : 'No classes',
+              muted: today.pct == null,
               note:
                 today.pct != null
                   ? `${today.present} of ${today.marked} present`
-                  : byClass.length > 0
-                  ? 'Not marked yet'
-                  : 'No classes assigned',
+                  : weekAvg != null
+                  ? `Week average ${weekAvg}%`
+                  : 'Not marked yet',
               low: today.pct != null && today.pct < LOW_ATTENDANCE,
-              onPress: () => navigation.navigate('Analytics', { userRole: 'teacher' }),
+              onPress: today.pct == null && pending.length > 0 ? toMark : toAnalytics('attendance'),
             },
             {
               icon: 'book-outline',
@@ -153,7 +192,7 @@ const TeacherHomeScreen = () => {
             <CardHead
               icon="time-outline"
               title="Today's schedule"
-              sub={`${classes.length} ${classes.length === 1 ? 'class' : 'classes'} · ${doneCount} done`}
+              sub={`${plural(classes.length, 'period')} · ${doneCount} done`}
               action="Timetable"
               onAction={() => navigation.navigate('Timetable')}
             />
@@ -163,7 +202,7 @@ const TeacherHomeScreen = () => {
                 start={c.time}
                 end={c.end_time}
                 title={quietCaps(c.subject)}
-                meta={[c.class, c.room ? `Room ${c.room}` : null].filter(Boolean).join(' · ')}
+                meta={[c.class ? className(c.class) : null, c.room ? `Room ${c.room}` : null].filter(Boolean).join(' · ')}
                 state={states[i]}
                 isFirst={i === 0}
                 isLast={i === classes.length - 1}
@@ -172,7 +211,7 @@ const TeacherHomeScreen = () => {
           </Card>
         )}
 
-        {/* Who is in today, class by class */}
+        {/* Who is in today, class by class, and the week behind it */}
         {byClass.length > 0 && (
           <Card>
             <CardHead
@@ -181,27 +220,48 @@ const TeacherHomeScreen = () => {
               sub={
                 today.pct != null
                   ? `${today.pct}% · ${today.present} of ${today.marked} present`
-                  : `${today.roster} students · not marked yet`
+                  : `${plural(today.roster, 'student')} · not marked yet`
               }
               action="Details"
-              onAction={() => navigation.navigate('Analytics', { userRole: 'teacher' })}
+              onAction={toAnalytics('attendance')}
             />
             <ClassAttendanceRows rows={byClass} />
             {week.length > 0 && (
-              <>
-                <Text style={s.caption}>Last 7 days, all classes</Text>
+              <View style={s.weekBlock}>
+                <View style={s.weekHead}>
+                  <Text style={s.caption}>Last 7 days</Text>
+                  {weekAvg != null && (
+                    <Text style={[s.caption, s.captionStrong, weekAvg < LOW_ATTENDANCE && s.low]}>
+                      Average {weekAvg}%
+                    </Text>
+                  )}
+                </View>
                 <Columns
                   height={56}
                   data={week.map(d => ({
                     key: d.date,
                     label: moment(d.date, 'YYYY-MM-DD').format('ddd'),
-                    sub: moment(d.date, 'YYYY-MM-DD').format('D'),
+                    sub: d.holiday ? 'Off' : moment(d.date, 'YYYY-MM-DD').format('D'),
                     value: d.percentage,
                     low: d.percentage != null && d.percentage < LOW_ATTENDANCE,
                   }))}
                 />
-              </>
+              </View>
             )}
+          </Card>
+        )}
+
+        {/* The students slipping under 75% this month */}
+        {!!watch && watch.total > 0 && (
+          <Card>
+            <CardHead
+              icon="alert-circle-outline"
+              title="Students to watch"
+              sub={`${watch.total} under ${LOW_ATTENDANCE}% this month`}
+              action="All"
+              onAction={toAnalytics('attendance')}
+            />
+            <WatchRows rows={watch.students.slice(0, 3)} more={Math.max(watch.total - 3, 0)} />
           </Card>
         )}
 
@@ -213,12 +273,12 @@ const TeacherHomeScreen = () => {
               title="Class performance"
               sub="Latest exam · the tick is the exam before"
               action="Details"
-              onAction={() => navigation.navigate('Analytics', { userRole: 'teacher' })}
+              onAction={toAnalytics('marks')}
             />
             {performance.slice(0, 4).map((p, i, list) => (
               <PctRow
                 key={`${p.class}-${p.subject}-${i}`}
-                label={`${p.class} · ${quietCaps(p.subject)}`}
+                label={`${className(p.class)} · ${quietCaps(p.subject)}`}
                 pct={p.average}
                 low={p.average < PASS_MARK}
                 mark={p.previous_average}
@@ -255,7 +315,7 @@ const TeacherHomeScreen = () => {
                   key={hw.id}
                   lead={<Initial text={quietCaps(hw.subject_name) || hw.title} />}
                   title={quietCaps(hw.title) || 'Homework'}
-                  meta={[quietCaps(hw.subject_name), hw.class, hw.date].filter(Boolean).join(' · ')}
+                  meta={[quietCaps(hw.subject_name), hw.class ? className(hw.class) : null, hw.date].filter(Boolean).join(' · ')}
                   trailing={
                     done != null && (hw.students ?? 0) > 0 ? (
                       <Pill text={`${done}/${hw.students} done`} tone={done >= (hw.students ?? 0) ? 'good' : 'neutral'} />
@@ -307,7 +367,16 @@ export default TeacherHomeScreen;
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
   scroll: { paddingBottom: 28 },
-  caption: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted, marginTop: 10 },
+  weekBlock: {
+    marginTop: 4,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.border,
+  },
+  weekHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  caption: { fontSize: 12, fontWeight: '500', color: theme.colors.textMuted },
+  captionStrong: { fontWeight: '600', color: theme.colors.textPrimary },
+  low: { color: theme.colors.danger },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.
