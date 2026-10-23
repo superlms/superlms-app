@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
+import { HeaderIconButton } from '../../components/Header';
 import Select from '../../components/Select';
 import { AppAlert, AppDialog } from '../../components/AppDialog';
 import PhotoEditor, { type PhotoEdit } from '../../components/PhotoEditor';
@@ -45,8 +46,8 @@ import {
  * taken with the camera there and then, or picked from the gallery, and cropped
  * from any side in the photo editor (PhotoEditor, which shows the circle the
  * lists will show); the photo already saved can be cropped again with Crop.
- * The server cuts the photo to the part kept. Editing also offers to remove
- * the student.
+ * The server cuts the photo to the part kept. Editing has Delete in the
+ * header, which asks first and then goes back to the list.
  *
  * Route params: id (edit), classes (what the list already knows they own).
  */
@@ -258,7 +259,8 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
     try {
       await deleteStudent(editId);
       setConfirming(false);
-      navigation.goBack();
+      // Straight back to the list: the student's own page has nobody to show now.
+      navigation.navigate('TeacherStudents');
     } catch (e) {
       AppAlert.alert('Could not remove', apiErr(e, 'Please try again.'));
     } finally {
@@ -294,7 +296,11 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
 
   return (
     <View style={s.root}>
-      <DocHeader title={editId ? 'Edit Student' : 'Add Student'} onBackPress={() => navigation.goBack()} />
+      <DocHeader
+        title={editId ? 'Edit Student' : 'Add Student'}
+        onBackPress={() => navigation.goBack()}
+        rightSlot={editId ? <HeaderIconButton icon="trash-outline" onPress={() => setConfirming(true)} /> : undefined}
+      />
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
@@ -420,13 +426,6 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
             )}
           </TouchableOpacity>
 
-          {!!editId && (
-            <TouchableOpacity style={s.removeBtn} onPress={() => setConfirming(true)} activeOpacity={0.7}>
-              <VectorIcon iconSet="Ionicons" iconName="trash-outline" size={16} color={theme.colors.danger} />
-              <Text style={s.removeText}>Remove student</Text>
-            </TouchableOpacity>
-          )}
-
           <View style={s.tail} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -508,19 +507,6 @@ const __mk_s = () => StyleSheet.create({
   },
   idle: { opacity: 0.7 },
   saveText: { fontSize: 15, fontWeight: '700', color: theme.colors.white },
-
-  removeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    marginTop: 12,
-    height: 46,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: theme.colors.danger + '55',
-  },
-  removeText: { fontSize: 14, fontWeight: '600', color: theme.colors.danger },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

@@ -16,6 +16,7 @@ import PhotoCropper, { type CropRect } from '../../components/PhotoCropper';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getTeacherProfile, updateTeacherPhoto, type PickedPhoto } from '../../api/teacherApi';
 import { apiErr } from '../../utils/filePickers';
+import { fromApiDate } from '../../utils/dayMonthYear';
 import { DocHeader, DocError } from '../more/docUi';
 import ProfileSkeleton from './ProfileSkeleton';
 import { AppAlert } from '../../components/AppDialog';
@@ -43,6 +44,10 @@ const hasVal = (v: any) => val(v) !== '—';
 
 // Gender is stored lower-case ("male").
 const capitalize = (v: any) => (hasVal(v) ? val(v).charAt(0).toUpperCase() + val(v).slice(1) : v);
+
+// The server's "1990-08-15" as the school writes a date: "15/08/1990". A date
+// in any other shape is shown as it came.
+const dayMonthYear = (v: any) => fromApiDate(v) || v;
 
 // A second number only when it differs from the first.
 const unlessSame = (v: any, other: any) => (val(v) === val(other) ? null : v);
@@ -79,9 +84,9 @@ const ROWS: [string, (d: TeacherProfile) => any][] = [
   ['Mobile', d => d.personal_info.mobile_number],
   ['Phone', d => unlessSame(d.personal_info.phone, d.personal_info.mobile_number)],
   ['Emergency Contact', d => d.personal_info.emergency_contact],
-  ['DOB', d => d.personal_info.dob],
+  ['DOB', d => dayMonthYear(d.personal_info.dob)],
   ['Gender', d => capitalize(d.personal_info.gender)],
-  ['Date of Joining', d => d.professional_info.date_of_joining],
+  ['Date of Joining', d => dayMonthYear(d.professional_info.date_of_joining)],
   ['Qualification', d => d.professional_info.qualification],
   ['Address', d => d.address_info.address],
   ['City', d => d.address_info.city],

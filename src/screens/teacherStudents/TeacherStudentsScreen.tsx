@@ -7,6 +7,7 @@ import AppRefreshControl from '../../components/AppRefreshControl';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
+import { quietCaps } from '../../utils/quietCaps';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { StudentRow, TeacherClass, getMyClasses, getStudents } from '../../api/teacherStudentApi';
 import StudentPhotoModal from './StudentPhotoModal';
@@ -15,9 +16,10 @@ import StudentPhotoModal from './StudentPhotoModal';
  * A class teacher's own students, in the More screen — the admin panel's
  * Students module for the class they are class teacher of, drawn as Subjects
  * is: a count, then a row per student with their photo, their name and their
- * numbers, in name order. The header's + adds one and a row opens it to edit,
- * where it can also be removed. A photo, tapped, opens large, to be cropped
- * and saved there (StudentPhotoModal).
+ * class and admission number, in name order. The header's + adds one; a row
+ * opens the student to look at (TeacherStudentDetail), whose Edit opens the
+ * form, where they can also be removed. A photo, tapped, opens large, to be
+ * cropped and saved there (StudentPhotoModal).
  *
  * A teacher who is class teacher of no class sees that, and adds no one.
  */
@@ -26,13 +28,17 @@ const TITLE = 'Students';
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-// The class a row belongs to, said the way the panel says it: "Class 5 · A".
-const classOf = (s: { class?: string | null; section?: string | null }) =>
-  [s.class, s.section].filter(Boolean).join(' · ');
+// The class a row belongs to, with the last letter of its section in brackets:
+// "Class 5 (A)" — "Section A" is A, and so is a section named just "A".
+const classOf = (s: { class?: string | null; section?: string | null }) => {
+  const cls = quietCaps(s.class);
+  const letter = (s.section ?? '').trim().slice(-1).toUpperCase();
+  return [cls, letter ? `(${letter})` : null].filter(Boolean).join(' ');
+};
 
 // ── One student ──────────────────────────────────────────────────────────────
 //   (photo)  Aarav Sharma                                          >
-//            Roll 12 · Adm 2026-0007
+//            Class 5 (A) · 2026-0007
 // The photo is decoded at the avatar's size (resizeMethod "resize"): students'
 // photos are full camera shots (4000 px), and a class of them decoded whole
 // ran out of image memory, so some rows lost theirs at random. One that still
@@ -261,14 +267,9 @@ const TeacherStudentsScreen = ({ navigation }: any) => {
         renderItem={({ item, index }) => (
           <Row
             student={item}
-            meta={[
-              oneClass ? null : classOf(item),
-              item.roll_no ? `Roll ${item.roll_no}` : null,
-              item.admission_no ? `Adm ${item.admission_no}` : null,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-            onOpen={() => navigation.navigate('TeacherStudentForm', { id: item.id, classes })}
+            // "Class 2 (A) · 2024015" — the values alone, no labels.
+            meta={[classOf(item), item.admission_no].filter(Boolean).join(' · ')}
+            onOpen={() => navigation.navigate('TeacherStudentDetail', { id: item.id, classes })}
             onPhoto={() => setViewing(item)}
             isLast={index === students.length - 1}
           />
