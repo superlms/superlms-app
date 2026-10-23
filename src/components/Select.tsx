@@ -26,6 +26,10 @@ interface Props {
   plain?: boolean;
   /** Once something is chosen, the outline turns the accent colour. */
   markChosen?: boolean;
+  /** The label set into the box's top border instead of over it (outlined forms, on a card-coloured page). */
+  notched?: boolean;
+  /** A small star after a notched label: the form needs it. */
+  required?: boolean;
 }
 
 // Labelled dropdown: a pressable box that opens a modal list. Replaces the chip
@@ -39,24 +43,40 @@ const Select = ({
   disabled,
   plain,
   markChosen,
+  notched,
+  required,
 }: Props) => {
   const [open, setOpen] = useState(false);
   const selected = options.find(o => o.value === value);
 
   return (
-    <View style={{ marginTop: 12 }}>
-      {!!label && <Text style={styles.label}>{label}</Text>}
+    <View style={notched ? styles.notchedWrap : styles.wrap}>
+      {!!label && !notched && <Text style={styles.label}>{label}</Text>}
       <TouchableOpacity
-        style={[styles.box, plain && styles.boxPlain, markChosen && !!selected && styles.boxChosen, disabled && styles.boxDisabled]}
+        style={[
+          styles.box,
+          (plain || notched) && styles.boxPlain,
+          notched && styles.boxNotched,
+          (markChosen && !!selected) || (notched && open) ? styles.boxChosen : null,
+          disabled && styles.boxDisabled,
+        ]}
         activeOpacity={0.7}
         disabled={disabled}
         onPress={() => setOpen(true)}
       >
-        <Text style={[styles.value, !selected && styles.placeholder]} numberOfLines={1}>
+        <Text style={[styles.value, notched && styles.valueNotched, !selected && styles.placeholder]} numberOfLines={1}>
           {selected ? selected.label : placeholder}
         </Text>
         <VectorIcon iconSet="Ionicons" iconName="chevron-down" size={18} color={theme.colors.textMuted} />
       </TouchableOpacity>
+      {!!label && notched && (
+        <View style={styles.notchLabelWrap} pointerEvents="none">
+          <Text style={[styles.notchLabel, open && styles.notchLabelOpen]} numberOfLines={1}>
+            {label}
+            {required && <Text style={styles.star}> *</Text>}
+          </Text>
+        </View>
+      )}
 
       <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
         <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setOpen(false)}>
@@ -95,7 +115,25 @@ export default Select;
 
 const __mk_styles = () =>
   StyleSheet.create({
+    wrap: { marginTop: 12 },
     label: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary, marginBottom: 6 },
+    // Notched: room above for the label that sits in the border, and the
+    // outlined fields' height and padding.
+    notchedWrap: { marginTop: 18 },
+    boxNotched: { minHeight: 50, paddingHorizontal: 14, paddingVertical: 12 },
+    valueNotched: { fontSize: 15 },
+    notchLabelWrap: { position: 'absolute', top: -8, left: 10, right: 10, flexDirection: 'row' },
+    notchLabel: {
+      flexShrink: 1,
+      paddingHorizontal: 5,
+      backgroundColor: theme.colors.card,
+      fontSize: 12,
+      lineHeight: 16,
+      fontWeight: '500',
+      color: theme.colors.textSecondary,
+    },
+    notchLabelOpen: { color: theme.colors.primary },
+    star: { color: theme.colors.danger },
     box: {
       flexDirection: 'row',
       alignItems: 'center',

@@ -19,9 +19,10 @@ import CroppedPhoto from '../../components/CroppedPhoto';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr, pickImage, takePhoto } from '../../utils/filePickers';
 import { fromApiDate, toApiDate, typeDate } from '../../utils/dayMonthYear';
+import { quietCaps } from '../../utils/quietCaps';
 import { PickedFile } from '../../api/adminProfileApi';
 import { DocHeader } from '../more/docUi';
-import { FormField, FormPair, FormSection, FormToggle } from './studentFormUi';
+import { CheckCard, FieldPair, FormHeading, OutlinedField } from './outlinedFormUi';
 import {
   StudentLookups,
   StudentPayload,
@@ -71,8 +72,12 @@ const emptyForm: StudentPayload = {
 // photo is); the square cut from it is at most 512.
 const PHOTO_SIDE = 1600;
 
+// The photo's circle on the form.
+const PHOTO = 92;
+
+// "Class 6 · Section A" — names the school typed in capitals brought down.
 const classLabel = (c?: TeacherClass | null) =>
-  c ? [c.class, c.section].filter(Boolean).join(' · ') : '';
+  c ? [quietCaps(c.class), quietCaps(c.section)].filter(Boolean).join(' · ') : '';
 
 // One class-and-section, as the section picker tells its options apart.
 const sectionKey = (standardId: number, sectionId?: number | null) => `${standardId}:${sectionId || 0}`;
@@ -285,7 +290,7 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
   // The line under the photo: the student's own section when editing, the one
   // picked when the form asks, and the teacher's only one otherwise.
   const inClass = asksSection
-    ? chosen ? classLabel(chosen) : (oneClass ? choices[0].class ?? '' : '')
+    ? chosen ? classLabel(chosen) : (oneClass ? quietCaps(choices[0].class) : '')
     : classLabel(
         editId
           ? classes.find(c => c.standard_id === form.standard_id && c.section_id === form.section_id) ??
@@ -306,18 +311,18 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
 
           {/* The photo, and the class the student goes into */}
           <View style={s.photoBlock}>
-            <TouchableOpacity activeOpacity={0.8} onPress={() => setAsking(true)}>
+            <TouchableOpacity activeOpacity={0.8} onPress={() => setAsking(true)} style={s.photoRing}>
               {shown && crop ? (
-                <CroppedPhoto uri={shown} crop={crop.circle} size={88} style={s.photo} />
+                <CroppedPhoto uri={shown} crop={crop.circle} size={PHOTO} style={s.photo} />
               ) : shown ? (
                 <Image source={{ uri: shown }} style={s.photo} />
               ) : (
                 <View style={[s.photo, s.photoEmpty]}>
-                  <VectorIcon iconSet="Ionicons" iconName="person" size={34} color={theme.colors.textMuted} />
+                  <VectorIcon iconSet="Ionicons" iconName="person-outline" size={36} color={theme.colors.textMuted} />
                 </View>
               )}
               <View style={s.camera}>
-                <VectorIcon iconSet="Ionicons" iconName="camera" size={15} color={theme.colors.white} />
+                <VectorIcon iconSet="Ionicons" iconName="camera" size={14} color={theme.colors.white} />
               </View>
             </TouchableOpacity>
 
@@ -334,100 +339,108 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
                 </>
               )}
             </View>
-            {!!inClass && <Text style={s.inClass}>{inClass}</Text>}
+            {!!inClass && (
+              <View style={s.classPill}>
+                <VectorIcon iconSet="Ionicons" iconName="school-outline" size={13} color={theme.colors.textSecondary} />
+                <Text style={s.classPillText}>{inClass}</Text>
+              </View>
+            )}
           </View>
 
-          <FormSection title="Student" first />
-          <FormField label="Full Name" value={form.name} onChangeText={(v: string) => set('name', v)} placeholder="Student name" />
-          <FormField label="Email" value={form.email} onChangeText={(v: string) => set('email', v)} placeholder="email@example.com" keyboardType="email-address" autoCapitalize="none" hint="Their login is emailed here." />
-          <FormPair>
-            <FormField half label="Mobile" value={form.mobile} onChangeText={(v: string) => set('mobile', v)} placeholder="10-digit" keyboardType="number-pad" maxLength={10} />
-            <FormField half label="Date of Birth" value={form.dob} onChangeText={(v: string) => set('dob', typeDate(v, form.dob))} placeholder="DD/MM/YYYY" keyboardType="number-pad" maxLength={10} />
-          </FormPair>
-          <View style={s.select}>
-            <Select plain label="Gender" placeholder="Select gender" value={form.gender || null} options={GENDERS} onChange={v => set('gender', v)} />
-          </View>
+          <FormHeading title="Student" first />
+          <OutlinedField required label="Full Name" value={form.name} onChangeText={(v: string) => set('name', v)} placeholder="As in school records" />
+          <OutlinedField required label="Email" value={form.email} onChangeText={(v: string) => set('email', v)} placeholder="name@example.com" keyboardType="email-address" autoCapitalize="none" hint="Their login is emailed here." />
+          <FieldPair>
+            <OutlinedField required half label="Mobile" value={form.mobile} onChangeText={(v: string) => set('mobile', v)} placeholder="10 digits" keyboardType="number-pad" maxLength={10} />
+            <OutlinedField required half label="Date of Birth" value={form.dob} onChangeText={(v: string) => set('dob', typeDate(v, form.dob))} placeholder="DD/MM/YYYY" keyboardType="number-pad" maxLength={10} />
+          </FieldPair>
+          <Select notched required label="Gender" placeholder="Select" value={form.gender || null} options={GENDERS} onChange={v => set('gender', v)} />
 
           {/* Class teacher of two or more sections: which one the student goes into */}
           {asksSection && (
             <>
-              <FormSection title="Class" />
-              <View style={s.select}>
-                <Select
-                  plain
-                  label={oneClass ? 'Section' : 'Class & Section'}
-                  placeholder="Select section"
-                  value={chosen ? chosenKey : null}
-                  options={choices.map(c => ({
-                    label: oneClass ? c.section ?? c.class ?? '' : classLabel(c),
-                    value: sectionKey(c.standard_id, c.section_id),
-                  }))}
-                  onChange={pickSection}
-                />
-              </View>
+              <FormHeading title="Class" />
+              <Select
+                notched
+                required
+                label={oneClass ? 'Section' : 'Class & Section'}
+                placeholder="Select section"
+                value={chosen ? chosenKey : null}
+                options={choices.map(c => ({
+                  label: oneClass ? quietCaps(c.section ?? c.class) : classLabel(c),
+                  value: sectionKey(c.standard_id, c.section_id),
+                }))}
+                onChange={pickSection}
+              />
             </>
           )}
 
-          <FormSection title="Family" />
-          <FormField label="Father’s Name" value={form.father_name} onChangeText={(v: string) => set('father_name', v)} placeholder="Father’s name" />
-          <FormField label="Mother’s Name" value={form.mother_name} onChangeText={(v: string) => set('mother_name', v)} placeholder="Optional" />
+          <FormHeading title="Family" />
+          <OutlinedField required label="Father’s Name" value={form.father_name} onChangeText={(v: string) => set('father_name', v)} />
+          <OutlinedField label="Mother’s Name" value={form.mother_name} onChangeText={(v: string) => set('mother_name', v)} />
 
-          <FormSection title="School" />
-          <FormField label="Date of Admission" value={form.date_of_admission} onChangeText={(v: string) => set('date_of_admission', typeDate(v, form.date_of_admission ?? ''))} placeholder="DD/MM/YYYY (optional)" keyboardType="number-pad" maxLength={10} />
-          <FormPair>
-            <FormField half label="Religion" value={form.religion} onChangeText={(v: string) => set('religion', v)} placeholder="Optional" />
-            <FormField half label="Aadhaar No." value={form.aadhar_no} onChangeText={(v: string) => set('aadhar_no', v)} placeholder="12 digits" keyboardType="number-pad" maxLength={12} />
-          </FormPair>
-          <FormPair>
-            <FormField half label="Apaar ID" value={form.appar_id} onChangeText={(v: string) => set('appar_id', v)} placeholder="Optional" />
-            <FormField half label="Registration No." value={form.registration_number} onChangeText={(v: string) => set('registration_number', v)} placeholder="Optional" />
-          </FormPair>
+          <FormHeading title="School" />
+          <OutlinedField label="Date of Admission" value={form.date_of_admission} onChangeText={(v: string) => set('date_of_admission', typeDate(v, form.date_of_admission ?? ''))} placeholder="DD/MM/YYYY" keyboardType="number-pad" maxLength={10} />
+          <FieldPair>
+            <OutlinedField half label="Religion" value={form.religion} onChangeText={(v: string) => set('religion', v)} />
+            <OutlinedField half label="Aadhaar No." value={form.aadhar_no} onChangeText={(v: string) => set('aadhar_no', v)} placeholder="12 digits" keyboardType="number-pad" maxLength={12} />
+          </FieldPair>
+          <FieldPair>
+            <OutlinedField half label="Apaar ID" value={form.appar_id} onChangeText={(v: string) => set('appar_id', v)} />
+            <OutlinedField half label="Registration No." value={form.registration_number} onChangeText={(v: string) => set('registration_number', v)} />
+          </FieldPair>
 
-          <FormSection title="Address" />
-          <FormPair>
-            <FormField half label="City" value={form.city} onChangeText={(v: string) => set('city', v)} placeholder="Optional" />
-            <FormField half label="State" value={form.state} onChangeText={(v: string) => set('state', v)} placeholder="Optional" />
-          </FormPair>
-          <FormField label="Pincode" value={form.pincode} onChangeText={(v: string) => set('pincode', v)} placeholder="6 digits (optional)" keyboardType="number-pad" maxLength={6} />
-          <FormField label="Local Address" value={form.local_address} onChangeText={(v: string) => set('local_address', v)} placeholder="Optional" multiline />
-          <FormField label="Permanent Address" value={form.permanent_address} onChangeText={(v: string) => set('permanent_address', v)} placeholder="Optional" multiline />
+          <FormHeading title="Address" />
+          <FieldPair>
+            <OutlinedField half label="City" value={form.city} onChangeText={(v: string) => set('city', v)} />
+            <OutlinedField half label="State" value={form.state} onChangeText={(v: string) => set('state', v)} />
+          </FieldPair>
+          <OutlinedField label="Pincode" value={form.pincode} onChangeText={(v: string) => set('pincode', v)} placeholder="6 digits" keyboardType="number-pad" maxLength={6} />
+          <OutlinedField label="Local Address" value={form.local_address} onChangeText={(v: string) => set('local_address', v)} multiline />
+          <OutlinedField label="Permanent Address" value={form.permanent_address} onChangeText={(v: string) => set('permanent_address', v)} multiline />
 
-          <FormSection title="Transport & Access" />
-          <FormToggle
+          <FormHeading title="Transport & Access" />
+          <CheckCard
+            icon="bus-outline"
             label="Takes the bus"
-            note={form.transportation_required ? 'Billed on the route below' : 'No transport fee'}
+            note={form.transportation_required ? 'Transport fee on the route below' : 'No transport fee'}
             value={!!form.transportation_required}
             onValueChange={(v: boolean) => set('transportation_required', v)}
           />
           {form.transportation_required && (
-            <View style={s.select}>
-              <Select
-                plain
-                label="Route"
-                placeholder="Select route"
-                value={form.route_id ?? null}
-                options={(lookups?.routes ?? []).map(rt => ({ label: rt.route_name, value: rt.id }))}
-                onChange={v => set('route_id', Number(v))}
-              />
-            </View>
+            <Select
+              notched
+              label="Route"
+              placeholder="Select route"
+              value={form.route_id ?? null}
+              options={(lookups?.routes ?? []).map(rt => ({ label: rt.route_name, value: rt.id }))}
+              onChange={v => set('route_id', Number(v))}
+            />
           )}
-          <FormToggle
-            label="Active"
-            note={form.is_active ? 'Can sign in to the app' : 'Signed out of the app'}
+          <CheckCard
+            icon="phone-portrait-outline"
+            label="App login active"
+            note={form.is_active ? 'Can sign in to the app' : 'Can’t sign in to the app'}
             value={!!form.is_active}
             onValueChange={(v: boolean) => set('is_active', v)}
           />
 
+          <View style={s.tail} />
+        </ScrollView>
+
+        {/* Save stays in reach at the foot, however far down the form is */}
+        <View style={s.footer}>
           <TouchableOpacity style={[s.saveBtn, saving && s.idle]} onPress={save} disabled={saving} activeOpacity={0.9}>
             {saving ? (
               <ActivityIndicator color={theme.colors.white} />
             ) : (
-              <Text style={s.saveText}>{editId ? 'Save changes' : 'Add student'}</Text>
+              <>
+                <VectorIcon iconSet="Ionicons" iconName={editId ? 'checkmark' : 'person-add-outline'} size={18} color={theme.colors.white} />
+                <Text style={s.saveText}>{editId ? 'Save changes' : 'Add student'}</Text>
+              </>
             )}
           </TouchableOpacity>
-
-          <View style={s.tail} />
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
 
       <AppDialog
@@ -465,42 +478,62 @@ const __mk_s = () => StyleSheet.create({
   flex: { flex: 1 },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 20, paddingTop: 8 },
-  tail: { height: 48 },
+  tail: { height: 28 },
 
   // Photo, and the class it belongs to
-  photoBlock: { alignItems: 'center', paddingTop: 12, paddingBottom: 4 },
-  photo: { width: 88, height: 88, borderRadius: 44, backgroundColor: theme.colors.background },
-  photoEmpty: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+  photoBlock: { alignItems: 'center', paddingTop: 16, paddingBottom: 4 },
+  // A soft ring a few points out from the photo.
+  photoRing: {
+    padding: 4,
+    borderRadius: PHOTO / 2 + 6,
+    borderWidth: 1.5,
+    borderColor: theme.colors.primary + '33',
   },
+  photo: { width: PHOTO, height: PHOTO, borderRadius: PHOTO / 2, overflow: 'hidden', backgroundColor: theme.colors.background },
+  photoEmpty: { alignItems: 'center', justifyContent: 'center' },
   camera: {
     position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    right: 0,
+    bottom: 0,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: 2.5,
     borderColor: theme.colors.card,
   },
-  photoText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary, marginTop: 10 },
-  photoLinks: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  photoDot: { fontSize: 13, color: theme.colors.textMuted, marginTop: 10 },
-  inClass: { fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
+  photoLinks: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+  photoText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
+  photoDot: { fontSize: 13, color: theme.colors.textMuted },
+  classPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: theme.colors.background,
+  },
+  classPillText: { fontSize: 12, fontWeight: '500', color: theme.colors.textSecondary },
 
-  // Select sits in the fields' rhythm
-  select: { marginTop: 12 },
-
+  // Save, at the foot
+  // (The app's root keeps clear of the phone's own bar below, so no inset here.)
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.card,
+  },
   saveBtn: {
-    marginTop: 28,
+    flexDirection: 'row',
+    gap: 8,
     height: 50,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
