@@ -6,7 +6,6 @@ import {
   FlatList,
   Image,
   Keyboard,
-  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -23,7 +22,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { Skeleton, SkeletonText } from '../../components/Skeleton';
-import { AppAlert } from '../../components/AppDialog';
+import { AppAlert, AppDialog } from '../../components/AppDialog';
 import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { useKeyboardLiftStyle } from '../../hooks/useKeyboardLift';
 import { theme, onThemeChange } from '../../utils/theme';
@@ -999,39 +998,16 @@ const ChatsScreen = ({ navigation, route }: any) => {
       )}
 
       {/* Delete confirmation */}
-      <Modal
-        transparent
+      <AppDialog
         visible={confirmDelete}
-        animationType="fade"
+        title={`Delete ${selectedIds.length === 1 ? 'message' : `${selectedIds.length} messages`}?`}
+        message={`They will be removed for you. ${contact.name} keeps their copy.`}
+        actions={[
+          { text: 'Cancel', style: 'cancel', onPress: () => setConfirmDelete(false) },
+          { text: 'Delete', style: 'destructive', onPress: deleteSelected },
+        ]}
         onRequestClose={() => setConfirmDelete(false)}
-      >
-        <View style={s.modalOverlay}>
-          <View style={s.modalCard}>
-            <Text style={s.modalTitle}>
-              Delete {selectedIds.length === 1 ? 'message' : `${selectedIds.length} messages`}?
-            </Text>
-            <Text style={s.modalDesc}>
-              They will be removed for you. {contact.name} keeps their copy.
-            </Text>
-            <View style={s.modalActions}>
-              <TouchableOpacity
-                style={[s.modalBtn, s.modalBtnGhost]}
-                activeOpacity={0.7}
-                onPress={() => setConfirmDelete(false)}
-              >
-                <Text style={s.modalBtnGhostText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.modalBtn, s.modalBtnDanger]}
-                activeOpacity={0.85}
-                onPress={deleteSelected}
-              >
-                <Text style={s.modalBtnDangerText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      />
     </Animated.View>
   );
 };
@@ -1201,35 +1177,6 @@ const __mk_s = () => StyleSheet.create({
   },
   blockedText: { fontSize: 13.5, color: CH.sub, textAlign: 'center' },
 
-  // Confirm modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: CH.surface,
-    borderRadius: theme.radius.lg,
-    padding: 24,
-  },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: CH.ink },
-  modalDesc: { marginTop: 8, fontSize: 14, color: CH.sub, lineHeight: 20 },
-  modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
-  modalBtn: {
-    flex: 1,
-    height: 46,
-    borderRadius: theme.radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBtnGhost: { borderWidth: 1, borderColor: CH.surfaceLine },
-  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: CH.ink },
-  modalBtnDanger: { backgroundColor: theme.colors.danger },
-  modalBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

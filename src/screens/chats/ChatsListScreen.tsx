@@ -3,7 +3,6 @@ import {
   BackHandler,
   FlatList,
   Image,
-  Modal,
   Platform,
   StyleProp,
   StyleSheet,
@@ -20,7 +19,7 @@ import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { Skeleton, SkeletonText } from '../../components/Skeleton';
-import { AppAlert } from '../../components/AppDialog';
+import { AppAlert, AppDialog } from '../../components/AppDialog';
 import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { theme, onThemeChange } from '../../utils/theme';
 import { DocNoData } from '../more/docUi';
@@ -475,75 +474,28 @@ const ChatsListScreen = ({ navigation, route }: any) => {
       )}
 
       {/* Block confirmation */}
-      <Modal
-        transparent
+      <AppDialog
         visible={confirmBlock}
-        animationType="fade"
+        title={`Block ${selectedIds.length === 1 ? selectedContacts[0]?.name ?? 'this chat' : `${selectedIds.length} chats`}?`}
+        message="They won't be able to message you, and you won't get notifications from them. You can unblock them at any time."
+        actions={[
+          { text: 'Cancel', style: 'cancel', onPress: () => setConfirmBlock(false) },
+          { text: 'Block', style: 'destructive', onPress: blockSelected },
+        ]}
         onRequestClose={() => setConfirmBlock(false)}
-      >
-        <View style={s.modalOverlay}>
-          <View style={s.modalCard}>
-            <Text style={s.modalTitle}>
-              Block {selectedIds.length === 1 ? selectedContacts[0]?.name ?? 'this chat' : `${selectedIds.length} chats`}?
-            </Text>
-            <Text style={s.modalDesc}>
-              They won't be able to message you, and you won't get notifications from them. You can unblock
-              them at any time.
-            </Text>
-            <View style={s.modalActions}>
-              <TouchableOpacity
-                style={[s.modalBtn, s.modalBtnGhost]}
-                activeOpacity={0.7}
-                onPress={() => setConfirmBlock(false)}
-              >
-                <Text style={s.modalBtnGhostText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.modalBtn, s.modalBtnDanger]}
-                activeOpacity={0.85}
-                onPress={blockSelected}
-              >
-                <Text style={s.modalBtnDangerText}>Block</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      />
 
       {/* Delete confirmation */}
-      <Modal
-        transparent
+      <AppDialog
         visible={confirmDelete}
-        animationType="fade"
+        title={`Delete ${selectedIds.length === 1 ? 'chat' : `${selectedIds.length} chats`}?`}
+        message="The messages will be removed for you. The other person keeps their copy."
+        actions={[
+          { text: 'Cancel', style: 'cancel', onPress: () => setConfirmDelete(false) },
+          { text: 'Delete', style: 'destructive', onPress: deleteSelected },
+        ]}
         onRequestClose={() => setConfirmDelete(false)}
-      >
-        <View style={s.modalOverlay}>
-          <View style={s.modalCard}>
-            <Text style={s.modalTitle}>
-              Delete {selectedIds.length === 1 ? 'chat' : `${selectedIds.length} chats`}?
-            </Text>
-            <Text style={s.modalDesc}>
-              The messages will be removed for you. The other person keeps their copy.
-            </Text>
-            <View style={s.modalActions}>
-              <TouchableOpacity
-                style={[s.modalBtn, s.modalBtnGhost]}
-                activeOpacity={0.7}
-                onPress={() => setConfirmDelete(false)}
-              >
-                <Text style={s.modalBtnGhostText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.modalBtn, s.modalBtnDanger]}
-                activeOpacity={0.85}
-                onPress={deleteSelected}
-              >
-                <Text style={s.modalBtnDangerText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      />
     </View>
   );
 };
@@ -633,35 +585,6 @@ const __mk_s = () => StyleSheet.create({
   errorText: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 20 },
   linkText: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 
-  // Confirm modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    padding: 24,
-  },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
-  modalDesc: { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
-  modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
-  modalBtn: {
-    flex: 1,
-    height: 46,
-    borderRadius: theme.radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
-  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  modalBtnDanger: { backgroundColor: theme.colors.danger },
-  modalBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

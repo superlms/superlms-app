@@ -1,6 +1,16 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { forwardRef, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Animated,
+  Easing,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
+import { Skeleton, SkeletonText } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
 
 /**
@@ -14,41 +24,194 @@ import { theme, onThemeChange } from '../../utils/theme';
 
 // ── A block's heading ────────────────────────────────────────────────────────
 //   STUDENT ─────────────────────────────────
-export const FormHeading = ({ title, first }: { title: string; first?: boolean }) => (
+export const FormHeading = ({ title, first, skeleton }: { title: string; first?: boolean; skeleton?: boolean }) => (
   <View style={[s.heading, first && s.headingFirst]}>
-    <Text style={s.headingText}>{title.toUpperCase()}</Text>
+    {skeleton ? (
+      <SkeletonText style={s.headingText}>{title.toUpperCase()}</SkeletonText>
+    ) : (
+      <Text style={s.headingText}>{title.toUpperCase()}</Text>
+    )}
     <View style={s.headingLine} />
   </View>
 );
+
+// ── A field as a skeleton ────────────────────────────────────────────────────
+// The same outline, its name a bar in the border and the value a bar as long
+// as what the field holds — so the form being opened has its own shape.
+export const SkeletonField = ({
+  label,
+  value,
+  half,
+  multiline,
+}: {
+  label: string;
+  value?: string | null;
+  half?: boolean;
+  multiline?: boolean;
+}) => (
+  <View style={[s.field, half && s.half]}>
+    <View style={[s.box, s.skBox, multiline && s.skBoxMultiline]}>
+      {!!value && (
+        <SkeletonText style={s.input} numberOfLines={multiline ? 2 : 1}>
+          {value}
+        </SkeletonText>
+      )}
+    </View>
+    <View style={s.labelWrap} pointerEvents="none">
+      <View style={s.skLabel}>
+        <SkeletonText style={s.label} numberOfLines={1}>
+          {label}
+        </SkeletonText>
+      </View>
+    </View>
+  </View>
+);
+
+// A yes-or-no card as a skeleton.
+export const SkeletonCheck = ({ label, note }: { label: string; note?: string }) => (
+  <View style={s.check}>
+    <Skeleton width={34} height={34} radius={10} />
+    <View style={s.checkBody}>
+      <SkeletonText style={s.checkLabel}>{label}</SkeletonText>
+      {!!note && <SkeletonText style={s.checkNote}>{note}</SkeletonText>}
+    </View>
+    <Skeleton width={22} height={22} radius={7} />
+  </View>
+);
+
+// ── Save, and how it is going ────────────────────────────────────────────────
+//   idle     [ +  Add student ]
+//   saving   [ ◌  Adding student…  ]  a light sweeps across, again and again
+//   done     [ ✓  Student added ]     green, the tick springs in
+export type SaveState = 'idle' | 'saving' | 'done';
+
+export const SaveButton = ({
+  state,
+  icon,
+  label,
+  busyLabel,
+  doneLabel,
+  onPress,
+}: {
+  state: SaveState;
+  icon: string;
+  label: string;
+  busyLabel: string;
+  doneLabel: string;
+  onPress: () => void;
+}) => {
+  const sweep = useRef(new Animated.Value(0)).current;
+  const pop = useRef(new Animated.Value(1)).current;
+  const [width, setWidth] = useState(0);
+  // "Adding student" with one, two, three dots after it in turn.
+  const [dots, setDots] = useState(1);
+
+  useEffect(() => {
+    if (state !== 'saving') return;
+    sweep.setValue(0);
+    setDots(1);
+    const run = Animated.loop(
+      Animated.timing(sweep, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    );
+    run.start();
+    const tick = setInterval(() => setDots(n => (n % 3) + 1), 400);
+    return () => {
+      run.stop();
+      clearInterval(tick);
+    };
+  }, [state, sweep]);
+
+  useEffect(() => {
+    if (state !== 'done') return;
+    pop.setValue(0.4);
+    Animated.spring(pop, { toValue: 1, friction: 4, tension: 160, useNativeDriver: true }).start();
+  }, [state, pop]);
+
+  const band = Math.max(60, width * 0.35);
+
+  return (
+    <TouchableOpacity
+      style={[s.saveBtn, state === 'saving' && s.saveBtnBusy, state === 'done' && s.saveBtnDone]}
+      onPress={onPress}
+      disabled={state !== 'idle'}
+      activeOpacity={0.9}
+      onLayout={e => setWidth(e.nativeEvent.layout.width)}
+      accessibilityRole="button"
+      accessibilityState={{ busy: state === 'saving', disabled: state !== 'idle' }}
+      accessibilityLabel={state === 'saving' ? busyLabel : state === 'done' ? doneLabel : label}
+    >
+      {state === 'saving' && width > 0 && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            s.sweep,
+            {
+              width: band,
+              transform: [
+                { translateX: sweep.interpolate({ inputRange: [0, 1], outputRange: [-band, width] }) },
+                { skewX: '-20deg' },
+              ],
+            },
+          ]}
+        />
+      )}
+
+      {state === 'idle' && (
+        <>
+          <VectorIcon iconSet="Ionicons" iconName={icon} size={18} color={theme.colors.white} />
+          <Text style={s.saveText}>{label}</Text>
+        </>
+      )}
+
+      {state === 'saving' && (
+        <>
+          <ActivityIndicator size="small" color={theme.colors.white} />
+          <View style={s.busyRow}>
+            <Text style={s.saveText}>{busyLabel}</Text>
+            {/* Room for three dots always held, so the words don't move as they come and go */}
+            <View style={s.dotsBox}>
+              <Text style={s.saveText}>{'.'.repeat(dots)}</Text>
+            </View>
+          </View>
+        </>
+      )}
+
+      {state === 'done' && (
+        <Animated.View style={[s.doneRow, { transform: [{ scale: pop }] }]}>
+          <VectorIcon iconSet="Ionicons" iconName="checkmark-circle" size={20} color={theme.colors.white} />
+          <Text style={s.saveText}>{doneLabel}</Text>
+        </Animated.View>
+      )}
+    </TouchableOpacity>
+  );
+};
 
 // ── A field with its name in the border ─────────────────────────────────────
 //   ╭─ Full Name * ─────────────────╮
 //   │ Aarav Sharma                  │
 //   ╰───────────────────────────────╯
-export const OutlinedField = ({
-  label,
-  required,
-  hint,
-  multiline,
-  half,
-  ...props
-}: {
+// A field the save stopped at (error) is outlined red, with what is wrong
+// under it in place of the hint, until it is typed in again.
+export const OutlinedField = forwardRef<TextInput, {
   label: string;
   /** A small star after the name: the form won't save without it. */
   required?: boolean;
   /** A line under the box — what the school expects there. */
   hint?: string;
+  /** What is wrong with it: the outline and the name turn red, this under it. */
+  error?: string | null;
   multiline?: boolean;
   /** Share the line with the field beside it, inside a FieldPair. */
   half?: boolean;
   [key: string]: any;
-}) => {
+}>(({ label, required, hint, error, multiline, half, ...props }, ref) => {
   const [focused, setFocused] = useState(false);
 
   return (
     <View style={[s.field, half && s.half]}>
-      <View style={[s.box, focused && s.boxFocused]}>
+      <View style={[s.box, focused && s.boxFocused, !!error && s.boxError]}>
         <TextInput
+          ref={ref}
           style={[s.input, multiline && s.inputMultiline]}
           placeholderTextColor={theme.colors.textMuted + 'B3'}
           multiline={multiline}
@@ -63,16 +226,26 @@ export const OutlinedField = ({
           }}
         />
       </View>
-      <BorderLabel text={label} required={required} focused={focused} />
-      {!!hint && <Text style={s.hint}>{hint}</Text>}
+      <BorderLabel text={label} required={required} focused={focused} error={!!error} />
+      {error ? <Text style={s.error}>{error}</Text> : !!hint && <Text style={s.hint}>{hint}</Text>}
     </View>
   );
-};
+});
 
 // The name set into the top border: drawn over the line on the page's colour.
-export const BorderLabel = ({ text, required, focused }: { text: string; required?: boolean; focused?: boolean }) => (
+export const BorderLabel = ({
+  text,
+  required,
+  focused,
+  error,
+}: {
+  text: string;
+  required?: boolean;
+  focused?: boolean;
+  error?: boolean;
+}) => (
   <View style={s.labelWrap} pointerEvents="none">
-    <Text style={[s.label, focused && s.labelFocused]} numberOfLines={1}>
+    <Text style={[s.label, focused && s.labelFocused, error && s.labelError]} numberOfLines={1}>
       {text}
       {required && <Text style={s.star}> *</Text>}
     </Text>
@@ -116,7 +289,7 @@ export const CheckCard = ({
       {!!note && <Text style={s.checkNote}>{note}</Text>}
     </View>
     <View style={[s.tick, value && s.tickOn]}>
-      {value && <VectorIcon iconSet="Ionicons" iconName="checkmark" size={16} color={theme.colors.white} />}
+      {value && <VectorIcon iconSet="Ionicons" iconName="checkmark" size={15} color={theme.colors.white} />}
     </View>
   </TouchableOpacity>
 );
@@ -128,26 +301,28 @@ const __mk_s = () => StyleSheet.create({
   headingText: { fontSize: 11, fontWeight: '700', letterSpacing: 1.1, color: theme.colors.textMuted },
   headingLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border },
 
-  // Field — room above for the name that sits in the border
-  field: { marginTop: 18 },
+  // Field — room above for the name that sits in the border. Slim: a 44pt box
+  // with 14pt type, the outline a thin line.
+  field: { marginTop: 16 },
   half: { flex: 1 },
   box: {
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth * 2,
     borderColor: theme.colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
+    borderRadius: 10,
+    paddingHorizontal: 13,
   },
   // The width of the outline stays the same, so the text doesn't shift on focus.
   boxFocused: { borderColor: theme.colors.primary },
+  boxError: { borderColor: theme.colors.danger },
   input: {
-    minHeight: 50,
-    paddingVertical: 12,
+    minHeight: 44,
+    paddingVertical: 9,
     paddingHorizontal: 0,
-    fontSize: 15,
+    fontSize: 14,
     color: theme.colors.textPrimary,
   },
-  inputMultiline: { minHeight: 84, paddingTop: 16, textAlignVertical: 'top' },
-  labelWrap: { position: 'absolute', top: -8, left: 10, right: 10, flexDirection: 'row' },
+  inputMultiline: { minHeight: 70, paddingTop: 13, textAlignVertical: 'top' },
+  labelWrap: { position: 'absolute', top: -8, left: 9, right: 9, flexDirection: 'row' },
   label: {
     flexShrink: 1,
     paddingHorizontal: 5,
@@ -158,8 +333,10 @@ const __mk_s = () => StyleSheet.create({
     color: theme.colors.textSecondary,
   },
   labelFocused: { color: theme.colors.primary },
+  labelError: { color: theme.colors.danger },
   star: { color: theme.colors.danger },
-  hint: { fontSize: 11, color: theme.colors.textMuted, marginTop: 5, marginLeft: 15 },
+  hint: { fontSize: 11, color: theme.colors.textMuted, marginTop: 4, marginLeft: 14 },
+  error: { fontSize: 11, color: theme.colors.danger, marginTop: 4, marginLeft: 14 },
 
   pair: { flexDirection: 'row', gap: 12 },
 
@@ -168,36 +345,66 @@ const __mk_s = () => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginTop: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    borderWidth: 1,
+    marginTop: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 11,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth * 2,
     borderColor: theme.colors.border,
   },
   checkOn: { borderColor: theme.colors.primary + '66', backgroundColor: theme.colors.primary + '0A' },
   checkIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 11,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.background,
   },
   checkIconOn: { backgroundColor: theme.colors.primary + '1A' },
   checkBody: { flex: 1, gap: 2 },
-  checkLabel: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary },
+  checkLabel: { fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary },
   checkNote: { fontSize: 12, color: theme.colors.textMuted },
   tick: {
-    width: 24,
-    height: 24,
-    borderRadius: 8,
+    width: 22,
+    height: 22,
+    borderRadius: 7,
     borderWidth: 1.5,
     borderColor: theme.colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   tickOn: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primary },
+
+  // Skeleton field: the box keeps the field's height; its value bar sits where the text would.
+  skBox: { minHeight: 44, justifyContent: 'center' },
+  skBoxMultiline: { minHeight: 70, justifyContent: 'flex-start', paddingTop: 4 },
+  skLabel: { paddingHorizontal: 5, backgroundColor: theme.colors.card },
+
+  // Save
+  saveBtn: {
+    flexDirection: 'row',
+    gap: 8,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  saveBtnBusy: { opacity: 0.92 },
+  saveBtnDone: { backgroundColor: theme.colors.success },
+  sweep: {
+    position: 'absolute',
+    top: -10,
+    bottom: -10,
+    left: 0,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+  },
+  saveText: { fontSize: 15, fontWeight: '700', color: theme.colors.white },
+  busyRow: { flexDirection: 'row', alignItems: 'center' },
+  dotsBox: { width: 16 },
+  doneRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

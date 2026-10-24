@@ -8,13 +8,16 @@ import CroppedPhoto from '../src/components/CroppedPhoto';
 import * as pickers from '../src/utils/filePickers';
 import * as api from '../src/api/teacherStudentApi';
 import TeacherStudentFormScreen from '../src/screens/teacherStudents/TeacherStudentFormScreen';
+import { OutlinedField, SaveButton } from '../src/screens/teacherStudents/outlinedFormUi';
 
 jest.mock('../src/utils/theme', () => ({
   theme: new Proxy({}, { get: () => new Proxy({}, { get: () => '#000' }) }),
   onThemeChange: () => {},
 }));
 jest.mock('../src/components/VectorIcon', () => () => null);
+jest.mock('../src/components/Header', () => ({ HeaderIconButton: () => null }));
 jest.mock('../src/screens/more/docUi', () => ({ DocHeader: () => null }));
+jest.mock('../src/hooks/useLastLoaded', () => ({ useLastLoaded: () => [null, () => {}] }));
 jest.mock('../src/components/AppDialog', () => ({
   AppAlert: { alert: jest.fn() },
   AppDialog: () => null,
@@ -51,28 +54,43 @@ const sectionRow = (c: typeof A) => ({ id: c.section_id, name: c.section, code: 
 
 const navigation = { goBack: jest.fn(), navigate: jest.fn() };
 
+// Every form opened is closed after its test, so nothing it left waiting
+// (the close after a save) reaches the next one.
+const opened: Renderer[] = [];
+afterEach(() => {
+  opened.splice(0).forEach(r => act(() => r.unmount()));
+});
+
 const open = async (params: any, sections: (typeof A)[]) => {
   mocked.getStudentLookups.mockResolvedValue({ classes: [], sections: sections.map(sectionRow), routes: [] } as any);
   let r!: Renderer;
   await act(async () => {
     r = ReactTestRenderer.create(<TeacherStudentFormScreen navigation={navigation} route={{ params }} />);
   });
+  opened.push(r);
   return r;
 };
 
 const texts = (r: Renderer) => r.root.findAllByType(Text).map(t => String(t.props.children));
 const select = (r: Renderer, label: string) => r.root.findAllByType(Select).find(x => x.props.label === label);
-const type = (r: Renderer, placeholder: string, value: string) =>
-  act(() => r.root.findAllByType(TextInput).find(i => i.props.placeholder === placeholder)!.props.onChangeText(value));
+const field = (r: Renderer, label: string) => r.root.findAllByType(OutlinedField).find(x => x.props.label === label)!;
+const type = (r: Renderer, label: string, value: string) =>
+  act(() => field(r, label).findByType(TextInput).props.onChangeText(value));
+// The fields marked red, by name.
+const marked = (r: Renderer) =>
+  r.root.findAllByType(OutlinedField).filter(x => !!x.props.error).map(x => x.props.label);
 
 const fill = (r: Renderer) => {
-  type(r, 'Student name', 'Aarav Sharma');
-  type(r, 'email@example.com', 'aarav@example.com');
-  type(r, '10-digit', '9876543210');
-  type(r, 'DD/MM/YYYY', '12/04/2015');
-  type(r, 'Father’s name', 'Rakesh Sharma');
+  type(r, 'Full Name', 'Aarav Sharma');
+  type(r, 'Email', 'aarav@example.com');
+  type(r, 'Mobile', '9876543210');
+  type(r, 'Date of Birth', '12/04/2015');
+  type(r, 'Father’s Name', 'Rakesh Sharma');
   act(() => select(r, 'Gender')!.props.onChange('male'));
 };
+
+// Past the moment the green "added" stays on the button.
+const afterDone = () => act(() => new Promise<void>(res => setTimeout(res, 800)));
 
 const press = async (r: Renderer, label: string) => {
   const b = r.root
@@ -188,9 +206,16 @@ describe('TeacherStudentFormScreen — one student however often Add is pressed'
       b.props.onPress();
     });
     expect(mocked.createStudent).toHaveBeenCalledTimes(1);
+    // The button says it is adding while the answer is awaited.
+    expect(r.root.findByType(SaveButton).props.state).toBe('saving');
 
     await act(async () => answer({}));
+    // Added: green with a tick for a moment, then the form closes.
+    expect(r.root.findByType(SaveButton).props.state).toBe('done');
+    expect(navigation.goBack).not.toHaveBeenCalled();
+    await afterDone();
     expect(navigation.goBack).toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith('Student added', expect.any(String));
   });
 
   it('sends the same mark again when Add is pressed again after a failure', async () => {
@@ -200,6 +225,7 @@ describe('TeacherStudentFormScreen — one student however often Add is pressed'
 
     await press(r, 'Add student');
     expect(alert).toHaveBeenCalledWith('Not saved', expect.any(String));
+    expect(r.root.findByType(SaveButton).props.state).toBe('idle');
     await press(r, 'Add student');
 
     expect(mocked.createStudent).toHaveBeenCalledTimes(2);
@@ -219,6 +245,74 @@ describe('TeacherStudentFormScreen — one student however often Add is pressed'
 
     await press(r, 'Save changes');
     expect(mocked.updateStudent.mock.calls[0][1].client_ref).toBeUndefined();
+  });
+});
+
+describe('TeacherStudentFormScreen — what is wrong, one field at a time', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mocked.createStudent.mockResolvedValue({} as any);
+  });
+
+  it('names only the first empty field, and marks only that one', async () => {
+    const r = await open({ classes: [A] }, [A]);
+
+    await press(r, 'Add student');
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledWith('Full Name', expect.not.stringMatching(/email|mobile|father/i));
+    expect(marked(r)).toEqual(['Full Name']);
+    expect(mocked.createStudent).not.toHaveBeenCalled();
+
+    // Typed in, the red goes; the next press names the next one alone.
+    type(r, 'Full Name', 'Aarav Sharma');
+    expect(marked(r)).toEqual([]);
+    await press(r, 'Add student');
+    expect(alert).toHaveBeenLastCalledWith('Email', expect.any(String));
+    expect(marked(r)).toEqual(['Email']);
+  });
+
+  it('says what is wrong with a field written wrongly', async () => {
+    const r = await open({ classes: [A] }, [A]);
+    fill(r);
+    type(r, 'Email', 'aarav.example.com');
+
+    await press(r, 'Add student');
+    expect(alert).toHaveBeenCalledWith('Email', expect.stringContaining('not an email address'));
+    expect(marked(r)).toEqual(['Email']);
+
+    type(r, 'Email', 'aarav@example.com');
+    type(r, 'Mobile', '98765');
+    await press(r, 'Add student');
+    expect(alert).toHaveBeenLastCalledWith('Mobile', expect.stringContaining('10 digits'));
+
+    type(r, 'Mobile', '9876543210');
+    type(r, 'Pincode', '2260');
+    await press(r, 'Add student');
+    expect(alert).toHaveBeenLastCalledWith('Pincode', expect.stringContaining('6 digits'));
+    expect(mocked.createStudent).not.toHaveBeenCalled();
+  });
+
+  it('shows the server’s first refusal alone, in the order of the form', async () => {
+    mocked.createStudent.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: {
+          message: 'The pincode field must be 6 digits. The email field must be a valid email address.',
+          errors: {
+            pincode: ['The pincode field must be 6 digits.'],
+            email: ['The email field must be a valid email address.'],
+          },
+        },
+      },
+    });
+    const r = await open({ classes: [A] }, [A]);
+    fill(r);
+
+    await press(r, 'Add student');
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(alert).toHaveBeenCalledWith('Email', 'The email field must be a valid email address.');
+    expect(marked(r)).toEqual(['Email']);
+    expect(r.root.findByType(SaveButton).props.state).toBe('idle');
   });
 });
 

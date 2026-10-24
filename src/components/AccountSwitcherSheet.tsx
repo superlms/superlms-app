@@ -17,6 +17,7 @@ import { CommonActions, useNavigation } from '@react-navigation/native';
 import { initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import VectorIcon from './VectorIcon';
+import { AppDialog } from './AppDialog';
 import { useKeyboardHeight } from '../hooks/useKeyboardLift';
 import { theme, onThemeChange } from '../utils/theme';
 import {
@@ -471,38 +472,16 @@ const AccountSwitcherSheet = ({ visible, onClose }: Props) => {
       </View>
 
       {/* Remove confirmation, the same plain dialog as everywhere else */}
-      <Modal
-        transparent
-        statusBarTranslucent
+      <AppDialog
         visible={!!removeTarget}
-        animationType="fade"
+        title="Remove account?"
+        message={`${removeTarget?.name ?? 'This account'} will be signed out on this device. You can add the account again any time.`}
+        actions={[
+          { text: 'Cancel', style: 'cancel', onPress: () => setRemoveTarget(null) },
+          { text: 'Remove', style: 'destructive', onPress: doRemove },
+        ]}
         onRequestClose={() => setRemoveTarget(null)}
-      >
-        <View style={s.confirmOverlay}>
-          <View style={[s.statusStrip, { height: insets.top }]} />
-          <View style={s.confirmCard}>
-            <Text style={s.confirmTitle}>Remove account?</Text>
-            <Text style={s.confirmDesc}>
-              {removeTarget?.name} will be signed out on this device. You can add the account again
-              any time.
-            </Text>
-
-            <View style={s.confirmActions}>
-              <TouchableOpacity
-                style={[s.confirmBtn, s.confirmBtnGhost]}
-                activeOpacity={0.7}
-                onPress={() => setRemoveTarget(null)}
-              >
-                <Text style={s.confirmBtnGhostText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={[s.confirmBtn, s.confirmBtnDanger]} activeOpacity={0.85} onPress={doRemove}>
-                <Text style={s.confirmBtnDangerText}>Remove</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      />
     </Modal>
   );
 };
@@ -892,36 +871,6 @@ const __mk_s = () => StyleSheet.create({
 
   addIcon: { alignItems: 'center', justifyContent: 'center' },
   addText: { fontSize: 15, fontWeight: '600', color: theme.colors.primary },
-
-  // ─── Remove confirmation ──
-  confirmOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  confirmCard: {
-    width: '100%',
-    maxWidth: 380,
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    padding: 24,
-  },
-  confirmTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
-  confirmDesc: { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
-  confirmActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
-  confirmBtn: {
-    flex: 1,
-    height: 46,
-    borderRadius: theme.radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
-  confirmBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  confirmBtnDanger: { backgroundColor: theme.colors.danger },
-  confirmBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 
   // ─── Add form ──
   addContent: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 8 },

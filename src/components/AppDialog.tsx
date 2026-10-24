@@ -4,6 +4,8 @@ import {
   Alert,
   AlertButton,
   AlertOptions,
+  Animated,
+  Easing,
   Modal,
   Pressable,
   StyleSheet,
@@ -14,10 +16,12 @@ import {
 import { theme, onThemeChange } from '../utils/theme';
 
 /**
- * The app's popup: the card the delete confirmations use — a title, a line or
- * two of message, and the buttons along the bottom. Cancel is outlined, a
- * destructive action red, any other the accent colour. One button fills the
- * row, two share it, three or more stack with Cancel last.
+ * The app's popup, drawn as the "Update required" card is: a plain card in the
+ * middle of the screen, the title and a line or two of message centred, a
+ * full-width rule, then the buttons as words — a destructive one red, Cancel
+ * quieter, any other the accent colour. One button fills the foot, two share
+ * it with a thin line between, three or more stack (a line between each) with
+ * Cancel last. The card comes in with a small rise from 96%.
  *
  *   <AppDialog
  *     visible={open}
@@ -70,6 +74,26 @@ export const AppDialog = ({
     ? [...actions.filter(a => a.style !== 'cancel'), ...actions.filter(a => a.style === 'cancel')]
     : actions;
 
+  // A small rise as the card comes in, as the overlay fades.
+  const rise = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!visible) return;
+    rise.setValue(0);
+    Animated.timing(rise, {
+      toValue: 1,
+      duration: 180,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [visible, rise]);
+
+  const colorOf = (a: DialogAction) =>
+    a.style === 'destructive'
+      ? theme.colors.danger
+      : a.style === 'cancel'
+        ? theme.colors.textSecondary
+        : theme.colors.primary;
+
   return (
     <Modal
       transparent
@@ -82,41 +106,49 @@ export const AppDialog = ({
         {!!onBackdropPress && (
           <Pressable style={StyleSheet.absoluteFill} disabled={busy} onPress={onBackdropPress} />
         )}
-        <View style={s.card}>
-          {!!title && <Text style={s.title}>{title}</Text>}
-          {!!message && <Text style={[s.message, !title && s.messageAlone]}>{message}</Text>}
+        <Animated.View
+          style={[
+            s.card,
+            {
+              opacity: rise,
+              transform: [{ scale: rise.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }],
+            },
+          ]}
+        >
+          {(!!title || !!message) && (
+            <View style={s.body}>
+              {!!title && <Text style={s.title}>{title}</Text>}
+              {!!message && <Text style={[s.message, !title && s.messageAlone]}>{message}</Text>}
+            </View>
+          )}
 
+          <View style={s.rule} />
           <View style={[s.actions, stacked && s.actionsStacked]}>
             {ordered.map((a, i) => {
               const cancel = a.style === 'cancel';
               return (
-                <TouchableOpacity
-                  key={`${i}:${a.text}`}
-                  style={[
-                    s.btn,
-                    !stacked && s.btnInRow,
-                    cancel ? s.btnGhost : a.style === 'destructive' ? s.btnDanger : s.btnPrimary,
-                    a.loading && s.btnBusy,
-                  ]}
-                  activeOpacity={cancel ? 0.7 : 0.85}
-                  disabled={busy}
-                  onPress={a.onPress}
-                >
-                  {a.loading ? (
-                    <ActivityIndicator
-                      size="small"
-                      color={cancel ? theme.colors.textPrimary : theme.colors.white}
-                    />
-                  ) : (
-                    <Text style={cancel ? s.btnGhostText : s.btnText} numberOfLines={1}>
-                      {a.text}
-                    </Text>
-                  )}
-                </TouchableOpacity>
+                <React.Fragment key={`${i}:${a.text}`}>
+                  {i > 0 && <View style={stacked ? s.rule : s.ruleUpright} />}
+                  <TouchableOpacity
+                    style={[s.btn, !stacked && s.btnInRow, a.loading && s.btnBusy]}
+                    activeOpacity={0.6}
+                    disabled={busy}
+                    onPress={a.onPress}
+                    accessibilityRole="button"
+                  >
+                    {a.loading ? (
+                      <ActivityIndicator size="small" color={colorOf(a)} />
+                    ) : (
+                      <Text style={[s.btnText, cancel && s.btnTextCancel, { color: colorOf(a) }]} numberOfLines={1}>
+                        {a.text}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </React.Fragment>
               );
             })}
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -199,42 +231,44 @@ export const AppAlertHost = () => {
   );
 };
 
+// The "Update required" card's measures (components/PlayUpdateGate).
 const __mk_s = () => StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
   card: {
     width: '100%',
-    maxWidth: 420,
+    maxWidth: 320,
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.lg,
-    padding: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
-  title: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
-  message: { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
+  body: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 20 },
+  title: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary, textAlign: 'center' },
+  message: { marginTop: 8, fontSize: 14, lineHeight: 20, color: theme.colors.textSecondary, textAlign: 'center' },
   messageAlone: { marginTop: 0 },
 
-  // Buttons: side by side, or stacked
-  actions: { flexDirection: 'row', gap: 10, marginTop: 22 },
+  // The rule across the card, and the one between two buttons side by side
+  rule: { height: 1, backgroundColor: theme.colors.border },
+  ruleUpright: { width: 1, backgroundColor: theme.colors.border },
+
+  // Buttons: words, side by side or stacked
+  actions: { flexDirection: 'row' },
   actionsStacked: { flexDirection: 'column' },
-  btn: {
-    height: 46,
-    borderRadius: theme.radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
+  btn: { height: 52, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   btnInRow: { flex: 1 },
-  btnGhost: { borderWidth: 1, borderColor: theme.colors.border },
-  btnPrimary: { backgroundColor: theme.colors.primary },
-  btnDanger: { backgroundColor: theme.colors.danger },
   btnBusy: { opacity: 0.7 },
-  btnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  btnText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
+  btnText: { fontSize: 15, fontWeight: '600' },
+  btnTextCancel: { fontWeight: '500' },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

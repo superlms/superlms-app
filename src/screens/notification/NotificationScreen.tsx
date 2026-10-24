@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Modal,
   Pressable,
   SectionList,
   StyleSheet,
@@ -12,13 +11,12 @@ import { usePreventRemove } from '@react-navigation/native';
 import Header from '../../components/Header';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
+import { AppDialog } from '../../components/AppDialog';
 import { theme, onThemeChange } from '../../utils/theme';
 import { useNotifications, type NotificationItem } from '../../notifications';
 import { navigateToScreen } from '../../navigation/navigationRef';
 import { DocNoData } from '../more/docUi';
 import {
-  BODY,
-  INK,
   DayHeading,
   FilterPills,
   InboxRow,
@@ -224,43 +222,16 @@ const NotificationScreen = ({ navigation }: any) => {
       )}
 
       {/* Delete confirmation */}
-      <Modal
-        transparent
+      <AppDialog
         visible={confirmDelete}
-        animationType="fade"
+        title={`Delete ${selectedIds.length === 1 ? 'this notification' : `${selectedIds.length} notifications`}?`}
+        message="They will be removed from this device. This cannot be undone."
+        actions={[
+          { text: 'Cancel', style: 'cancel', onPress: () => setConfirmDelete(false) },
+          { text: 'Delete', style: 'destructive', onPress: deleteSelected },
+        ]}
         onRequestClose={() => setConfirmDelete(false)}
-      >
-        <View style={s.modalOverlay}>
-          <View style={s.modalCard}>
-            <Text style={s.modalTitle}>
-              Delete{' '}
-              {selectedIds.length === 1
-                ? 'this notification'
-                : `${selectedIds.length} notifications`}
-              ?
-            </Text>
-            <Text style={s.modalDesc}>
-              They will be removed from this device. This cannot be undone.
-            </Text>
-            <View style={s.modalActions}>
-              <TouchableOpacity
-                style={[s.modalBtn, s.modalBtnGhost]}
-                activeOpacity={0.7}
-                onPress={() => setConfirmDelete(false)}
-              >
-                <Text style={s.modalBtnGhostText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.modalBtn, s.modalBtnDanger]}
-                activeOpacity={0.85}
-                onPress={deleteSelected}
-              >
-                <Text style={s.modalBtnDangerText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      />
     </View>
   );
 };
@@ -274,34 +245,6 @@ const __mk_s = () => StyleSheet.create({
   headBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
 
   // Confirm modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    padding: 24,
-  },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: INK },
-  modalDesc: { marginTop: 8, fontSize: 14, color: BODY, lineHeight: 20 },
-  modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
-  modalBtn: {
-    flex: 1,
-    height: 46,
-    borderRadius: theme.radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
-  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: INK },
-  modalBtnDanger: { backgroundColor: theme.colors.danger },
-  modalBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

@@ -1,7 +1,5 @@
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,7 +23,7 @@ import {
   rowsFromObject,
   type IdCardFaceData,
 } from '../idCard/IdCardFaces';
-import { AppAlert } from '../../components/AppDialog';
+import { AppAlert, AppDialog } from '../../components/AppDialog';
 
 const TITLE = 'ID Card';
 
@@ -135,43 +133,16 @@ const AdminIdCardViewScreen = ({ navigation, route }: any) => {
       )}
 
       {/* Delete confirmation */}
-      <Modal
-        transparent
+      <AppDialog
         visible={confirmOpen}
-        animationType="fade"
+        title="Delete ID card?"
+        message={`Card ${row?.card_number ?? ''} will be removed. This cannot be undone.`}
+        actions={[
+          { text: 'Cancel', style: 'cancel', onPress: () => setConfirmOpen(false) },
+          { text: 'Delete', style: 'destructive', onPress: remove, loading: deleting },
+        ]}
         onRequestClose={() => setConfirmOpen(false)}
-      >
-        <View style={s.modalOverlay}>
-          <View style={s.modalCard}>
-            <Text style={s.modalTitle}>Delete ID card?</Text>
-            <Text style={s.modalDesc}>
-              Card {row?.card_number} will be removed. This cannot be undone.
-            </Text>
-            <View style={s.modalActions}>
-              <TouchableOpacity
-                style={[s.modalBtn, s.modalBtnGhost]}
-                activeOpacity={0.7}
-                disabled={deleting}
-                onPress={() => setConfirmOpen(false)}
-              >
-                <Text style={s.modalBtnGhostText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.modalBtn, s.modalBtnDanger, deleting && s.modalBtnBusy]}
-                activeOpacity={0.85}
-                disabled={deleting}
-                onPress={remove}
-              >
-                {deleting ? (
-                  <ActivityIndicator size="small" color={theme.colors.white} />
-                ) : (
-                  <Text style={s.modalBtnDangerText}>Delete</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      />
     </View>
   );
 };
@@ -192,36 +163,6 @@ const __mk_s = () => StyleSheet.create({
   deleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   deleteText: { fontSize: 14, fontWeight: '500', color: theme.colors.danger },
 
-  // Confirm modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    padding: 24,
-  },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
-  modalDesc: { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
-  modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
-  modalBtn: {
-    flex: 1,
-    height: 46,
-    borderRadius: theme.radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBtnBusy: { opacity: 0.7 },
-  modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
-  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  modalBtnDanger: { backgroundColor: theme.colors.danger },
-  modalBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

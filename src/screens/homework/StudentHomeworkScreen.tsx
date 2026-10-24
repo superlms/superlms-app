@@ -1,11 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
   ScrollView,
   StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -36,7 +32,7 @@ import {
   todayKey,
   useLastHomework,
 } from './homeworkUi';
-import { AppAlert } from '../../components/AppDialog';
+import { AppAlert, AppDialog } from '../../components/AppDialog';
 
 const TITLE = 'Homework';
 
@@ -228,41 +224,16 @@ const StudentHomeworkScreen = ({ navigation }: any) => {
       />
 
       {/* Marking complete */}
-      <Modal
-        transparent
+      <AppDialog
         visible={!!confirm}
-        animationType="fade"
-        onRequestClose={() => !saving && setConfirm(null)}
-      >
-        <View style={s.modalOverlay}>
-          <View style={s.modalCard}>
-            <Text style={s.modalTitle}>Mark this homework as complete?</Text>
-            <Text style={s.modalDesc}>“{quietCaps(confirm?.title)}” moves to Completed.</Text>
-            <View style={s.modalActions}>
-              <TouchableOpacity
-                style={[s.modalBtn, s.modalBtnGhost]}
-                activeOpacity={0.7}
-                disabled={saving}
-                onPress={() => setConfirm(null)}
-              >
-                <Text style={s.modalBtnGhostText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.modalBtn, s.modalBtnPrimary, saving && s.modalBtnBusy]}
-                activeOpacity={0.85}
-                disabled={saving}
-                onPress={markComplete}
-              >
-                {saving ? (
-                  <ActivityIndicator size="small" color={theme.colors.white} />
-                ) : (
-                  <Text style={s.modalBtnPrimaryText}>Mark complete</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        title="Mark this homework as complete?"
+        message={`“${quietCaps(confirm?.title)}” moves to Completed.`}
+        actions={[
+          { text: 'Cancel', style: 'cancel', onPress: () => setConfirm(null) },
+          { text: 'Mark complete', onPress: markComplete, loading: saving },
+        ]}
+        onRequestClose={() => setConfirm(null)}
+      />
     </View>
   );
 };
@@ -276,30 +247,6 @@ const __mk_s = () => StyleSheet.create({
   fullDivider: { height: 1, backgroundColor: theme.colors.border },
   list: { paddingHorizontal: 20, paddingBottom: 40 },
 
-  // Confirm
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    padding: 24,
-  },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
-  modalDesc: { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
-  modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
-  modalBtn: { flex: 1, height: 46, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center' },
-  modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
-  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  modalBtnPrimary: { backgroundColor: theme.colors.primary },
-  modalBtnBusy: { opacity: 0.7 },
-  modalBtnPrimaryText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

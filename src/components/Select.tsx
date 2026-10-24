@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -30,6 +31,8 @@ interface Props {
   notched?: boolean;
   /** A small star after a notched label: the form needs it. */
   required?: boolean;
+  /** What is wrong with the choice (notched forms): outlined red, said under it. */
+  error?: string | null;
 }
 
 // Labelled dropdown: a pressable box that opens a modal list. Replaces the chip
@@ -45,9 +48,11 @@ const Select = ({
   markChosen,
   notched,
   required,
+  error,
 }: Props) => {
   const [open, setOpen] = useState(false);
   const selected = options.find(o => o.value === value);
+  const wrong = notched && !!error;
 
   return (
     <View style={notched ? styles.notchedWrap : styles.wrap}>
@@ -58,6 +63,7 @@ const Select = ({
           (plain || notched) && styles.boxPlain,
           notched && styles.boxNotched,
           (markChosen && !!selected) || (notched && open) ? styles.boxChosen : null,
+          wrong && styles.boxError,
           disabled && styles.boxDisabled,
         ]}
         activeOpacity={0.7}
@@ -67,30 +73,38 @@ const Select = ({
         <Text style={[styles.value, notched && styles.valueNotched, !selected && styles.placeholder]} numberOfLines={1}>
           {selected ? selected.label : placeholder}
         </Text>
-        <VectorIcon iconSet="Ionicons" iconName="chevron-down" size={18} color={theme.colors.textMuted} />
+        <VectorIcon iconSet="Ionicons" iconName="chevron-down" size={notched ? 16 : 18} color={theme.colors.textMuted} />
       </TouchableOpacity>
       {!!label && notched && (
         <View style={styles.notchLabelWrap} pointerEvents="none">
-          <Text style={[styles.notchLabel, open && styles.notchLabelOpen]} numberOfLines={1}>
+          <Text style={[styles.notchLabel, open && styles.notchLabelOpen, wrong && styles.notchLabelError]} numberOfLines={1}>
             {label}
             {required && <Text style={styles.star}> *</Text>}
           </Text>
         </View>
       )}
+      {wrong && <Text style={styles.error}>{error}</Text>}
 
-      <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setOpen(false)}>
+      {/* The choices, on the app's centred card: the name, a line, then the rows */}
+      <Modal transparent visible={open} animationType="fade" statusBarTranslucent onRequestClose={() => setOpen(false)}>
+        <View style={styles.overlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
           <View style={styles.sheet}>
-            {!!label && <Text style={styles.sheetTitle}>{label}</Text>}
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Text style={styles.sheetTitle}>{label || placeholder}</Text>
+            <View style={styles.sheetRule} />
+            <ScrollView
+              style={styles.sheetList}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               {options.length === 0 && <Text style={styles.empty}>No options</Text>}
-              {options.map(o => {
+              {options.map((o, i) => {
                 const active = o.value === value;
                 return (
                   <TouchableOpacity
                     key={String(o.value)}
-                    style={styles.row}
-                    activeOpacity={0.7}
+                    style={[styles.row, i < options.length - 1 && styles.rowLine]}
+                    activeOpacity={0.6}
                     onPress={() => {
                       onChange(o.value);
                       setOpen(false);
@@ -104,8 +118,12 @@ const Select = ({
                 );
               })}
             </ScrollView>
+            <View style={styles.sheetRule} />
+            <TouchableOpacity style={styles.cancel} activeOpacity={0.6} onPress={() => setOpen(false)}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </View>
   );
@@ -119,10 +137,19 @@ const __mk_styles = () =>
     label: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary, marginBottom: 6 },
     // Notched: room above for the label that sits in the border, and the
     // outlined fields' height and padding.
-    notchedWrap: { marginTop: 18 },
-    boxNotched: { minHeight: 50, paddingHorizontal: 14, paddingVertical: 12 },
-    valueNotched: { fontSize: 15 },
-    notchLabelWrap: { position: 'absolute', top: -8, left: 10, right: 10, flexDirection: 'row' },
+    notchedWrap: { marginTop: 16 },
+    boxNotched: {
+      minHeight: 44,
+      paddingHorizontal: 13,
+      paddingVertical: 9,
+      borderRadius: 10,
+      borderWidth: StyleSheet.hairlineWidth * 2,
+    },
+    valueNotched: { fontSize: 14 },
+    boxError: { borderColor: theme.colors.danger },
+    notchLabelError: { color: theme.colors.danger },
+    error: { fontSize: 11, color: theme.colors.danger, marginTop: 4, marginLeft: 14 },
+    notchLabelWrap: { position: 'absolute', top: -8, left: 9, right: 9, flexDirection: 'row' },
     notchLabel: {
       flexShrink: 1,
       paddingHorizontal: 5,
@@ -150,21 +177,45 @@ const __mk_styles = () =>
     boxDisabled: { opacity: 0.5 },
     value: { flex: 1, fontSize: 14, color: theme.colors.textPrimary, marginRight: 8 },
     placeholder: { color: theme.colors.textMuted },
-    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-    sheet: { width: '100%', maxWidth: 420, maxHeight: '70%', backgroundColor: theme.colors.card, borderRadius: 16, padding: 16 },
-    sheetTitle: { fontSize: 15, fontWeight: '800', color: theme.colors.textPrimary, marginBottom: 8 },
+    // The choices: the app's centred popup card (as the update and lock cards).
+    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+    sheet: {
+      width: '100%',
+      maxWidth: 340,
+      maxHeight: '72%',
+      backgroundColor: theme.colors.card,
+      borderRadius: theme.radius.lg,
+      overflow: 'hidden',
+      shadowColor: '#000',
+      shadowOpacity: 0.12,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 8,
+    },
+    sheetTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: theme.colors.textPrimary,
+      textAlign: 'center',
+      paddingHorizontal: 24,
+      paddingTop: 20,
+      paddingBottom: 14,
+    },
+    sheetRule: { height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border },
+    sheetList: { flexGrow: 0 },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: 12,
-      paddingHorizontal: 6,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
+      minHeight: 48,
+      paddingHorizontal: 20,
     },
-    rowText: { fontSize: 14, color: theme.colors.textPrimary },
-    rowTextActive: { color: theme.colors.primary, fontWeight: '700' },
+    rowLine: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
+    rowText: { flex: 1, fontSize: 15, color: theme.colors.textPrimary, marginRight: 8 },
+    rowTextActive: { color: theme.colors.primary, fontWeight: '600' },
     empty: { fontSize: 13, color: theme.colors.textMuted, textAlign: 'center', paddingVertical: 20 },
+    cancel: { height: 50, alignItems: 'center', justifyContent: 'center' },
+    cancelText: { fontSize: 15, fontWeight: '500', color: theme.colors.textSecondary },
   });
 
 let styles = __mk_styles();

@@ -1,9 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  Animated,
-  Easing,
   Image,
-  Modal,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -13,7 +10,7 @@ import {
   createDrawerNavigator,
   DrawerContentScrollView,
 } from '@react-navigation/drawer';
-import { BlurView } from '@react-native-community/blur';
+import { AppDialog } from '../components/AppDialog';
 import { theme, onThemeChange } from '../utils/theme';
 import VectorIcon from '../components/VectorIcon';
 import { DrawerShadeBridge } from './drawerShade';
@@ -139,31 +136,7 @@ const AdminDrawerNavigator = () => {
           ];
     }, [permissions]);
 
-    // Log out dialog: the blurred backdrop and the card fade in together.
-    const logoutAnim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-      if (!logoutVisible) return;
-      logoutAnim.setValue(0);
-      const frame = requestAnimationFrame(() => {
-        Animated.timing(logoutAnim, {
-          toValue: 1,
-          duration: 200,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }).start();
-      });
-      return () => cancelAnimationFrame(frame);
-    }, [logoutVisible, logoutAnim]);
-
-    const closeLogout = () => {
-      Animated.timing(logoutAnim, {
-        toValue: 0,
-        duration: 150,
-        easing: Easing.in(Easing.quad),
-        useNativeDriver: true,
-      }).start(() => setLogoutVisible(false));
-    };
+    const closeLogout = () => setLogoutVisible(false);
 
     const doLogout = async () => {
       setLogoutVisible(false);
@@ -260,69 +233,17 @@ const AdminDrawerNavigator = () => {
           </View>
         </DrawerContentScrollView>
 
-        <Modal
-          transparent
+        <AppDialog
           visible={logoutVisible}
-          animationType="none"
-          statusBarTranslucent
+          title="Log out?"
+          message="Are you sure you want to log out of this account on this device?"
+          actions={[
+            { text: 'Cancel', style: 'cancel', onPress: closeLogout },
+            { text: 'Log out', style: 'destructive', onPress: doLogout },
+          ]}
           onRequestClose={closeLogout}
-        >
-          <View style={styles.modalOverlay}>
-            {/* Blur everything behind the popup, with a light tint for contrast */}
-            <Animated.View
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, { opacity: logoutAnim }]}
-            >
-              <BlurView
-                style={StyleSheet.absoluteFill}
-                blurType="light"
-                blurAmount={10}
-                reducedTransparencyFallbackColor="rgba(0,0,0,0.35)"
-              />
-              <View style={[StyleSheet.absoluteFill, styles.modalTint]} />
-            </Animated.View>
-
-            <Animated.View
-              style={[
-                styles.modalCard,
-                {
-                  opacity: logoutAnim,
-                  transform: [
-                    {
-                      scale: logoutAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0.96, 1],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <Text style={styles.modalTitle}>Log out?</Text>
-              <Text style={styles.modalDesc}>
-                Are you sure you want to log out of this account on this device?
-              </Text>
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalBtnGhost]}
-                  activeOpacity={0.7}
-                  onPress={closeLogout}
-                >
-                  <Text style={styles.modalBtnGhostText}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalBtnDanger]}
-                  activeOpacity={0.85}
-                  onPress={doLogout}
-                >
-                  <Text style={styles.modalBtnDangerText}>Log out</Text>
-                </TouchableOpacity>
-              </View>
-            </Animated.View>
-          </View>
-        </Modal>
+          onBackdropPress={closeLogout}
+        />
       </>
     );
   };
@@ -438,36 +359,6 @@ const __mk_styles = () => StyleSheet.create({
   // Log out
   logoutContainer: { paddingTop: 8 },
   logoutText: { fontSize: 15, fontWeight: '500', color: theme.colors.danger },
-
-  // Log out dialog
-  modalOverlay: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalTint: { backgroundColor: 'rgba(15, 23, 42, 0.2)' },
-  modalCard: {
-    width: '100%',
-    maxWidth: 300,
-    backgroundColor: theme.colors.card,
-    borderRadius: theme.radius.lg,
-    padding: 24,
-  },
-  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.textPrimary },
-  modalDesc: { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, lineHeight: 20 },
-  modalActions: { flexDirection: 'row', gap: 10, marginTop: 22 },
-  modalBtn: {
-    flex: 1,
-    height: 46,
-    borderRadius: theme.radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBtnGhost: { borderWidth: 1, borderColor: theme.colors.border },
-  modalBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  modalBtnDanger: { backgroundColor: theme.colors.danger },
-  modalBtnDangerText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

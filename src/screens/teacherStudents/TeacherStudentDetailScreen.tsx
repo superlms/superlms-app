@@ -1,15 +1,18 @@
-import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { HeaderIconButton } from '../../components/Header';
 import CroppedPhoto from '../../components/CroppedPhoto';
 import AppRefreshControl from '../../components/AppRefreshControl';
+import { Skeleton, SkeletonText } from '../../components/Skeleton';
+import { AppAlert } from '../../components/AppDialog';
 import { useRefresh } from '../../hooks/useRefresh';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { fromApiDate } from '../../utils/dayMonthYear';
 import { DocHeader, DocError } from '../more/docUi';
-import { StudentDetail, getStudent } from '../../api/teacherStudentApi';
+import { StudentDetail, StudentRow, getStudent } from '../../api/teacherStudentApi';
 import StudentPhotoModal from './StudentPhotoModal';
 
 /**
@@ -67,38 +70,110 @@ const rowsOf = (d: StudentDetail): [string, string][] =>
     ] as [string, string][]
   ).filter(([, v]) => v !== '');
 
-const InfoRow = ({ label, value, last }: { label: string; value: string; last?: boolean }) => (
-  <View style={[s.infoRow, !last && s.infoRowBorder]}>
-    <Text style={s.infoLabel}>{label}</Text>
-    <Text style={s.infoValue}>{value}</Text>
-  </View>
-);
+const InfoRow = ({
+  label,
+  value,
+  last,
+  skeleton,
+}: {
+  label: string;
+  value: string;
+  last?: boolean;
+  skeleton?: boolean;
+}) => {
+  const T = skeleton ? SkeletonText : Text;
+  return (
+    <View style={[s.infoRow, !last && s.infoRowBorder]}>
+      <View style={s.infoLabelCol}>
+        <T style={s.infoLabel}>{label}</T>
+      </View>
+      <View style={s.infoValueCol}>
+        <T style={s.infoValue}>{value}</T>
+      </View>
+    </View>
+  );
+};
+
+// A student never opened on this phone: an ordinary one, with what the list
+// already said about them (name, class, numbers) in its place.
+const sampleOf = (row?: Partial<StudentDetail> | null): StudentDetail => ({
+  id: 0,
+  user_id: 0,
+  full_name: 'Aarav Sharma',
+  email: 'aarav.sharma@example.com',
+  phone: '9876543210',
+  gender: 'male',
+  admission_no: '26SSIC160315',
+  roll_no: '12',
+  class: 'Class 6',
+  section: 'Section A',
+  dob: '2014-04-12',
+  father_name: 'Rajesh Sharma',
+  mother_name: 'Sunita Sharma',
+  date_of_admission: '2024-04-01',
+  local_address: 'House 12, Gandhi Nagar',
+  city: 'Lucknow',
+  state: 'Uttar Pradesh',
+  pincode: '226001',
+  is_active: true,
+  transportation_required: false,
+  ...(row ?? {}),
+});
+
+// What is kept of a student for the skeleton: the page's words, not the photo.
+const toKeep = (d: StudentDetail): StudentDetail => ({ ...d, image: d.image ? 'kept' : null, photo_circle: null });
 
 const TeacherStudentDetailScreen = ({ navigation, route }: any) => {
   const id: number = route?.params?.id;
   const classes = route?.params?.classes;
+  // The row of the list it was opened from, for a skeleton of this student.
+  const row: StudentRow | undefined = route?.params?.row;
   const [d, setD] = useState<StudentDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The photo shown large.
   const [viewing, setViewing] = useState(false);
+  const [last, rememberLast] = useLastLoaded<StudentDetail>(id ? `teacher-student:${id}` : null);
+  // The newest load wins: an older one that answers late is ignored.
+  const seq = useRef(0);
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setD(await getStudent(id));
-    } catch (e) {
-      setError(apiErr(e, 'Could not load this student.'));
-    }
-  }, [id]);
+  const load = useCallback(
+    async (tellFailure = false) => {
+      const mine = ++seq.current;
+      try {
+        const got = await getStudent(id);
+        if (mine !== seq.current) return;
+        setD(got);
+        setError(null);
+        rememberLast(toKeep(got));
+      } catch (e) {
+        if (mine !== seq.current) return;
+        const message = apiErr(e, 'Could not load this student.');
+        // The page already shown stays; only a first load shows the error.
+        setError(message);
+        if (tellFailure) AppAlert.alert('Could not refresh', message);
+      }
+    },
+    [id, rememberLast],
+  );
 
   // Back from Edit, the page shows what was saved.
   useFocusEffect(useCallback(() => { load(); }, [load]));
-  const { refreshing, onRefresh } = useRefresh(load);
+  const pull = useCallback(() => load(true), [load]);
+  const { refreshing, onRefresh } = useRefresh(pull);
 
-  const edit = () => navigation.navigate('TeacherStudentForm', { id, classes });
+  const edit = () => navigation.navigate('TeacherStudentForm', { id, classes, row: d ?? row });
 
   if (error && !d) {
-    return <DocError title="Student" message={error} onRetry={load} />;
+    return (
+      <DocError
+        title="Student"
+        message={error}
+        onRetry={() => {
+          setError(null);
+          load();
+        }}
+      />
+    );
   }
 
   const header = (
@@ -110,12 +185,32 @@ const TeacherStudentDetailScreen = ({ navigation, route }: any) => {
   );
 
   if (!d) {
+    // The page drawn as a skeleton from this student: what was shown the last
+    // time they were opened here, else what the list said about them.
+    const kept = last ?? sampleOf(row);
+    const keptRows = rowsOf(kept);
     return (
       <View style={s.root}>
         {header}
-        <View style={s.loader}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
+        <ScrollView scrollEnabled={false} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+          <View style={s.head}>
+            <Skeleton width={96} height={96} radius={48} />
+            <View style={s.skName}>
+              <SkeletonText style={s.name}>{val(kept.full_name) || 'Student'}</SkeletonText>
+            </View>
+            {!!val(kept.email) && (
+              <View style={s.skName}>
+                <SkeletonText style={s.email}>{val(kept.email)}</SkeletonText>
+              </View>
+            )}
+          </View>
+          <View style={s.divider} />
+          <View style={s.body}>
+            {keptRows.map(([label, value], i) => (
+              <InfoRow key={label} label={label} value={value} last={i === keptRows.length - 1} skeleton />
+            ))}
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -171,8 +266,9 @@ export default TeacherStudentDetailScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
-  loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingBottom: 40 },
+  // A centred line of the skeleton's head: the bar sits in the middle.
+  skName: { alignSelf: 'stretch', alignItems: 'center' },
 
   // Head — as the teacher's Profile
   head: { alignItems: 'center', paddingTop: 28, paddingBottom: 24, paddingHorizontal: 20 },
@@ -199,8 +295,10 @@ const __mk_s = () => StyleSheet.create({
   // Label in the left half, value from the middle — as the teacher's Profile.
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 14 },
   infoRowBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-  infoLabel: { width: '50%', paddingRight: 12, fontSize: 14, color: theme.colors.textSecondary },
-  infoValue: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
+  infoLabelCol: { width: '50%', paddingRight: 12 },
+  infoValueCol: { flex: 1 },
+  infoLabel: { fontSize: 14, color: theme.colors.textSecondary },
+  infoValue: { fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.
