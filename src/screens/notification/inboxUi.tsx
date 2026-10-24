@@ -1,11 +1,12 @@
 import React from 'react';
-import { ActivityIndicator, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
 import { Skeleton } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
 import { AppAlert } from '../../components/AppDialog';
 import { useDocumentDownload } from '../more/docUi';
+import { TransferIcon } from '../../components/TransferToast';
 
 // The shared look of the inbox-style lists — Notifications, Announcements and
 // calendar events: filter pills, day headings, rows led by a round icon, and
@@ -241,7 +242,8 @@ export const AttachmentChip = ({
         {k === 'pdf' ? 'PDF' : 'Image'}
       </Text>
       {busy ? (
-        <ActivityIndicator size="small" color={theme.colors.textMuted} style={s.chipSpinner} />
+        // Coming down: the arrow falls into its tray, again and again.
+        <TransferIcon kind="download" size={13} color={theme.colors.primary} />
       ) : (
         <VectorIcon
           iconSet="Feather"
@@ -459,7 +461,6 @@ const __mk_s = () => StyleSheet.create({
   },
   chipText: { flexShrink: 1, fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary },
   // Scaled to the 12px icon it stands in for, so the chip keeps its size.
-  chipSpinner: { width: 12, height: 12, transform: [{ scale: 0.6 }] },
 
   // Skeleton boxes, at the heights of the real lines
   skList: { paddingHorizontal: 20 },

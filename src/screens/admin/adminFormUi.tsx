@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
+import SavingButton, { type SaveState } from '../../components/SavingButton';
 import { AppAlert } from '../../components/AppDialog';
 import { theme, onThemeChange } from '../../utils/theme';
 import { MonthBar, MonthGrid } from '../calendar/calendarUi';
@@ -286,27 +287,37 @@ export const Hint = ({ children }: { children: React.ReactNode }) => <Text style
 export const FormError = ({ children }: { children?: string }) =>
   children ? <Text style={s.errorText}>{children}</Text> : null;
 
+// Busy, it says so the app's way (SavingButton): a light sweeping across with
+// what it is doing ("Posting assignment…"), filling up while a file goes up,
+// and — given `state` — green with a tick once saved.
 export const SubmitButton = ({
   label,
   busy,
   onPress,
+  state,
+  busyLabel,
+  doneLabel,
+  icon,
 }: {
   label: string;
   busy?: boolean;
   onPress: () => void;
+  state?: SaveState;
+  busyLabel?: string;
+  doneLabel?: string;
+  icon?: string;
 }) => (
-  <TouchableOpacity
-    activeOpacity={0.85}
+  <SavingButton
+    label={label}
+    busy={busy}
+    state={state}
+    busyLabel={busyLabel}
+    doneLabel={doneLabel}
+    icon={icon}
     onPress={onPress}
-    style={[s.submitBtn, busy && s.submitBtnBusy]}
-    disabled={busy}
-  >
-    {busy ? (
-      <ActivityIndicator color={theme.colors.white} size="small" />
-    ) : (
-      <Text style={s.submitText}>{label}</Text>
-    )}
-  </TouchableOpacity>
+    style={s.submitBtn}
+    textStyle={s.submitText}
+  />
 );
 
 /** A quiet text action at the foot of a detail page ("Delete event"). */
@@ -715,7 +726,6 @@ const __mk_s = () => StyleSheet.create({
     justifyContent: 'center',
     marginTop: 8,
   },
-  submitBtnBusy: { opacity: 0.7 },
   submitText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 
   // Quiet action

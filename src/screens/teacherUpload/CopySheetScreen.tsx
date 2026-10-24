@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
 import { Skeleton } from '../../components/Skeleton';
@@ -24,6 +24,7 @@ import {
 import type { Exam } from '../exam/examData';
 import { Words } from '../exam/examUi';
 import { marksClassLabel } from './MarksClassesScreen';
+import { UploadStatus } from '../../components/TransferToast';
 
 /**
  * Upload Copy, step three: one class's students for one exam and subject,
@@ -307,7 +308,12 @@ const CopySheetScreen = ({ navigation, route }: any) => {
     if (skeleton) return <Skeleton width={84} height={30} radius={theme.radius.full} />;
 
     if (busy === st.student_detail_id) {
-      return <ActivityIndicator size="small" color={theme.colors.primary} />;
+      // The copy going up: the rising arrow and how far along it is.
+      return (
+        <View style={[s.pill, s.pillUp]}>
+          <UploadStatus color={theme.colors.primary} label="Uploading" textStyle={s.pillUpText} />
+        </View>
+      );
     }
 
     if (!hasMarks) {

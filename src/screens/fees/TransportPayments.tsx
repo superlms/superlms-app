@@ -14,6 +14,7 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { downloadPdf } from '../../api/pdfDownload';
 import { transportReceiptUrl, type TransportPayment } from '../../api/transportApi';
 import { inr } from './feesUi';
+import { TransferIcon } from '../../components/TransferToast';
 
 // The green of a settled payment — its tick, and the "Paid" chip — and the
 // soft red behind money still owed.
@@ -134,7 +135,12 @@ export const CardFooter = ({
 }) => (
   <TouchableOpacity style={s.footer} onPress={onPress} disabled={disabled || busy} activeOpacity={0.6}>
     {busy ? (
-      <ActivityIndicator size="small" color={theme.colors.primary} />
+      // A file coming down: the arrow falls into its tray, again and again.
+      icon.startsWith('download') ? (
+        <TransferIcon kind="download" size={17} color={theme.colors.primary} />
+      ) : (
+        <ActivityIndicator size="small" color={theme.colors.primary} />
+      )
     ) : (
       <VectorIcon iconSet="Ionicons" iconName={icon} size={17} color={theme.colors.primary} />
     )}

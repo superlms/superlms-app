@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import VectorIcon from './VectorIcon';
 import CroppedPhoto from './CroppedPhoto';
 import type { CropRect } from './PhotoCropper';
+import { UploadStatus } from './TransferToast';
 
 /**
  * Profile on a photo — the web panel's Profile, on the phone: the round circle
@@ -226,7 +227,7 @@ export const PhotoCircleView = ({
           <Text style={[s.cancel, busy && s.off]}>Cancel</Text>
         </TouchableOpacity>
         {busy ? (
-          <ActivityIndicator color="#fff" />
+          <UploadStatus color="#fff" label="Saving" />
         ) : (
           <TouchableOpacity onPress={() => current && onDone(current)} disabled={!current} hitSlop={10} activeOpacity={0.6}>
             <Text style={[s.done, !current && s.off]}>{doneLabel}</Text>

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   Platform,
   StyleSheet,
@@ -16,6 +15,7 @@ import Header from '../../components/Header';
 import { Skeleton, SkeletonIcon, SkeletonText } from '../../components/Skeleton';
 import VectorIcon from '../../components/VectorIcon';
 import { theme, onThemeChange } from '../../utils/theme';
+import { TransferIcon } from '../../components/TransferToast';
 
 /**
  * Shared building blocks for the More info screens (About App, School Info,
@@ -141,7 +141,7 @@ export const DocRow = ({
   sub?: string;
   trailingIcon?: string;
   trailingIconSet?: IconSet;
-  /** A spinner in place of the trailing icon, e.g. while a download runs. */
+  /** Busy in place of the trailing icon: the falling arrow while a download runs. */
   trailingBusy?: boolean;
   onPress?: () => void;
   isLast?: boolean;
@@ -161,7 +161,7 @@ export const DocRow = ({
         {!!sub && <Text style={s.rowSub}>{sub}</Text>}
       </View>
       {trailingBusy ? (
-        <ActivityIndicator size="small" color={theme.colors.textMuted} />
+        <TransferIcon kind="download" size={17} color={theme.colors.primary} />
       ) : (
         !!trailingIcon && (
           <VectorIcon

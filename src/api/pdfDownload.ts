@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ReactNativeBlobUtil from 'react-native-blob-util';
+import { TransferHandle, startTransfer } from '../utils/transfers';
 
 /**
  * Sanctum bearer header for token-protected PDF endpoints (admit card / report
@@ -52,13 +53,33 @@ export const downloadFile = async (
   fileName: string,
   headers: Record<string, string> = {},
 ): Promise<string> => {
+  // Shown coming down, as it comes (TransferToast), and done once it is saved.
+  const shown = startTransfer('download', fileName);
+  try {
+    const path = await fetchAndSurface(url, fileName, headers, shown);
+    shown.done();
+    return path;
+  } catch (e) {
+    shown.fail();
+    throw e;
+  }
+};
+
+const fetchAndSurface = async (
+  url: string,
+  fileName: string,
+  headers: Record<string, string>,
+  shown: TransferHandle,
+): Promise<string> => {
   const { config, fs, android, ios, MediaCollection } = ReactNativeBlobUtil;
   const ext = fileName.includes('.') ? fileName.split('.').pop()!.toLowerCase() : '';
   const mimeType = MIME[ext] ?? 'application/octet-stream';
 
   // App-private dir is always writable (no scoped-storage issues).
   const localPath = `${fs.dirs.DocumentDir}/${fileName}`;
-  const res = await config({ path: localPath, fileCache: true }).fetch('GET', url, headers);
+  const task = config({ path: localPath, fileCache: true }).fetch('GET', url, headers);
+  task.progress({ interval: 120 }, (received, total) => shown.update(Number(received), Number(total)));
+  const res = await task;
   const status = res.info().status;
   if (status >= 400) throw new Error(`Download failed (HTTP ${status})`);
   const path = res.path();
@@ -109,8 +130,21 @@ export const downloadPdf = async (url: string, fileName: string): Promise<string
  * is prepended so Excel reads UTF-8 correctly. Returns the local file path.
  */
 export const saveCsvFile = async (fileName: string, csv: string): Promise<string> => {
-  const { fs, android, ios, MediaCollection } = ReactNativeBlobUtil;
   const safeName = fileName.endsWith('.csv') ? fileName : `${fileName}.csv`;
+  // Written here, not fetched: the toast shows it saved.
+  const shown = startTransfer('download', safeName);
+  try {
+    const path = await writeCsv(safeName, csv);
+    shown.done();
+    return path;
+  } catch (e) {
+    shown.fail();
+    throw e;
+  }
+};
+
+const writeCsv = async (safeName: string, csv: string): Promise<string> => {
+  const { fs, android, ios, MediaCollection } = ReactNativeBlobUtil;
   const localPath = `${fs.dirs.DocumentDir}/${safeName}`;
 
   await fs.writeFile(localPath, '﻿' + csv, 'utf8');

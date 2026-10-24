@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -30,6 +29,7 @@ import {
 import type { Exam } from '../exam/examData';
 import { Words } from '../exam/examUi';
 import { marksClassLabel } from './MarksClassesScreen';
+import SavingButton, { afterTick, saveStateOf, useSavedFlash } from '../../components/SavingButton';
 
 /**
  * Upload Marks, step three: one class's students for one exam and subject.
@@ -197,6 +197,8 @@ const MarksSheetScreen = ({ navigation, route }: any) => {
   const [error, setError] = useState<string | null>(null);
   const [marks, setMarks] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
+  // Green with a tick for a moment once saved.
+  const [saved, flashSaved] = useSavedFlash();
   const [last, rememberLast] = useLastLoaded<MarksSheet>(
     `marks-sheet:${key.exam_id}:${key.standard_id}:${key.section_id}:${key.subject_id}`,
   );
@@ -289,13 +291,14 @@ const MarksSheetScreen = ({ navigation, route }: any) => {
       );
       dirty.current = false;
       rememberLast(next);
-      if (edit) {
+      // Green with a tick for a moment, then on.
+      flashSaved();
+      if (!edit) fill(next);
+      afterTick(() => {
         // Back to the saved list, which reloads on focus.
-        navigation.goBack();
-      } else {
-        fill(next);
-      }
-      AppAlert.alert('Marks saved', message);
+        if (edit) navigation.goBack();
+        AppAlert.alert('Marks saved', message);
+      });
     } catch (e: any) {
       console.log('[saveMarksSheet] Error:', e?.response?.status, e?.message);
       AppAlert.alert('Couldn’t save marks', marksErrorMessage(e));
@@ -498,18 +501,15 @@ const MarksSheetScreen = ({ navigation, route }: any) => {
           {skeleton ? (
             <Skeleton width="100%" height={48} radius={theme.radius.md} />
           ) : (
-            <TouchableOpacity
-              style={[s.saveBtn, (saving || entered === 0) && s.saveOff]}
-              activeOpacity={0.85}
-              disabled={saving}
+            <SavingButton
+              state={saveStateOf(saving, saved)}
+              label="Save Marks"
+              busyLabel="Saving marks"
+              doneLabel="Marks saved"
               onPress={save}
-            >
-              {saving ? (
-                <ActivityIndicator color={theme.colors.white} />
-              ) : (
-                <Text style={s.saveText}>Save Marks</Text>
-              )}
-            </TouchableOpacity>
+              style={[s.saveBtn, !saving && !saved && entered === 0 && s.saveOff]}
+              textStyle={s.saveText}
+            />
           )}
         </View>
       </ScrollView>

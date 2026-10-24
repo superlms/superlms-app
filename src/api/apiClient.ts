@@ -6,6 +6,7 @@ import axios, {
 } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import constant from '../utils/constant';
+import { TransferHandle, filesIn, startTransfer } from '../utils/transfers';
 
 
 const apiClient: AxiosInstance = axios.create({
@@ -26,6 +27,37 @@ apiClient.interceptors.request.use(
   (error: AxiosError) => Promise.reject(error),
 );
 
+// ── Uploads, as they go ─────────────────────────────────────────────────────
+// A request that carries a file reports how much of it has gone up, so the
+// saving button (or the toast) can show it. `uploadLabel` names it; else the
+// file's own name. `trackUpload: false` keeps one quiet.
+type TrackedConfig = InternalAxiosRequestConfig & { __upload?: TransferHandle };
+
+apiClient.interceptors.request.use((config: TrackedConfig) => {
+  if (config.trackUpload === false || config.__upload) return config;
+  const files = filesIn(config.data);
+  if (!files) return config;
+  const handle = startTransfer('upload', config.uploadLabel || files);
+  config.__upload = handle;
+  const theirs = config.onUploadProgress;
+  config.onUploadProgress = e => {
+    handle.update(e.loaded, e.total);
+    theirs?.(e);
+  };
+  return config;
+});
+
+apiClient.interceptors.response.use(
+  (response: AxiosResponse) => {
+    (response.config as TrackedConfig).__upload?.done();
+    return response;
+  },
+  (error: AxiosError) => {
+    (error.config as TrackedConfig | undefined)?.__upload?.fail();
+    return Promise.reject(error);
+  },
+);
+
 // ── Asking again when the server stumbles ───────────────────────────────────
 // A read that fails for a moment — the server busy or restarting (500, 502,
 // 503, 504), too many requests (429), the network dropping or a timeout — is
@@ -43,6 +75,10 @@ declare module 'axios' {
   interface AxiosRequestConfig {
     /** false: a failed read is not asked again. */
     retry?: boolean;
+    /** false: a file going up is not shown going up. */
+    trackUpload?: boolean;
+    /** What the upload is called while it goes ("Homework photo"). */
+    uploadLabel?: string;
   }
 }
 

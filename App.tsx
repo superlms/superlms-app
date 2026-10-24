@@ -20,6 +20,7 @@ import { checkForOTAUpdate } from './src/utils/otaUpdate';
 import { startPlayUpdateChecks } from './src/utils/playUpdate';
 import PlayUpdateGate from './src/components/PlayUpdateGate';
 import { AppAlertHost } from './src/components/AppDialog';
+import TransferToast from './src/components/TransferToast';
 import { SystemBarShade } from './src/navigation/drawerShade';
 
 // Routes where the biometric prompt must NOT fire — splash, onboarding and
@@ -113,6 +114,8 @@ const App = () => {
       <SafeAreaProvider>
         <ThemeProvider>
           <AppInner />
+          {/* Files going up and coming down, as they go */}
+          <TransferToast />
           {/* Draws every AppAlert.alert() popup */}
           <AppAlertHost />
           {/* Holds the app until a newer Play Store build is installed */}

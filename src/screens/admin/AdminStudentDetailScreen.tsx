@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -11,6 +11,8 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import { HeaderIconButton } from '../../components/Header';
+import { Skeleton, SkeletonText } from '../../components/Skeleton';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr, pickImage, takePhoto } from '../../utils/filePickers';
 import { DocHeader } from '../more/docUi';
@@ -22,6 +24,8 @@ import {
   setStudentPhoto,
 } from '../../api/adminStudentApi';
 import { AppAlert, AppDialog } from '../../components/AppDialog';
+import { keepStudentDetail, sampleStudentDetail } from './adminStudentsUi';
+import { UploadStatus } from '../../components/TransferToast';
 
 /**
  * Student Detail — one student, as the app shows a person: the photo, the name
@@ -30,6 +34,11 @@ import { AppAlert, AppDialog } from '../../components/AppDialog';
  * gallery) or removed from here, on its own. Edit and Delete are in the
  * header: Edit opens the student's form, and saved, it comes back here; Delete
  * takes the student and their login away, and asks first.
+ *
+ * While the student loads, the page is drawn as a skeleton of them — what it
+ * showed the last time they were opened on this phone, else what their row in
+ * the list said: the photo's circle, the name and class, and every line the
+ * page will have, label and value, as bars as long as those words.
  */
 
 interface Line {
@@ -38,22 +47,87 @@ interface Line {
 }
 
 // A heading and its lines — the ones the school has nothing for are left out,
-// and the last line keeps no divider under it.
-const Block = ({ title, lines }: { title: string; lines: Line[] }) => {
+// and the last line keeps no divider under it. As a skeleton, bars as long as
+// the words.
+const Block = ({ title, lines, skeleton }: { title: string; lines: Line[]; skeleton?: boolean }) => {
   const shown = lines.filter(l => !!l.value);
   if (shown.length === 0) return null;
+  const T = skeleton ? SkeletonText : Text;
   return (
     <View>
-      <Text style={s.blockTitle}>{title.toUpperCase()}</Text>
+      <View style={s.blockTitleWrap}>
+        <T style={s.blockTitle}>{title.toUpperCase()}</T>
+      </View>
       {shown.map((l, i) => (
         <View key={l.label} style={[s.line, i < shown.length - 1 && s.lineDivider]}>
-          <Text style={s.lineLabel}>{l.label}</Text>
-          <Text style={s.lineValue}>{l.value}</Text>
+          <View style={s.lineLabelCol}>
+            <T style={s.lineLabel}>{l.label}</T>
+          </View>
+          <View style={s.lineValueCol}>
+            <T style={s.lineValue}>{l.value}</T>
+          </View>
         </View>
       ))}
     </View>
   );
 };
+
+const cap = (v?: string | null) => (v ? v.charAt(0).toUpperCase() + v.slice(1) : null);
+
+// The page's blocks, from a student — the real one, or one kept for the skeleton.
+const Blocks = ({ d, skeleton }: { d: StudentDetail; skeleton?: boolean }) => (
+  <>
+    <Block
+      skeleton={skeleton}
+      title="Academic"
+      lines={[
+        { label: 'Admission No', value: d.admission_no },
+        { label: 'Roll No', value: d.roll_no },
+        { label: 'Class', value: d.class },
+        { label: 'Section', value: d.section },
+        { label: 'Board', value: d.board },
+        { label: 'Date of Admission', value: d.date_of_admission },
+        { label: 'Registration No', value: d.registration_number },
+        { label: 'Apaar ID', value: d.appar_id },
+      ]}
+    />
+
+    <Block
+      skeleton={skeleton}
+      title="Personal"
+      lines={[
+        { label: 'Email', value: d.email },
+        { label: 'Phone', value: d.phone },
+        { label: 'Gender', value: cap(d.gender) },
+        { label: 'Date of Birth', value: d.dob },
+        { label: 'Religion', value: d.religion },
+        { label: 'Aadhaar No', value: d.aadhar_no },
+        { label: 'Father’s Name', value: d.father_name },
+        { label: 'Mother’s Name', value: d.mother_name },
+      ]}
+    />
+
+    <Block
+      skeleton={skeleton}
+      title="Address"
+      lines={[
+        { label: 'Local Address', value: d.local_address },
+        { label: 'Permanent Address', value: d.permanent_address },
+        { label: 'City', value: d.city },
+        { label: 'State', value: d.state },
+        { label: 'Pincode', value: d.pincode },
+      ]}
+    />
+
+    {d.transportation_required && (
+      <Block skeleton={skeleton} title="Transport" lines={[{ label: 'Route', value: d.route_name ?? '—' }]} />
+    )}
+  </>
+);
+
+// "Class 6 · A · Roll 06012"
+const subOf = (d: StudentDetail) =>
+  [[d.class, d.section].filter(Boolean).join(' · '), d.roll_no ? `Roll ${d.roll_no}` : null].filter(Boolean).join(' · ') || '—';
 
 // A profile picture needs no more than this on its longest side — it keeps the
 // upload well under the server's 2 MB.
@@ -61,23 +135,32 @@ const PHOTO_SIDE = 1024;
 
 const AdminStudentDetailScreen = ({ navigation, route }: any) => {
   const id: number = route?.params?.id;
+  // The row of the list it was opened from, for a skeleton of this student.
+  const row: Partial<StudentDetail> | undefined = route?.params?.row;
   const [d, setD] = useState<StudentDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [last, rememberLast] = useLastLoaded<StudentDetail>(id ? `admin-student:${id}` : null);
+  // The newest load wins: an older one that answers late is ignored.
+  const seq = useRef(0);
   const [deleting, setDeleting] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [asking, setAsking] = useState(false);
 
   const load = useCallback(async () => {
+    const mine = ++seq.current;
     try {
       const res = await getStudent(id);
+      if (mine !== seq.current) return;
       setD(res);
+      rememberLast(keepStudentDetail(res));
     } catch (e) {
+      if (mine !== seq.current) return;
       AppAlert.alert('Error', apiErr(e, 'Could not load student.'));
       navigation.goBack();
     } finally {
-      setLoading(false);
+      if (mine === seq.current) setLoading(false);
     }
-  }, [id, navigation]);
+  }, [id, navigation, rememberLast]);
 
   // Back from Edit, the page shows what was saved.
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -154,7 +237,7 @@ const AdminStudentDetailScreen = ({ navigation, route }: any) => {
         rightSlot={
           d ? (
             <View style={s.headActions}>
-              <HeaderIconButton icon="create-outline" onPress={() => navigation.navigate('AdminStudentForm', { id })} />
+              <HeaderIconButton icon="create-outline" onPress={() => navigation.navigate('AdminStudentForm', { id, row: d })} />
               {deleting ? (
                 <ActivityIndicator style={s.headBusy} color={theme.colors.primary} />
               ) : (
@@ -165,8 +248,8 @@ const AdminStudentDetailScreen = ({ navigation, route }: any) => {
         }
       />
 
-      {loading ? (
-        <View style={s.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>
+      {loading && !d ? (
+        <StudentSkeleton d={last ?? sampleStudentDetail(row)} />
       ) : !d ? null : (
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
           {/* Who they are */}
@@ -180,11 +263,7 @@ const AdminStudentDetailScreen = ({ navigation, route }: any) => {
                     <Text style={s.initial}>{(d.full_name || '?').charAt(0).toUpperCase()}</Text>
                   </View>
                 )}
-                {photoBusy && (
-                  <View style={[s.photo, s.photoBusy]}>
-                    <ActivityIndicator color={theme.colors.white} />
-                  </View>
-                )}
+                {photoBusy && <UploadStatus compact color={theme.colors.white} style={[s.photo, s.photoBusy]} />}
               </TouchableOpacity>
               <TouchableOpacity style={s.camera} onPress={() => setAsking(true)} disabled={photoBusy} hitSlop={8} accessibilityLabel="Change photo">
                 <VectorIcon iconSet="Ionicons" iconName="camera" size={15} color={theme.colors.white} />
@@ -206,56 +285,11 @@ const AdminStudentDetailScreen = ({ navigation, route }: any) => {
             </View>
 
             <Text style={s.name}>{d.full_name}</Text>
-            <Text style={s.sub}>
-              {[[d.class, d.section].filter(Boolean).join(' · '), d.roll_no ? `Roll ${d.roll_no}` : null]
-                .filter(Boolean)
-                .join(' · ') || '—'}
-            </Text>
+            <Text style={s.sub}>{subOf(d)}</Text>
             {!d.is_active && <Text style={s.inactive}>Signed out of the app</Text>}
           </View>
 
-          <Block
-            title="Academic"
-            lines={[
-              { label: 'Admission No', value: d.admission_no },
-              { label: 'Roll No', value: d.roll_no },
-              { label: 'Class', value: d.class },
-              { label: 'Section', value: d.section },
-              { label: 'Board', value: d.board },
-              { label: 'Date of Admission', value: d.date_of_admission },
-              { label: 'Registration No', value: d.registration_number },
-              { label: 'Apaar ID', value: d.appar_id },
-            ]}
-          />
-
-          <Block
-            title="Personal"
-            lines={[
-              { label: 'Email', value: d.email },
-              { label: 'Phone', value: d.phone },
-              { label: 'Gender', value: d.gender ? d.gender.charAt(0).toUpperCase() + d.gender.slice(1) : null },
-              { label: 'Date of Birth', value: d.dob },
-              { label: 'Religion', value: d.religion },
-              { label: 'Aadhaar No', value: d.aadhar_no },
-              { label: 'Father’s Name', value: d.father_name },
-              { label: 'Mother’s Name', value: d.mother_name },
-            ]}
-          />
-
-          <Block
-            title="Address"
-            lines={[
-              { label: 'Local Address', value: d.local_address },
-              { label: 'Permanent Address', value: d.permanent_address },
-              { label: 'City', value: d.city },
-              { label: 'State', value: d.state },
-              { label: 'Pincode', value: d.pincode },
-            ]}
-          />
-
-          {d.transportation_required && (
-            <Block title="Transport" lines={[{ label: 'Route', value: d.route_name ?? '—' }]} />
-          )}
+          <Blocks d={d} />
 
           <View style={s.tail} />
         </ScrollView>
@@ -277,11 +311,30 @@ const AdminStudentDetailScreen = ({ navigation, route }: any) => {
   );
 };
 
+// ── The page while the student loads, drawn from what is known of them ─────
+const StudentSkeleton = ({ d }: { d: StudentDetail }) => (
+  <ScrollView contentContainerStyle={s.scroll} scrollEnabled={false} showsVerticalScrollIndicator={false}>
+    <View style={s.hero}>
+      <Skeleton width={96} height={96} radius={48} />
+      <View style={s.photoLinks}>
+        <Skeleton width={84} height={11} radius={5} />
+      </View>
+      <View style={s.skCenter}>
+        <SkeletonText style={s.name}>{d.full_name || 'Student'}</SkeletonText>
+      </View>
+      <View style={s.skCenter}>
+        <SkeletonText style={s.sub}>{subOf(d)}</SkeletonText>
+      </View>
+    </View>
+    <Blocks d={d} skeleton />
+    <View style={s.tail} />
+  </ScrollView>
+);
+
 export default AdminStudentDetailScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
-  loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 20, paddingTop: 8 },
   tail: { height: 48 },
   headActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -315,11 +368,15 @@ const __mk_s = () => StyleSheet.create({
   inactive: { fontSize: 12, color: theme.colors.textMuted, marginTop: 6 },
 
   // Blocks
-  blockTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 1, color: theme.colors.textMuted, marginTop: 24, marginBottom: 2 },
+  blockTitleWrap: { marginTop: 24, marginBottom: 2, alignSelf: 'flex-start' },
+  blockTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 1, color: theme.colors.textMuted },
   line: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, paddingVertical: 12 },
   lineDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  lineLabel: { fontSize: 13, color: theme.colors.textSecondary, flexShrink: 0 },
-  lineValue: { fontSize: 14, color: theme.colors.textPrimary, flex: 1, textAlign: 'right' },
+  lineLabelCol: { flexShrink: 0 },
+  lineLabel: { fontSize: 13, color: theme.colors.textSecondary },
+  lineValueCol: { flex: 1, alignItems: 'flex-end' },
+  lineValue: { fontSize: 14, color: theme.colors.textPrimary, textAlign: 'right' },
+  skCenter: { alignItems: 'center' },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

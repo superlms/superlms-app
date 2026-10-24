@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   ScrollView,
   StyleSheet,
@@ -20,6 +19,7 @@ import { fromApiDate } from '../../utils/dayMonthYear';
 import { DocHeader, DocError } from '../more/docUi';
 import ProfileSkeleton from './ProfileSkeleton';
 import { AppAlert } from '../../components/AppDialog';
+import { UploadStatus } from '../../components/TransferToast';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface TeacherProfile {
@@ -204,9 +204,7 @@ const TeacherProfileScreen = () => {
               </View>
             )}
             {uploading ? (
-              <View style={[s.avatar, s.avatarBusy]}>
-                <ActivityIndicator color={theme.colors.white} />
-              </View>
+              <UploadStatus compact color={theme.colors.white} style={[s.avatar, s.avatarBusy]} />
             ) : (
               <View style={s.avatarBadge}>
                 <VectorIcon iconSet="Ionicons" iconName="camera" size={15} color={theme.colors.white} />

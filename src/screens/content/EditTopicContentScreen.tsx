@@ -1,6 +1,5 @@
 import React, { useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -26,6 +25,7 @@ import {
 } from '../../api/contentApi';
 import { hasMaterial } from './contentUi';
 import { AppAlert } from '../../components/AppDialog';
+import SavingButton, { afterTick, saveStateOf, useSavedFlash } from '../../components/SavingButton';
 
 const TITLE = 'Topic Content';
 
@@ -56,6 +56,8 @@ const EditTopicContentScreen = ({ navigation, route }: any) => {
   const [pdf, setPdf] = useState<ContentFile | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(topic?.pdfUrl ?? null);
   const [saving, setSaving] = useState(false);
+  // Green with a tick for a moment once saved.
+  const [savedNow, flashSaved] = useSavedFlash();
   const [focused, setFocused] = useState<Field | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const notesRef = useRef<TextInput>(null);
@@ -116,14 +118,18 @@ const EditTopicContentScreen = ({ navigation, route }: any) => {
         removePdf: !hasPdf && !!topic.pdfUrl,
       });
       const params = { topic: saved, chapterName: route.params?.chapterName, subjectName, canEdit: true };
-      if (hasMaterial(saved)) {
-        // Back to the topic's page, now showing what was saved.
-        if (fromView) navigation.popTo('ViewContent', params);
-        else navigation.replace('ViewContent', params);
-      } else {
-        // Nothing left to read: back to the topics.
-        navigation.pop(fromView ? 2 : 1);
-      }
+      // The tick has a moment on the button, then the page moves on.
+      flashSaved();
+      afterTick(() => {
+        if (hasMaterial(saved)) {
+          // Back to the topic's page, now showing what was saved.
+          if (fromView) navigation.popTo('ViewContent', params);
+          else navigation.replace('ViewContent', params);
+        } else {
+          // Nothing left to read: back to the topics.
+          navigation.pop(fromView ? 2 : 1);
+        }
+      });
     } catch (e: any) {
       AppAlert.alert('Error', contentErrorMessage(e));
     } finally {
@@ -233,18 +239,15 @@ const EditTopicContentScreen = ({ navigation, route }: any) => {
           </Text>
 
           {/* Save */}
-          <TouchableOpacity
-            activeOpacity={0.85}
+          <SavingButton
+            state={saveStateOf(saving, savedNow)}
+            label="Save Content"
+            busyLabel="Saving content"
+            doneLabel="Content saved"
             onPress={save}
-            style={[s.submitBtn, saving && s.submitBtnBusy]}
-            disabled={saving}
-          >
-            {saving ? (
-              <ActivityIndicator color={theme.colors.white} size="small" />
-            ) : (
-              <Text style={s.submitText}>Save Content</Text>
-            )}
-          </TouchableOpacity>
+            style={s.submitBtn}
+            textStyle={s.submitText}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
 

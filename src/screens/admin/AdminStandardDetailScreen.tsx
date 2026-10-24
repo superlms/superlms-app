@@ -3,6 +3,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
 import { HeaderIconButton } from '../../components/Header';
+import { Skeleton, SkeletonText } from '../../components/Skeleton';
 import { AppAlert } from '../../components/AppDialog';
 import { useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
@@ -103,10 +104,31 @@ const AdminStandardDetailScreen = ({ navigation, route }: any) => {
   const drill = (d: object) => navigation.popTo('AdminStandardHome', { drill: d });
 
   if (!item) {
+    // Drawn as the page will be: the head, then its lines as bars.
+    const labels =
+      type === 'class'
+        ? ['Code', 'Board', 'Display order', 'Status', 'Sections', 'Subjects', 'Created']
+        : type === 'section'
+        ? ['Class', 'Code', 'Status', 'Subjects', 'Created']
+        : ['Code', 'Class', 'Sections', 'Mandatory', 'Status', 'Created'];
     return (
       <View style={s.root}>
         <DocHeader title={HEADS[type]} onBackPress={() => navigation.goBack()} />
-        <ActivityIndicator style={s.loader} color={theme.colors.primary} />
+        <View style={s.head}>
+          <Skeleton width={52} height={52} radius={14} />
+          <View style={s.headBody}>
+            <SkeletonText style={s.name}>{`${TITLES[type]} 6`}</SkeletonText>
+            <SkeletonText style={s.sub}>Code 06 · Active</SkeletonText>
+          </View>
+        </View>
+        <View style={s.rows}>
+          {labels.map((l, i) => (
+            <View key={l} style={[s.skRow, i < labels.length - 1 && s.skRowDivider]}>
+              <SkeletonText style={s.skLabel}>{l}</SkeletonText>
+              <Skeleton width={70 + ((i * 23) % 60)} height={12} />
+            </View>
+          ))}
+        </View>
       </View>
     );
   }
@@ -200,7 +222,9 @@ export default AdminStandardDetailScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
-  loader: { marginTop: 40 },
+  skRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14 },
+  skRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
+  skLabel: { fontSize: 13, color: theme.colors.textSecondary },
   scroll: { paddingBottom: 40 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 12 },
   icon: {

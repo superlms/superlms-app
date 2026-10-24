@@ -1,8 +1,5 @@
-import React, { forwardRef, useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Easing,
   StyleSheet,
   Text,
   TextInput,
@@ -11,6 +8,7 @@ import {
 } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
 import { Skeleton, SkeletonText } from '../../components/Skeleton';
+import SavingButton, { type SaveState } from '../../components/SavingButton';
 import { theme, onThemeChange } from '../../utils/theme';
 
 /**
@@ -83,109 +81,19 @@ export const SkeletonCheck = ({ label, note }: { label: string; note?: string })
 // ── Save, and how it is going ────────────────────────────────────────────────
 //   idle     [ +  Add student ]
 //   saving   [ ◌  Adding student…  ]  a light sweeps across, again and again
+//   upload   [ ↑  Uploading · 42% ]  filling up as the photo goes
 //   done     [ ✓  Student added ]     green, the tick springs in
-export type SaveState = 'idle' | 'saving' | 'done';
+// The app's SavingButton, at the form's size.
+export type { SaveState };
 
-export const SaveButton = ({
-  state,
-  icon,
-  label,
-  busyLabel,
-  doneLabel,
-  onPress,
-}: {
+export const SaveButton = (props: {
   state: SaveState;
   icon: string;
   label: string;
   busyLabel: string;
   doneLabel: string;
   onPress: () => void;
-}) => {
-  const sweep = useRef(new Animated.Value(0)).current;
-  const pop = useRef(new Animated.Value(1)).current;
-  const [width, setWidth] = useState(0);
-  // "Adding student" with one, two, three dots after it in turn.
-  const [dots, setDots] = useState(1);
-
-  useEffect(() => {
-    if (state !== 'saving') return;
-    sweep.setValue(0);
-    setDots(1);
-    const run = Animated.loop(
-      Animated.timing(sweep, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-    );
-    run.start();
-    const tick = setInterval(() => setDots(n => (n % 3) + 1), 400);
-    return () => {
-      run.stop();
-      clearInterval(tick);
-    };
-  }, [state, sweep]);
-
-  useEffect(() => {
-    if (state !== 'done') return;
-    pop.setValue(0.4);
-    Animated.spring(pop, { toValue: 1, friction: 4, tension: 160, useNativeDriver: true }).start();
-  }, [state, pop]);
-
-  const band = Math.max(60, width * 0.35);
-
-  return (
-    <TouchableOpacity
-      style={[s.saveBtn, state === 'saving' && s.saveBtnBusy, state === 'done' && s.saveBtnDone]}
-      onPress={onPress}
-      disabled={state !== 'idle'}
-      activeOpacity={0.9}
-      onLayout={e => setWidth(e.nativeEvent.layout.width)}
-      accessibilityRole="button"
-      accessibilityState={{ busy: state === 'saving', disabled: state !== 'idle' }}
-      accessibilityLabel={state === 'saving' ? busyLabel : state === 'done' ? doneLabel : label}
-    >
-      {state === 'saving' && width > 0 && (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            s.sweep,
-            {
-              width: band,
-              transform: [
-                { translateX: sweep.interpolate({ inputRange: [0, 1], outputRange: [-band, width] }) },
-                { skewX: '-20deg' },
-              ],
-            },
-          ]}
-        />
-      )}
-
-      {state === 'idle' && (
-        <>
-          <VectorIcon iconSet="Ionicons" iconName={icon} size={18} color={theme.colors.white} />
-          <Text style={s.saveText}>{label}</Text>
-        </>
-      )}
-
-      {state === 'saving' && (
-        <>
-          <ActivityIndicator size="small" color={theme.colors.white} />
-          <View style={s.busyRow}>
-            <Text style={s.saveText}>{busyLabel}</Text>
-            {/* Room for three dots always held, so the words don't move as they come and go */}
-            <View style={s.dotsBox}>
-              <Text style={s.saveText}>{'.'.repeat(dots)}</Text>
-            </View>
-          </View>
-        </>
-      )}
-
-      {state === 'done' && (
-        <Animated.View style={[s.doneRow, { transform: [{ scale: pop }] }]}>
-          <VectorIcon iconSet="Ionicons" iconName="checkmark-circle" size={20} color={theme.colors.white} />
-          <Text style={s.saveText}>{doneLabel}</Text>
-        </Animated.View>
-      )}
-    </TouchableOpacity>
-  );
-};
+}) => <SavingButton {...props} />;
 
 // ── A field with its name in the border ─────────────────────────────────────
 //   ╭─ Full Name * ─────────────────╮
@@ -468,31 +376,6 @@ const __mk_s = () => StyleSheet.create({
   skBox: { minHeight: 44, justifyContent: 'center' },
   skBoxMultiline: { minHeight: 70, justifyContent: 'flex-start', paddingTop: 4 },
   skLabel: { paddingHorizontal: 5, backgroundColor: theme.colors.card },
-
-  // Save
-  saveBtn: {
-    flexDirection: 'row',
-    gap: 8,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  saveBtnBusy: { opacity: 0.92 },
-  saveBtnDone: { backgroundColor: theme.colors.success },
-  sweep: {
-    position: 'absolute',
-    top: -10,
-    bottom: -10,
-    left: 0,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-  },
-  saveText: { fontSize: 15, fontWeight: '700', color: theme.colors.white },
-  busyRow: { flexDirection: 'row', alignItems: 'center' },
-  dotsBox: { width: 16 },
-  doneRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

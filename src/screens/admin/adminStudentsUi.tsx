@@ -1,14 +1,19 @@
 import React, { useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
-import { Skeleton } from '../../components/Skeleton';
+import { Skeleton, SkeletonIcon, SkeletonText } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
-import type { StudentRow } from '../../api/adminStudentApi';
+import type { StudentDetail, StudentLookups, StudentRow } from '../../api/adminStudentApi';
 
 /**
  * Students' shared pieces, drawn as the student's Subjects list is: a count
  * over plain rows — a small tile, a name and a line under it, an arrow — with a
  * line between them.
+ *
+ * Each row can be drawn as a skeleton of itself: bars where its words will be,
+ * as long as those words. A list's first load draws the rows it held the last
+ * time it was opened on this phone (useLastLoaded), row for row; a list never
+ * opened here draws an ordinary one (the samples below).
  */
 
 export const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
@@ -23,6 +28,7 @@ export const GroupRow = ({
   meta,
   isLast,
   onPress,
+  skeleton,
 }: {
   /** The tile's icon — or, with letter, the section's letter in it. */
   icon?: string;
@@ -31,7 +37,19 @@ export const GroupRow = ({
   meta?: string | null;
   isLast: boolean;
   onPress: () => void;
-}) => (
+  /** Bars where the words will be. */
+  skeleton?: boolean;
+}) =>
+  skeleton ? (
+    <View style={[s.row, !isLast && s.rowDivider]}>
+      <Skeleton width={30} height={30} radius={6} />
+      <View style={s.body}>
+        <SkeletonText style={s.name} numberOfLines={1}>{title}</SkeletonText>
+        {!!meta && <SkeletonText style={s.meta} numberOfLines={1}>{meta}</SkeletonText>}
+      </View>
+      <SkeletonIcon iconName="chevron-forward" size={13} />
+    </View>
+  ) : (
   <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onPress}>
     <View style={s.tile}>
       {letter ? (
@@ -46,7 +64,7 @@ export const GroupRow = ({
     </View>
     <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />
   </TouchableOpacity>
-);
+  );
 
 // ── One student ──────────────────────────────────────────────────────────────
 //   (photo)  Aarav Sharma                                          >
@@ -65,8 +83,34 @@ const Avatar = ({ uri, name }: { uri?: string | null; name: string }) => {
   );
 };
 
-export const StudentListRow = ({ student, onOpen, isLast }: { student: StudentRow; onOpen: () => void; isLast: boolean }) => {
+export const StudentListRow = ({
+  student,
+  onOpen,
+  isLast,
+  skeleton,
+}: {
+  student: StudentRow;
+  onOpen: () => void;
+  isLast: boolean;
+  /** Bars where the name and the numbers will be. */
+  skeleton?: boolean;
+}) => {
   const cls = [student.class, student.section].filter(Boolean).join(' · ');
+
+  if (skeleton) {
+    return (
+      <View style={[s.row, !isLast && s.rowDivider]}>
+        <Skeleton width={34} height={34} radius={17} />
+        <View style={s.body}>
+          <SkeletonText style={s.name} numberOfLines={1}>{student.full_name}</SkeletonText>
+          {!!student.admission_no && <SkeletonText style={s.meta} numberOfLines={1}>{student.admission_no}</SkeletonText>}
+          {!!cls && <SkeletonText style={s.cls} numberOfLines={1}>{cls}</SkeletonText>}
+        </View>
+        {!student.is_active && <SkeletonText style={s.off}>OFF</SkeletonText>}
+        <SkeletonIcon iconName="chevron-forward" size={13} />
+      </View>
+    );
+  }
 
   return (
     <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onOpen}>
@@ -81,6 +125,103 @@ export const StudentListRow = ({ student, onOpen, isLast }: { student: StudentRo
     </TouchableOpacity>
   );
 };
+
+// ── The count over a list, or its skeleton ───────────────────────────────────
+export const ListCount = ({ text, skeleton }: { text: string; skeleton?: boolean }) =>
+  skeleton ? (
+    <View style={s.countWrap}>
+      <SkeletonText style={s.count}>{text}</SkeletonText>
+    </View>
+  ) : (
+    <Text style={[s.count, s.countWrap]}>{text}</Text>
+  );
+
+// ── What a list keeps for its skeleton, and what it draws never having loaded
+export type KeptStudent = Pick<StudentRow, 'id' | 'full_name' | 'admission_no' | 'class' | 'section' | 'is_active'>;
+
+/** A row's words, without the photo or anything the row does not show. */
+export const keepStudentRows = (rows: StudentRow[]): KeptStudent[] =>
+  rows.map(r => ({
+    id: r.id,
+    full_name: r.full_name,
+    admission_no: r.admission_no ?? null,
+    class: r.class ?? null,
+    section: r.section ?? null,
+    is_active: r.is_active,
+  }));
+
+const NAMES = [
+  'Aarav Sharma', 'Ananya Verma', 'Ishaan Gupta', 'Kavya Singh', 'Mohammad Arif',
+  'Riya Patel', 'Vivaan Yadav', 'Diya Mishra', 'Arjun Chauhan', 'Saanvi Joshi',
+  'Kabir Khan', 'Myra Tiwari',
+];
+
+/** An ordinary class's students, for a list never opened on this phone. */
+export const sampleStudents = (count = 7, cls = 'Class 6', section = 'A'): KeptStudent[] =>
+  Array.from({ length: Math.max(1, Math.min(count, 12)) }, (_, i) => ({
+    id: -1 - i,
+    full_name: NAMES[i % NAMES.length],
+    admission_no: `26SSIC1603${String(10 + i * 7)}`,
+    class: cls,
+    section,
+    is_active: true,
+  }));
+
+/** The school's classes and sections, as the Students page keeps them for its skeleton. */
+export type KeptClasses = Pick<StudentLookups, 'classes' | 'sections'>;
+
+/** An ordinary school's classes, for a page never opened on this phone. */
+export const sampleClasses = (): KeptClasses => {
+  const classes = Array.from({ length: 8 }, (_, i) => ({
+    id: -1 - i,
+    name: `Class ${i + 1}`,
+    code: String(i + 1),
+    students: 58 + ((i * 7) % 15),
+  }));
+  const sections = classes.flatMap((c, i) =>
+    (i % 3 === 2 ? ['A'] : ['A', 'B']).map((name, j) => ({
+      id: c.id * 10 - j,
+      name,
+      code: name,
+      standard_id: c.id,
+      students: 30,
+    })),
+  );
+  return { classes, sections };
+};
+
+// ── One student, for the skeleton of their page and their form ──────────────
+/** What is kept of a student: the page's words, not the photo. */
+export const keepStudentDetail = (d: StudentDetail): StudentDetail => ({
+  ...d,
+  image: d.image ? 'kept' : null,
+  photo_circle: null,
+});
+
+/** A student never opened on this phone: an ordinary one, with what their row already said. */
+export const sampleStudentDetail = (row?: Partial<StudentDetail> | null): StudentDetail => ({
+  id: 0,
+  user_id: 0,
+  full_name: 'Aarav Sharma',
+  email: 'aarav.sharma@example.com',
+  phone: '9876543210',
+  gender: 'male',
+  admission_no: '26SSIC160315',
+  roll_no: '06012',
+  class: 'Class 6',
+  section: 'A',
+  dob: '2014-04-12',
+  father_name: 'Rajesh Sharma',
+  mother_name: 'Sunita Sharma',
+  date_of_admission: '2024-04-01',
+  local_address: 'House 12, Gandhi Nagar',
+  city: 'Lucknow',
+  state: 'Uttar Pradesh',
+  pincode: '226001',
+  is_active: true,
+  transportation_required: false,
+  ...(row ?? {}),
+});
 
 // ── Loading: the rows at their own sizes ─────────────────────────────────────
 export const ListSkeleton = ({ photo, rows = 7 }: { photo?: boolean; rows?: number }) => (
@@ -122,6 +263,8 @@ const __mk_s = () => StyleSheet.create({
   initial: { fontSize: 14, fontWeight: '600', color: theme.colors.primary },
 
   skCount: { paddingTop: 13, paddingBottom: 3 },
+  count: { fontSize: 12, color: theme.colors.textMuted },
+  countWrap: { paddingTop: 12, paddingBottom: 2 },
   skBody: { flex: 1, gap: 8 },
 });
 

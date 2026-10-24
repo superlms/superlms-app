@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -25,6 +24,7 @@ import {
   type TeacherCombo,
 } from '../../api/contentApi';
 import { comboLabel } from '../subjects/outlineUi';
+import SavingButton from '../../components/SavingButton';
 
 export type SyllabusAddKind = 'chapter' | 'topic';
 
@@ -271,18 +271,15 @@ export const AddToSyllabusSheet = ({
               >
                 <Text style={s.sheetBtnGhostText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.sheetBtn, s.sheetBtnPrimary, !canSave && s.btnDisabled]}
+              <SavingButton
+                label="Add"
+                busy={saving}
+                busyLabel="Adding"
                 onPress={submit}
-                activeOpacity={0.85}
                 disabled={!canSave}
-              >
-                {saving ? (
-                  <ActivityIndicator size="small" color={theme.colors.white} />
-                ) : (
-                  <Text style={s.sheetBtnPrimaryText}>Add</Text>
-                )}
-              </TouchableOpacity>
+                style={[s.sheetBtn, s.sheetBtnPrimary]}
+                textStyle={s.sheetBtnPrimaryText}
+              />
             </View>
           </View>
         </Animated.View>
@@ -373,7 +370,6 @@ const __mk_s = () => StyleSheet.create({
   sheetBtnGhostText: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
   sheetBtnPrimary: { backgroundColor: theme.colors.primary },
   sheetBtnPrimaryText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
-  btnDisabled: { opacity: 0.5 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

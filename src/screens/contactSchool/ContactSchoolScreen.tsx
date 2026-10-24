@@ -10,7 +10,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  ActivityIndicator,
 } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import VectorIcon from '../../components/VectorIcon';
@@ -21,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { studentContactAdmin, teacherContactAdmin } from '../../api/contactApi';
 import { DocHeader } from '../more/docUi';
 import { AppDialog, AppAlert } from '../../components/AppDialog';
+import SavingButton, { afterTick, saveStateOf, useSavedFlash } from '../../components/SavingButton';
 
 // Attachments show only a file-type icon and label, never the file name.
 const fileTypeIcon = (mime?: string) => {
@@ -45,6 +45,8 @@ const ContactSchoolScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(false);
   const [role, setRole] = useState<string>('student');
   const [successVisible, setSuccessVisible] = useState(false);
+  // Green with a tick for a moment once it has gone.
+  const [saved, flashSaved] = useSavedFlash();
   const [focused, setFocused] = useState<'subject' | 'message' | null>(null);
   const subjectRef = useRef<TextInput>(null);
   const messageRef = useRef<TextInput>(null);
@@ -148,7 +150,8 @@ const ContactSchoolScreen = ({ navigation }: any) => {
 
       console.log('[ContactSchoolScreen] Submit success:', response);
 
-      setSuccessVisible(true);
+      flashSaved();
+      afterTick(() => setSuccessVisible(true));
     } catch (err: any) {
       console.error('[ContactSchoolScreen] Submit error:', err?.response?.data || err.message);
 
@@ -255,18 +258,15 @@ const ContactSchoolScreen = ({ navigation }: any) => {
           )}
 
           {/* Submit */}
-          <TouchableOpacity
-            activeOpacity={0.85}
+          <SavingButton
+            state={saveStateOf(loading, saved)}
+            label="Submit Query"
+            busyLabel="Submitting query"
+            doneLabel="Query submitted"
             onPress={handleSubmit}
-            style={[s.submitBtn, loading && s.submitBtnBusy]}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={theme.colors.white} size="small" />
-            ) : (
-              <Text style={s.submitText}>Submit Query</Text>
-            )}
-          </TouchableOpacity>
+            style={s.submitBtn}
+            textStyle={s.submitText}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
 

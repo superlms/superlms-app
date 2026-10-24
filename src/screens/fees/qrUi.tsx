@@ -1,12 +1,13 @@
 import React from 'react';
-import { ActivityIndicator, Image, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import moment from 'moment';
 import ReactNativeBlobUtil from 'react-native-blob-util';
-import VectorIcon from '../../components/VectorIcon';
+import SavingButton from '../../components/SavingButton';
 import { theme, onThemeChange } from '../../utils/theme';
 import { DateBlock, LineRow, Pill } from '../home/dashboardUi';
 import type { QrPaymentRequest, SchoolQr } from '../../api/feeApi';
 import { inr } from './feesUi';
+import { startTransfer } from '../../utils/transfers';
 
 /**
  * Paying on the school's own UPI QR: the buttons that start it, the row for a
@@ -16,12 +17,17 @@ import { inr } from './feesUi';
  */
 
 // ── Buttons ──────────────────────────────────────────────────────────────────
+// Busy, a button says so the app's way (SavingButton): a light sweeping across
+// while it sends, filling up as a screenshot goes up, and an arrow falling
+// into a tray while the QR comes down (`busyKind="download"`).
 export const FeeButton = ({
   label,
   icon,
   onPress,
   outline,
   busy,
+  busyLabel,
+  busyKind,
   disabled,
   compact,
 }: {
@@ -30,31 +36,25 @@ export const FeeButton = ({
   onPress: () => void;
   outline?: boolean;
   busy?: boolean;
+  /** What it says while busy ("Sending"); the label otherwise. */
+  busyLabel?: string;
+  busyKind?: 'save' | 'download';
   disabled?: boolean;
   compact?: boolean;
 }) => (
-  <TouchableOpacity
-    style={[s.btn, outline && s.btnOutline, compact && s.btnCompact, (disabled || busy) && s.btnIdle]}
+  <SavingButton
+    label={label}
+    icon={icon}
     onPress={onPress}
-    disabled={disabled || busy}
-    activeOpacity={0.85}
-  >
-    {busy ? (
-      <ActivityIndicator size="small" color={outline ? theme.colors.primary : theme.colors.white} />
-    ) : (
-      <>
-        {!!icon && (
-          <VectorIcon
-            iconSet="Ionicons"
-            iconName={icon}
-            size={compact ? 16 : 18}
-            color={outline ? theme.colors.primary : theme.colors.white}
-          />
-        )}
-        <Text style={[s.btnText, outline && s.btnTextOutline, compact && s.btnTextCompact]}>{label}</Text>
-      </>
-    )}
-  </TouchableOpacity>
+    busy={busy}
+    busyLabel={busyLabel}
+    busyKind={busyKind}
+    disabled={disabled}
+    compact={compact}
+    variant={outline ? 'outline' : 'solid'}
+    style={[s.btn, outline && s.btnOutline, compact && s.btnCompact]}
+    textStyle={[s.btnText, outline && s.btnTextOutline, compact && s.btnTextCompact]}
+  />
 );
 
 /**
@@ -190,15 +190,25 @@ export const saveQrToPhone = async (url: string): Promise<void> => {
   const name = `school-fee-qr-${moment().format('YYYYMMDD-HHmmss')}.${safeExt}`;
   const mime = safeExt === 'png' ? 'image/png' : safeExt === 'webp' ? 'image/webp' : 'image/jpeg';
 
-  const res = await config({ path: `${fs.dirs.CacheDir}/${name}`, fileCache: true }).fetch('GET', url);
-  if (res.info().status >= 400) throw new Error('Could not download the QR.');
-  const path = res.path();
+  // Shown coming down, as it comes, and done once it is in the gallery.
+  const shown = startTransfer('download', 'School fee QR');
+  try {
+    const task = config({ path: `${fs.dirs.CacheDir}/${name}`, fileCache: true }).fetch('GET', url);
+    task.progress({ interval: 120 }, (received, total) => shown.update(Number(received), Number(total)));
+    const res = await task;
+    if (res.info().status >= 400) throw new Error('Could not download the QR.');
+    const path = res.path();
 
-  if (Platform.OS === 'android') {
-    await MediaCollection.copyToMediaStore({ name, parentFolder: '', mimeType: mime }, 'Image', path);
-    return;
+    if (Platform.OS === 'android') {
+      await MediaCollection.copyToMediaStore({ name, parentFolder: '', mimeType: mime }, 'Image', path);
+    } else {
+      await ios.openDocument(path);
+    }
+    shown.done();
+  } catch (e) {
+    shown.fail();
+    throw e;
   }
-  await ios.openDocument(path);
 };
 
 const __mk_s = () => StyleSheet.create({
@@ -219,7 +229,6 @@ const __mk_s = () => StyleSheet.create({
     borderColor: theme.colors.primary + '55',
   },
   btnCompact: { height: 40, paddingHorizontal: 12 },
-  btnIdle: { opacity: 0.5 },
   btnText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
   btnTextOutline: { color: theme.colors.primary },
   btnTextCompact: { fontSize: 14 },

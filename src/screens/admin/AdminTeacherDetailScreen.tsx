@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -12,6 +12,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
 import { HeaderIconButton } from '../../components/Header';
+import { Skeleton, SkeletonText } from '../../components/Skeleton';
+import { UploadStatus } from '../../components/TransferToast';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr, pickImage, takePhoto } from '../../utils/filePickers';
 import { DocHeader } from '../more/docUi';
@@ -24,6 +27,7 @@ import {
 } from '../../api/adminTeacherApi';
 import { AppAlert, AppDialog } from '../../components/AppDialog';
 import { withinOneMb } from './adminFormUi';
+import { keepTeacherDetail, sampleTeacherDetail } from './adminTeachersUi';
 
 /**
  * Teacher Detail — the panel's View Teacher, as the app shows a person (and as
@@ -34,6 +38,10 @@ import { withinOneMb } from './adminFormUi';
  * its own. Edit and Delete are in the header: Edit opens the form, and saved,
  * it comes back here; Delete takes the teacher, their login, their class
  * assignments and their photo away, and asks first.
+ *
+ * While the teacher loads, the page is drawn as a skeleton of them — what it
+ * showed the last time they were opened on this phone, else what their row in
+ * the list said — every line it will have, as bars as long as those words.
  */
 
 interface Line {
@@ -42,17 +50,25 @@ interface Line {
 }
 
 // A heading and its lines — the ones the school has nothing for are left out,
-// and the last line keeps no divider under it.
-const Block = ({ title, lines }: { title: string; lines: Line[] }) => {
+// and the last line keeps no divider under it. As a skeleton, bars as long as
+// the words.
+const Block = ({ title, lines, skeleton }: { title: string; lines: Line[]; skeleton?: boolean }) => {
   const shown = lines.filter(l => !!l.value);
   if (shown.length === 0) return null;
+  const T = skeleton ? SkeletonText : Text;
   return (
     <View>
-      <Text style={s.blockTitle}>{title.toUpperCase()}</Text>
+      <View style={s.blockTitleWrap}>
+        <T style={s.blockTitle}>{title.toUpperCase()}</T>
+      </View>
       {shown.map((l, i) => (
         <View key={l.label} style={[s.line, i < shown.length - 1 && s.lineDivider]}>
-          <Text style={s.lineLabel}>{l.label}</Text>
-          <Text style={s.lineValue}>{l.value}</Text>
+          <View style={s.lineLabelCol}>
+            <T style={s.lineLabel}>{l.label}</T>
+          </View>
+          <View style={s.lineValueCol}>
+            <T style={s.lineValue}>{l.value}</T>
+          </View>
         </View>
       ))}
     </View>
@@ -69,24 +85,87 @@ const day = (v?: string | null) => {
   return m.isValid() ? m.format('D MMM YYYY') : v || null;
 };
 
+// "Class 5 · A, Class 6"
+const dutiesOf = (d: TeacherDetail) =>
+  (d.assignments ?? [])
+    .filter(a => a.class || a.section)
+    .map(a => [a.class, a.section].filter(Boolean).join(' · '))
+    .join(', ');
+
+// The page's blocks, from a teacher — the real one, or one kept for the skeleton.
+const Blocks = ({ d, skeleton }: { d: TeacherDetail; skeleton?: boolean }) => (
+  <>
+    <Block
+      skeleton={skeleton}
+      title="Account"
+      lines={[
+        { label: 'Username', value: d.username },
+        { label: 'Employee ID', value: d.employee_id },
+        { label: 'Mobile', value: d.phone },
+      ]}
+    />
+    <Block
+      skeleton={skeleton}
+      title="Personal"
+      lines={[
+        { label: 'Gender', value: d.gender ? d.gender.charAt(0).toUpperCase() + d.gender.slice(1) : null },
+        { label: 'Date of Birth', value: day(d.dob) },
+        { label: 'Emergency Contact', value: d.emergency_contact },
+      ]}
+    />
+    <Block
+      skeleton={skeleton}
+      title="School"
+      lines={[
+        { label: 'Date of Joining', value: day(d.date_of_joining) },
+        { label: 'Qualification', value: d.qualification },
+        { label: 'Class Teacher Of', value: dutiesOf(d) || null },
+      ]}
+    />
+    <Block
+      skeleton={skeleton}
+      title="Address"
+      lines={[
+        { label: 'Address', value: d.address },
+        { label: 'City', value: d.city },
+        { label: 'State', value: d.state },
+        { label: 'Pincode', value: d.pincode },
+      ]}
+    />
+  </>
+);
+
+// As the panel's View heads it: the email, and whether they can sign in.
+const subOf = (d: TeacherDetail) => [d.email, d.is_active ? 'Active' : 'Inactive'].filter(Boolean).join(' · ');
+
 const AdminTeacherDetailScreen = ({ navigation, route }: any) => {
   const id: number = route?.params?.id;
+  // The row of the list it was opened from, for a skeleton of this teacher.
+  const row: Partial<TeacherDetail> | undefined = route?.params?.row;
   const [d, setD] = useState<TeacherDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [last, rememberLast] = useLastLoaded<TeacherDetail>(id ? `admin-teacher:${id}` : null);
+  // The newest load wins: an older one that answers late is ignored.
+  const seq = useRef(0);
   const [deleting, setDeleting] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [asking, setAsking] = useState(false);
 
   const load = useCallback(async () => {
+    const mine = ++seq.current;
     try {
-      setD(await getTeacher(id));
+      const res = await getTeacher(id);
+      if (mine !== seq.current) return;
+      setD(res);
+      rememberLast(keepTeacherDetail(res));
     } catch (e) {
+      if (mine !== seq.current) return;
       AppAlert.alert('Error', apiErr(e, 'Could not load teacher.'));
       navigation.goBack();
     } finally {
-      setLoading(false);
+      if (mine === seq.current) setLoading(false);
     }
-  }, [id, navigation]);
+  }, [id, navigation, rememberLast]);
 
   // Back from Edit, the page shows what was saved.
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -159,11 +238,6 @@ const AdminTeacherDetailScreen = ({ navigation, route }: any) => {
     else setAsking(true);
   };
 
-  const duties = (d?.assignments ?? [])
-    .filter(a => a.class || a.section)
-    .map(a => [a.class, a.section].filter(Boolean).join(' · '))
-    .join(', ');
-
   return (
     <View style={s.root}>
       <DocHeader
@@ -172,7 +246,7 @@ const AdminTeacherDetailScreen = ({ navigation, route }: any) => {
         rightSlot={
           d ? (
             <View style={s.headActions}>
-              <HeaderIconButton icon="create-outline" onPress={() => navigation.navigate('AdminTeacherForm', { id })} />
+              <HeaderIconButton icon="create-outline" onPress={() => navigation.navigate('AdminTeacherForm', { id, row: d })} />
               {deleting ? (
                 <ActivityIndicator style={s.headBusy} color={theme.colors.primary} />
               ) : (
@@ -183,8 +257,8 @@ const AdminTeacherDetailScreen = ({ navigation, route }: any) => {
         }
       />
 
-      {loading ? (
-        <View style={s.loader}><ActivityIndicator size="large" color={theme.colors.primary} /></View>
+      {loading && !d ? (
+        <TeacherSkeleton d={last ?? sampleTeacherDetail(row)} />
       ) : !d ? null : (
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
           {/* Who they are */}
@@ -198,11 +272,7 @@ const AdminTeacherDetailScreen = ({ navigation, route }: any) => {
                     <Text style={s.initial}>{(d.name || '?').charAt(0).toUpperCase()}</Text>
                   </View>
                 )}
-                {photoBusy && (
-                  <View style={[s.photo, s.photoBusy]}>
-                    <ActivityIndicator color={theme.colors.white} />
-                  </View>
-                )}
+                {photoBusy && <UploadStatus compact color={theme.colors.white} style={[s.photo, s.photoBusy]} />}
               </TouchableOpacity>
               <TouchableOpacity style={s.camera} onPress={() => setAsking(true)} disabled={photoBusy} hitSlop={8} accessibilityLabel="Change photo">
                 <VectorIcon iconSet="Ionicons" iconName="camera" size={15} color={theme.colors.white} />
@@ -224,46 +294,10 @@ const AdminTeacherDetailScreen = ({ navigation, route }: any) => {
             </View>
 
             <Text style={s.name}>{d.name}</Text>
-            {/* As the panel's View heads it: the email, and whether they can sign in. */}
-            <Text style={s.sub}>{[d.email, d.is_active ? 'Active' : 'Inactive'].filter(Boolean).join(' · ')}</Text>
+            <Text style={s.sub}>{subOf(d)}</Text>
           </View>
 
-          <Block
-            title="Account"
-            lines={[
-              { label: 'Username', value: d.username },
-              { label: 'Employee ID', value: d.employee_id },
-              { label: 'Mobile', value: d.phone },
-            ]}
-          />
-
-          <Block
-            title="Personal"
-            lines={[
-              { label: 'Gender', value: d.gender ? d.gender.charAt(0).toUpperCase() + d.gender.slice(1) : null },
-              { label: 'Date of Birth', value: day(d.dob) },
-              { label: 'Emergency Contact', value: d.emergency_contact },
-            ]}
-          />
-
-          <Block
-            title="School"
-            lines={[
-              { label: 'Date of Joining', value: day(d.date_of_joining) },
-              { label: 'Qualification', value: d.qualification },
-              { label: 'Class Teacher Of', value: duties || null },
-            ]}
-          />
-
-          <Block
-            title="Address"
-            lines={[
-              { label: 'Address', value: d.address },
-              { label: 'City', value: d.city },
-              { label: 'State', value: d.state },
-              { label: 'Pincode', value: d.pincode },
-            ]}
-          />
+          <Blocks d={d} />
 
           <View style={s.tail} />
         </ScrollView>
@@ -285,11 +319,30 @@ const AdminTeacherDetailScreen = ({ navigation, route }: any) => {
   );
 };
 
+// ── The page while the teacher loads, drawn from what is known of them ─────
+const TeacherSkeleton = ({ d }: { d: TeacherDetail }) => (
+  <ScrollView contentContainerStyle={s.scroll} scrollEnabled={false} showsVerticalScrollIndicator={false}>
+    <View style={s.hero}>
+      <Skeleton width={96} height={96} radius={48} />
+      <View style={s.photoLinks}>
+        <Skeleton width={84} height={11} radius={5} />
+      </View>
+      <View style={s.skCenter}>
+        <SkeletonText style={s.name}>{d.name || 'Teacher'}</SkeletonText>
+      </View>
+      <View style={s.skCenter}>
+        <SkeletonText style={s.sub}>{subOf(d)}</SkeletonText>
+      </View>
+    </View>
+    <Blocks d={d} skeleton />
+    <View style={s.tail} />
+  </ScrollView>
+);
+
 export default AdminTeacherDetailScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
-  loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 20, paddingTop: 8 },
   tail: { height: 48 },
   headActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -322,11 +375,15 @@ const __mk_s = () => StyleSheet.create({
   sub: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 4, textAlign: 'center' },
 
   // Blocks
-  blockTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 1, color: theme.colors.textMuted, marginTop: 24, marginBottom: 2 },
+  blockTitleWrap: { marginTop: 24, marginBottom: 2, alignSelf: 'flex-start' },
+  blockTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 1, color: theme.colors.textMuted },
   line: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, paddingVertical: 12 },
   lineDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  lineLabel: { fontSize: 13, color: theme.colors.textSecondary, flexShrink: 0 },
-  lineValue: { fontSize: 14, color: theme.colors.textPrimary, flex: 1, textAlign: 'right' },
+  lineLabelCol: { flexShrink: 0 },
+  lineLabel: { fontSize: 13, color: theme.colors.textSecondary },
+  lineValueCol: { flex: 1, alignItems: 'flex-end' },
+  lineValue: { fontSize: 14, color: theme.colors.textPrimary, textAlign: 'right' },
+  skCenter: { alignItems: 'center' },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

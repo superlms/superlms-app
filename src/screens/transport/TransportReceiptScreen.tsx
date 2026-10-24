@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { HeaderIconButton } from '../../components/Header';
 import { Skeleton } from '../../components/Skeleton';
 import { AppAlert } from '../../components/AppDialog';
@@ -8,6 +8,7 @@ import { DocHeader } from '../more/docUi';
 import { PdfSheet, SheetPage } from '../exam/pdfSheet';
 import { authHeader, downloadPdf } from '../../api/pdfDownload';
 import { transportReceiptUrl, type TransportPayment } from '../../api/transportApi';
+import { TransferIcon } from '../../components/TransferToast';
 
 /**
  * One fee payment's receipt, as the school issues it: the sheet
@@ -106,8 +107,8 @@ const TransportReceiptScreen = ({ navigation, route }: any) => {
         onBackPress={() => navigation.goBack()}
         rightSlot={
           saving ? (
-            <View style={s.saving}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
+            <View style={s.saving} accessibilityLabel="Downloading">
+              <TransferIcon kind="download" size={20} color={theme.colors.primary} />
             </View>
           ) : (
             <HeaderIconButton icon="download-outline" onPress={download} />

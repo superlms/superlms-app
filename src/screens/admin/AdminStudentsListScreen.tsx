@@ -7,12 +7,18 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { StudentRow, getStudents } from '../../api/adminStudentApi';
-import { ListSkeleton, StudentListRow, plural } from './adminStudentsUi';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
+import { KeptStudent, ListCount, StudentListRow, keepStudentRows, plural, sampleStudents } from './adminStudentsUi';
 
 /**
  * One section's students — a count, then a row per student with their photo,
  * their name, their admission number and their class and section, A to Z; a
  * search narrows them. A row opens Student Detail.
+ *
+ * The first load is drawn as a skeleton of the section as it was the last
+ * time it was opened on this phone — as many rows as it had, each bar as long
+ * as that name and those numbers; a section never opened here, as many
+ * ordinary rows as the class page said it has.
  */
 
 const AdminStudentsListScreen = ({ navigation, route }: any) => {
@@ -24,6 +30,11 @@ const AdminStudentsListScreen = ({ navigation, route }: any) => {
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // How many students the page that opened this said it has.
+  const known: number | undefined = route?.params?.count;
+  const [last, rememberLast] = useLastLoaded<KeptStudent[]>(
+    classId && sectionId ? `admin-students:${classId}:${sectionId}` : null,
+  );
 
   const seq = useRef(0);
   const load = useCallback(async () => {
@@ -37,13 +48,17 @@ const AdminStudentsListScreen = ({ navigation, route }: any) => {
         sort: 'name_asc',
         per_page: 500,
       });
-      if (mine === seq.current) setRows(r.students);
+      if (mine === seq.current) {
+        setRows(r.students);
+        // The whole section is kept, not a search's few.
+        if (!search.trim()) rememberLast(keepStudentRows(r.students));
+      }
     } catch (e) {
       if (mine === seq.current) setError(apiErr(e, 'Could not load the students.'));
     } finally {
       if (mine === seq.current) setRefreshing(false);
     }
-  }, [classId, sectionId, search]);
+  }, [classId, sectionId, search, rememberLast]);
 
   // Typing waits a moment before it asks.
   useEffect(() => {
@@ -63,7 +78,15 @@ const AdminStudentsListScreen = ({ navigation, route }: any) => {
     }, [load]),
   );
 
-  const list = rows ?? [];
+  // The students — the real ones, or the section as it was kept, drawn as a skeleton.
+  const skeleton = !rows && !error;
+  const list: StudentRow[] =
+    rows ??
+    (skeleton
+      ? ((last && Array.isArray(last) && last.length
+          ? last
+          : sampleStudents(known ?? 7, route?.params?.className, route?.params?.sectionName)) as StudentRow[])
+      : []);
   const active = list.filter(r => r.is_active).length;
   const countLine = search.trim()
     ? `${plural(list.length, 'student')} found`
@@ -92,9 +115,7 @@ const AdminStudentsListScreen = ({ navigation, route }: any) => {
         </View>
       </View>
 
-      {!rows && !error ? (
-        <ListSkeleton photo />
-      ) : error && !rows ? (
+      {error && !rows ? (
         <View style={s.centered}>
           <VectorIcon iconSet="Ionicons" iconName="cloud-offline-outline" size={32} color={theme.colors.textMuted} />
           <Text style={s.errorText}>{error}</Text>
@@ -109,8 +130,13 @@ const AdminStudentsListScreen = ({ navigation, route }: any) => {
           contentContainerStyle={[s.list, list.length === 0 && s.listEmpty]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
-          ListHeaderComponent={list.length > 0 ? <Text style={s.count}>{countLine}</Text> : null}
+          scrollEnabled={!skeleton}
+          refreshControl={
+            skeleton ? undefined : (
+              <AppRefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />
+            )
+          }
+          ListHeaderComponent={list.length > 0 ? <ListCount skeleton={skeleton} text={countLine} /> : null}
           ListEmptyComponent={
             <DocNoData
               icon={search.trim() ? 'search-outline' : 'person-add-outline'}
@@ -121,7 +147,8 @@ const AdminStudentsListScreen = ({ navigation, route }: any) => {
           renderItem={({ item, index }) => (
             <StudentListRow
               student={item}
-              onOpen={() => navigation.navigate('AdminStudentDetail', { id: item.id })}
+              skeleton={skeleton}
+              onOpen={() => navigation.navigate('AdminStudentDetail', { id: item.id, row: item })}
               isLast={index === list.length - 1}
             />
           )}
@@ -144,7 +171,6 @@ const __mk_s = () => StyleSheet.create({
   // List
   list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
   listEmpty: { flexGrow: 1 },
-  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
 
   // Error
   centered: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

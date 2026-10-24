@@ -1,11 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   InteractionManager,
   ScrollView,
   StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { CommonActions } from '@react-navigation/native';
@@ -15,6 +12,7 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { AppDialog, AppAlert } from '../../components/AppDialog';
 import { DocHeader } from '../more/docUi';
 import { ReviewContent, ReviewSkeleton, reviewGroups, type MarkStudent } from './markAttendanceUi';
+import SavingButton, { saveStateOf } from '../../components/SavingButton';
 
 /**
  * Before attendance is saved, in the Subjects screens' plain look: the day,
@@ -81,18 +79,15 @@ const MarkAttendanceReviewScreen = ({ navigation, route }: any) => {
           <ReviewContent date={date} classLabel={classLabel} students={students} />
 
           {/* Submit sits after the last student, reached by scrolling down. */}
-          <TouchableOpacity
-            style={[s.submitBtn, submitting && s.btnBusy]}
-            activeOpacity={0.85}
-            disabled={submitting}
+          <SavingButton
+            state={saveStateOf(submitting, submitted)}
+            label="Submit attendance"
+            busyLabel="Submitting attendance"
+            doneLabel="Attendance submitted"
             onPress={submit}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color={theme.colors.white} />
-            ) : (
-              <Text style={s.submitText}>Submit attendance</Text>
-            )}
-          </TouchableOpacity>
+            style={s.submitBtn}
+            textStyle={s.submitText}
+          />
         </ScrollView>
       )}
 

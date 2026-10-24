@@ -7,7 +7,16 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { StudentLookups, StudentRow, getStudentLookups, getStudents } from '../../api/adminStudentApi';
-import { GroupRow, ListSkeleton, StudentListRow, plural } from './adminStudentsUi';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
+import {
+  GroupRow,
+  KeptClasses,
+  ListCount,
+  StudentListRow,
+  plural,
+  sampleClasses,
+  sampleStudents,
+} from './adminStudentsUi';
 import StudentExportSheet from './StudentExportSheet';
 
 /**
@@ -22,6 +31,10 @@ import StudentExportSheet from './StudentExportSheet';
  * admission number, email — and while it holds text the students it finds
  * stand in for the classes, A to Z, more as the list scrolls; a row opens
  * Student Detail. Clearing it brings the classes back.
+ *
+ * The first load is drawn as a skeleton of the classes the page held the last
+ * time it was opened on this phone — as many rows as the school has, each bar
+ * as long as that class's name and counts; a search, as rows of students.
  */
 
 const SEARCH_PAGE = 50;
@@ -42,19 +55,25 @@ const AdminStudentsScreen = ({ navigation }: any) => {
   const [refreshing, setRefreshing] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
 
+  // The classes last loaded on this phone, for the first load's skeleton.
+  const [last, rememberLast] = useLastLoaded<KeptClasses>('admin-student-classes');
+
   const seq = useRef(0);
   const load = useCallback(async () => {
     const mine = ++seq.current;
     setError(null);
     try {
       const r = await getStudentLookups();
-      if (mine === seq.current) setLookups(r);
+      if (mine === seq.current) {
+        setLookups(r);
+        rememberLast({ classes: r.classes, sections: r.sections });
+      }
     } catch (e) {
       if (mine === seq.current) setError(apiErr(e, 'Could not load the classes.'));
     } finally {
       if (mine === seq.current) setRefreshing(false);
     }
-  }, []);
+  }, [rememberLast]);
 
   // Back from adding or removing a student, the counts are fresh.
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -143,21 +162,45 @@ const AdminStudentsScreen = ({ navigation }: any) => {
   );
 
   const classes = lookups?.classes ?? [];
-  const sectionsOf = (id: number) => (lookups?.sections ?? []).filter(x => x.standard_id === id);
-  const total = classes.reduce((n, c) => n + (c.students ?? 0), 0);
+  const sectionsOf = (id: number, from: KeptClasses | null = lookups) =>
+    (from?.sections ?? []).filter(x => x.standard_id === id);
 
-  // One section: its students at once. More: the sections first.
-  const open = (id: number, name: string) => {
+  // One section: its students at once. More: the sections first — each told
+  // what is known of it already, for its skeleton.
+  const open = (id: number, name: string, students?: number) => {
     const secs = sectionsOf(id);
     if (secs.length === 1) {
-      navigation.navigate('AdminStudentsList', { classId: id, className: name, sectionId: secs[0].id, sectionName: secs[0].name });
+      navigation.navigate('AdminStudentsList', {
+        classId: id,
+        className: name,
+        sectionId: secs[0].id,
+        sectionName: secs[0].name,
+        count: secs[0].students ?? students,
+      });
     } else {
-      navigation.navigate('AdminStudentSections', { classId: id, className: name });
+      navigation.navigate('AdminStudentSections', { classId: id, className: name, sections: secs });
     }
   };
 
+  // A search being asked: rows of students, as its answer will be.
+  const searchSkeleton = () => {
+    const rows = sampleStudents(5) as StudentRow[];
+    return (
+      <FlatList
+        data={rows}
+        keyExtractor={i => String(i.id)}
+        contentContainerStyle={s.list}
+        scrollEnabled={false}
+        ListHeaderComponent={<ListCount skeleton text={`${plural(rows.length, 'student')} found`} />}
+        renderItem={({ item, index }) => (
+          <StudentListRow skeleton student={item} onOpen={() => {}} isLast={index === rows.length - 1} />
+        )}
+      />
+    );
+  };
+
   const results = () => {
-    if (!found && !foundError) return <ListSkeleton photo />;
+    if (!found && !foundError) return searchSkeleton();
 
     if (foundError && !found) {
       return (
@@ -182,7 +225,7 @@ const AdminStudentsScreen = ({ navigation }: any) => {
         refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); find(); }} />}
         onEndReached={findMore}
         onEndReachedThreshold={0.4}
-        ListHeaderComponent={list.length > 0 ? <Text style={s.count}>{`${plural(foundTotal, 'student')} found`}</Text> : null}
+        ListHeaderComponent={list.length > 0 ? <ListCount text={`${plural(foundTotal, 'student')} found`} /> : null}
         ListFooterComponent={loadingMore ? <ActivityIndicator style={s.more} size="small" color={theme.colors.primary} /> : null}
         ListEmptyComponent={
           <DocNoData icon="search-outline" title="No students found" subtitle="No student’s name, mobile, admission number or email matches the search." />
@@ -190,7 +233,7 @@ const AdminStudentsScreen = ({ navigation }: any) => {
         renderItem={({ item, index }) => (
           <StudentListRow
             student={item}
-            onOpen={() => navigation.navigate('AdminStudentDetail', { id: item.id })}
+            onOpen={() => navigation.navigate('AdminStudentDetail', { id: item.id, row: item })}
             isLast={index === list.length - 1}
           />
         )}
@@ -198,10 +241,64 @@ const AdminStudentsScreen = ({ navigation }: any) => {
     );
   };
 
+  // The classes, as rows — the real ones, or the last ones kept drawn as a skeleton.
+  const classList = (from: KeptClasses, skeleton: boolean) => {
+    const rows = from.classes;
+    const total = rows.reduce((n, c) => n + (c.students ?? 0), 0);
+    return (
+      <FlatList
+        data={rows}
+        keyExtractor={c => String(c.id)}
+        contentContainerStyle={[s.list, rows.length === 0 && s.listEmpty]}
+        showsVerticalScrollIndicator={false}
+        scrollEnabled={!skeleton}
+        refreshControl={
+          skeleton ? undefined : (
+            <AppRefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />
+          )
+        }
+        ListHeaderComponent={
+          rows.length > 0 ? (
+            <ListCount skeleton={skeleton} text={`${plural(rows.length, 'class', 'classes')} · ${plural(total, 'student')}`} />
+          ) : null
+        }
+        ListEmptyComponent={
+          <DocNoData icon="school-outline" title="No classes yet" subtitle="Add the school’s classes under Standards first." />
+        }
+        renderItem={({ item, index }) => {
+          const secs = sectionsOf(item.id, from);
+          const meta = [
+            secs.length > 1 ? plural(secs.length, 'section') : secs.length === 1 ? `Section ${secs[0].name}` : 'No sections',
+            item.students != null ? plural(item.students, 'student') : null,
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          return (
+            <GroupRow
+              icon="school-outline"
+              title={item.name}
+              meta={meta}
+              isLast={index === rows.length - 1}
+              skeleton={skeleton}
+              onPress={() =>
+                secs.length === 0
+                  ? navigation.navigate('AdminStudentSections', { classId: item.id, className: item.name, sections: [] })
+                  : open(item.id, item.name, item.students)
+              }
+            />
+          );
+        }}
+      />
+    );
+  };
+
   const body = () => {
     if (query) return results();
 
-    if (!lookups && !error) return <ListSkeleton />;
+    // Drawn from the classes last loaded here, row for row.
+    if (!lookups && !error) {
+      return classList(last && Array.isArray(last.classes) ? last : sampleClasses(), true);
+    }
 
     if (error && !lookups) {
       return (
@@ -215,43 +312,7 @@ const AdminStudentsScreen = ({ navigation }: any) => {
       );
     }
 
-    return (
-      <FlatList
-        data={classes}
-        keyExtractor={c => String(c.id)}
-        contentContainerStyle={[s.list, classes.length === 0 && s.listEmpty]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
-        ListHeaderComponent={
-          classes.length > 0 ? <Text style={s.count}>{`${plural(classes.length, 'class', 'classes')} · ${plural(total, 'student')}`}</Text> : null
-        }
-        ListEmptyComponent={
-          <DocNoData icon="school-outline" title="No classes yet" subtitle="Add the school’s classes under Standards first." />
-        }
-        renderItem={({ item, index }) => {
-          const secs = sectionsOf(item.id);
-          const meta = [
-            secs.length > 1 ? plural(secs.length, 'section') : secs.length === 1 ? `Section ${secs[0].name}` : 'No sections',
-            item.students != null ? plural(item.students, 'student') : null,
-          ]
-            .filter(Boolean)
-            .join(' · ');
-          return (
-            <GroupRow
-              icon="school-outline"
-              title={item.name}
-              meta={meta}
-              isLast={index === classes.length - 1}
-              onPress={() =>
-                secs.length === 0
-                  ? navigation.navigate('AdminStudentSections', { classId: item.id, className: item.name })
-                  : open(item.id, item.name)
-              }
-            />
-          );
-        }}
-      />
-    );
+    return classList(lookups ?? { classes, sections: [] }, false);
   };
 
   return (
@@ -313,7 +374,6 @@ const __mk_s = () => StyleSheet.create({
   // List
   list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
   listEmpty: { flexGrow: 1 },
-  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
 
   // Error
   centered: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

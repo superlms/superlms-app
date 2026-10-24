@@ -18,6 +18,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { useFocusLoad } from '../../hooks/useRefresh';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
+import { Skeleton, SkeletonIcon, SkeletonText } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import {
@@ -33,7 +35,7 @@ import {
 import { DocHeader, DocNoData } from '../more/docUi';
 import { SubjectIcon } from '../subjects/subjectIcon';
 import { OptionSheet } from './adminFormUi';
-import { ErrorBox, ListSkeleton } from './adminTransportUi';
+import { ErrorBox } from './adminTransportUi';
 
 /**
  * Standards — the admin panel's Academic Structure, drawn as the app's own
@@ -43,6 +45,12 @@ import { ErrorBox, ListSkeleton } from './adminTransportUi';
  * steps out a level. The eye on a row opens it on its own page, with Edit and
  * Delete. The + asks what to add — a class, a section or a subject — and opens
  * its form with what is picked filled in.
+ *
+ * Each level's first load is drawn as a skeleton of what it held the last time
+ * it was opened on this phone — the classes, a class's sections, a section's
+ * subjects — row for row, each bar as long as those words. A level never opened
+ * here is drawn from what the pickers already know (a class's sections), else
+ * as an ordinary one.
  */
 
 // The level on show: the classes, one class's sections or one section's subjects.
@@ -73,6 +81,7 @@ const Row = ({
   onInfo,
   onOpen,
   isLast,
+  skeleton,
 }: {
   lead: React.ReactNode;
   title: string;
@@ -84,7 +93,23 @@ const Row = ({
   /** Opens what is inside it (a class's sections, a section's subjects). */
   onOpen?: () => void;
   isLast: boolean;
-}) => (
+  /** Bars where the words will be. */
+  skeleton?: boolean;
+}) =>
+  skeleton ? (
+    <View style={[st.row, !isLast && st.rowDivider]}>
+      <View style={st.lead}>
+        <Skeleton width={26} height={26} radius={8} />
+      </View>
+      <View style={st.rowBody}>
+        <SkeletonText style={st.rowTitle} numberOfLines={1}>{title}</SkeletonText>
+        {!!sub && <SkeletonText style={st.rowSub} numberOfLines={1}>{sub}</SkeletonText>}
+        {!!meta && <SkeletonText style={st.rowMeta} numberOfLines={1}>{meta}</SkeletonText>}
+      </View>
+      {!!onInfo && <SkeletonIcon iconName="eye-outline" size={20} />}
+      <SkeletonIcon iconName="chevron-forward" size={onOpen ? 18 : 15} />
+    </View>
+  ) : (
   <TouchableOpacity style={[st.row, !isLast && st.rowDivider]} activeOpacity={0.6} onPress={onPress}>
     {lead}
     <View style={st.rowBody}>
@@ -120,13 +145,34 @@ const Row = ({
       </View>
     )}
   </TouchableOpacity>
-);
+  );
 
 const Lead = ({ icon }: { icon: string }) => (
   <View style={st.lead}>
     <VectorIcon iconSet="Ionicons" iconName={icon} size={20} color={theme.colors.textSecondary} />
   </View>
 );
+
+// ── A level never opened on this phone: an ordinary one ──────────────────────
+const SAMPLE_CLASSES: AdminClass[] = Array.from({ length: 8 }, (_, i) => ({
+  id: -1 - i,
+  name: `Class ${i + 1}`,
+  code: String(i + 1).padStart(2, '0'),
+  board: 'CBSE',
+  is_active: true,
+  section_names: i % 3 === 2 ? ['A'] : ['A', 'B'],
+}));
+
+const SAMPLE_SUBJECTS: AdminSubject[] = ['English', 'Hindi', 'Mathematics', 'Science', 'Social Science'].map((name, i) => ({
+  id: -1 - i,
+  name,
+  code: name.slice(0, 3).toUpperCase(),
+  is_active: true,
+  standard_name: 'Class 6',
+  is_mandatory: true,
+  section_ids: [],
+  sections: 'A, B',
+}));
 
 const AdminStandardScreen = ({ navigation, route }: any) => {
   const [tab, setTab] = useState<Tab>('classes');
@@ -142,6 +188,11 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
   const [sheet, setSheet] = useState<null | 'add'>(null);
   const seq = useRef(0);
 
+  // What each level held the last time it was opened here, for its skeleton.
+  const [lastClasses, keepClasses] = useLastLoaded<AdminClass[]>('admin-standard-classes');
+  const [lastSections, keepSections] = useLastLoaded<AdminSection[]>(classId ? `admin-standard-sections:${classId}` : null);
+  const [lastSubjects, keepSubjects] = useLastLoaded<AdminSubject[]>(sectionId ? `admin-standard-subjects:${sectionId}` : null);
+
   const loadLookups = useCallback(() => {
     getAcademicLookups()
       .then(r => setLookups(r.classes ?? []))
@@ -155,24 +206,33 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
     try {
       if (tab === 'classes') {
         const r = await getClasses();
-        if (mine === seq.current) setClasses(r.standards);
+        if (mine === seq.current) {
+          setClasses(r.standards);
+          keepClasses(r.standards);
+        }
       } else if (tab === 'sections') {
         // The panel lists sections of one class.
         const r = classId ? (await getSections({ standard_id: classId })).sections : [];
-        if (mine === seq.current) setSections(r);
+        if (mine === seq.current) {
+          setSections(r);
+          if (classId) keepSections(r);
+        }
       } else {
         // …and subjects of one section.
         const r = sectionId
           ? (await getSubjects({ section_id: sectionId, standard_id: classId ?? undefined })).subjects
           : [];
-        if (mine === seq.current) setSubjects(r);
+        if (mine === seq.current) {
+          setSubjects(r);
+          if (sectionId) keepSubjects(r);
+        }
       }
     } catch (e) {
       if (mine === seq.current) setError(apiErr(e, 'Could not load.'));
     } finally {
       if (mine === seq.current) setRefreshing(false);
     }
-  }, [tab, classId, sectionId]);
+  }, [tab, classId, sectionId, keepClasses, keepSections, keepSubjects]);
 
   useEffect(() => {
     load();
@@ -253,8 +313,34 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
 
   const cls = lookups.find(c => c.id === classId) ?? null;
 
-  const list = tab === 'classes' ? classes : tab === 'sections' ? sections : subjects;
+  const fetched = tab === 'classes' ? classes : tab === 'sections' ? sections : subjects;
   const waiting = (tab === 'sections' && !classId) || (tab === 'subjects' && !sectionId);
+
+  // Not loaded yet: what this level held the last time, else what is known of
+  // it (a class's sections from the pickers), else an ordinary one.
+  const skeleton = !fetched && !error && !waiting;
+  const keptRows = (): any[] => {
+    if (tab === 'classes') {
+      if (lastClasses?.length) return lastClasses;
+      if (lookups.length) {
+        return lookups.map(c => ({ ...c, is_active: true, section_names: c.sections.map(x => x.name) }));
+      }
+      return SAMPLE_CLASSES;
+    }
+    if (tab === 'sections') {
+      if (lastSections?.length) return lastSections;
+      const known = cls?.sections ?? [];
+      return (known.length ? known : [{ id: -1, name: 'A' }, { id: -2, name: 'B' }]).map(x => ({
+        ...x,
+        standard_id: classId ?? 0,
+        standard_name: cls?.name ?? null,
+        is_active: true,
+        subjects_count: 6,
+      }));
+    }
+    return lastSubjects?.length ? lastSubjects : SAMPLE_SUBJECTS;
+  };
+  const list = fetched ?? (skeleton ? keptRows() : null);
 
   const renderItem = ({ item, index }: { item: any; index: number }) => {
     const isLast = index === (list?.length ?? 0) - 1;
@@ -271,6 +357,7 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
           onInfo={() => detail('class', c)}
           onOpen={() => openClass(c.id)}
           isLast={isLast}
+          skeleton={skeleton}
         />
       );
     }
@@ -287,6 +374,7 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
           onInfo={() => detail('section', x)}
           onOpen={() => openSection(x.standard_id, x.id)}
           isLast={isLast}
+          skeleton={skeleton}
         />
       );
     }
@@ -300,6 +388,7 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
         inactive={!sj.is_active}
         onPress={() => detail('subject', sj)}
         isLast={isLast}
+        skeleton={skeleton}
       />
     );
   };
@@ -346,17 +435,20 @@ const AdminStandardScreen = ({ navigation, route }: any) => {
         ) : (
           <DocNoData icon="library-outline" title="Select a section to view subjects" subtitle="Go back and tap a section." />
         )
-      ) : error && !list ? (
+      ) : error && !fetched ? (
         <ErrorBox message={error} onRetry={load} />
-      ) : !list ? (
-        <ListSkeleton />
       ) : (
         <FlatList
-          data={list as any[]}
+          data={(list ?? []) as any[]}
           keyExtractor={(x: any) => `${tab}-${x.id}`}
           renderItem={renderItem}
           ListEmptyComponent={empty()}
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadLookups(); load(); }} />}
+          scrollEnabled={!skeleton}
+          refreshControl={
+            skeleton ? undefined : (
+              <AppRefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadLookups(); load(); }} />
+            )
+          }
           contentContainerStyle={st.list}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}

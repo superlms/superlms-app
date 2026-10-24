@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -28,6 +27,7 @@ import {
 } from '../../api/homeworkApi';
 import { ErrorBox } from './homeworkUi';
 import { AppAlert } from '../../components/AppDialog';
+import SavingButton, { afterTick, saveStateOf, useSavedFlash } from '../../components/SavingButton';
 
 interface PickedFile {
   uri: string;
@@ -174,6 +174,8 @@ const AddHomeworkScreen = ({ navigation, route }: any) => {
     editing?.file_url ? savedFile(editing) : null,
   );
   const [submitting, setSubmitting] = useState(false);
+  // Green with a tick for a moment once posted.
+  const [saved, flashSaved] = useSavedFlash();
 
   const loadTriples = useCallback(async () => {
     setLoadingTriples(true);
@@ -228,14 +230,20 @@ const AddHomeworkScreen = ({ navigation, route }: any) => {
     try {
       if (editing) {
         await updateHomework(editing.id, payload, file, !!editing.file_url && !keptFile);
-        AppAlert.alert('Homework updated', 'Your changes were saved.', [
-          { text: 'Done', onPress: () => navigation.goBack() },
-        ]);
+        flashSaved();
+        afterTick(() =>
+          AppAlert.alert('Homework updated', 'Your changes were saved.', [
+            { text: 'Done', onPress: () => navigation.goBack() },
+          ]),
+        );
       } else {
         await createHomework(payload, file);
-        AppAlert.alert('Homework added', 'The homework was posted successfully.', [
-          { text: 'Done', onPress: () => navigation.goBack() },
-        ]);
+        flashSaved();
+        afterTick(() =>
+          AppAlert.alert('Homework added', 'The homework was posted successfully.', [
+            { text: 'Done', onPress: () => navigation.goBack() },
+          ]),
+        );
       }
     } catch (e: any) {
       AppAlert.alert(editing ? 'Could not save homework' : 'Could not add homework', homeworkErrorMessage(e));
@@ -339,18 +347,15 @@ const AddHomeworkScreen = ({ navigation, route }: any) => {
           )}
 
           {/* Post — right under the form, as Submit Query is on Contact School */}
-          <TouchableOpacity
-            style={[s.postBtn, submitting && s.postBtnBusy]}
-            activeOpacity={0.85}
+          <SavingButton
+            state={saveStateOf(submitting, saved)}
+            label={editing ? 'Save changes' : 'Post homework'}
+            busyLabel={editing ? 'Saving changes' : 'Posting homework'}
+            doneLabel={editing ? 'Saved' : 'Posted'}
             onPress={handleSubmit}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color={theme.colors.white} />
-            ) : (
-              <Text style={s.postText}>{editing ? 'Save changes' : 'Post homework'}</Text>
-            )}
-          </TouchableOpacity>
+            style={s.postBtn}
+            textStyle={s.postText}
+          />
 
           {/* Class menu: opens over the field, starting at its top line. It
               lives at the form level (not inside the field's box) so Android

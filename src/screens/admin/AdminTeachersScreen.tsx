@@ -7,8 +7,9 @@ import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr } from '../../utils/filePickers';
 import { DocHeader, DocNoData } from '../more/docUi';
 import { TeacherRow, TeacherStats, getTeachers } from '../../api/adminTeacherApi';
-import { ListSkeleton, plural } from './adminStudentsUi';
-import { TeacherListRow } from './adminTeachersUi';
+import { useLastLoaded } from '../../hooks/useLastLoaded';
+import { ListCount, plural } from './adminStudentsUi';
+import { KeptTeachers, TeacherListRow, keepTeacherRows, sampleTeachers } from './adminTeachersUi';
 import TeacherExportSheet from './TeacherExportSheet';
 
 /**
@@ -19,6 +20,10 @@ import TeacherExportSheet from './TeacherExportSheet';
  * ID and mobile, and the class they are class teacher of. A row opens Teacher
  * Detail. The header holds Export — Excel or PDF, as the panel asks it — and
  * the + that adds one.
+ *
+ * The first load is drawn as a skeleton of the list as it was the last time
+ * it was opened on this phone — as many rows as there were teachers, each bar
+ * as long as that name and those numbers.
  */
 
 const HeadBtn = ({ icon, onPress }: { icon: string; onPress: () => void }) => (
@@ -34,6 +39,8 @@ const AdminTeachersScreen = ({ navigation }: any) => {
   const [refreshing, setRefreshing] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [search, setSearch] = useState('');
+  // The list last loaded on this phone, for the first load's skeleton.
+  const [last, rememberLast] = useLastLoaded<KeptTeachers>('admin-teachers');
 
   const seq = useRef(0);
   const load = useCallback(async () => {
@@ -48,13 +55,15 @@ const AdminTeachersScreen = ({ navigation }: any) => {
       if (mine === seq.current) {
         setRows(r.teachers);
         setStats(r.stats);
+        // The whole staff is kept, not a search's few.
+        if (!search.trim()) rememberLast(keepTeacherRows(r.teachers, r.stats));
       }
     } catch (e) {
       if (mine === seq.current) setError(apiErr(e, 'Could not load teachers.'));
     } finally {
       if (mine === seq.current) setRefreshing(false);
     }
-  }, [search]);
+  }, [search, rememberLast]);
 
   // Typing waits a moment before it asks, as the panel's search does.
   useEffect(() => {
@@ -77,18 +86,20 @@ const AdminTeachersScreen = ({ navigation }: any) => {
     }, []),
   );
 
-  const list = rows ?? [];
+  // The teachers — the real ones, or the list as it was kept, drawn as a skeleton.
+  const skeleton = !rows && !error;
+  const kept = skeleton ? (last && Array.isArray(last.teachers) ? last : sampleTeachers()) : null;
+  const list = (rows ?? kept?.teachers ?? []) as TeacherRow[];
   const searching = !!search.trim();
+  const thisYear = kept ? kept.this_year : stats?.this_year;
 
   const countLine = searching
     ? `${plural(list.length, 'teacher')} found`
-    : [plural(list.length, 'teacher'), stats?.this_year != null ? `${stats.this_year} joined this year` : null]
+    : [plural(list.length, 'teacher'), thisYear != null ? `${thisYear} joined this year` : null]
         .filter(Boolean)
         .join(' · ');
 
   const body = () => {
-    if (!rows && !error) return <ListSkeleton photo />;
-
     if (error && !rows) {
       return (
         <View style={s.centered}>
@@ -108,8 +119,13 @@ const AdminTeachersScreen = ({ navigation }: any) => {
         contentContainerStyle={[s.list, list.length === 0 && s.listEmpty]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
-        ListHeaderComponent={list.length > 0 ? <Text style={s.count}>{countLine}</Text> : null}
+        scrollEnabled={!skeleton}
+        refreshControl={
+          skeleton ? undefined : (
+            <AppRefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />
+          )
+        }
+        ListHeaderComponent={list.length > 0 ? <ListCount skeleton={skeleton} text={countLine} /> : null}
         ListEmptyComponent={
           searching ? (
             <DocNoData icon="search-outline" title="No teachers found" subtitle="No teacher’s name, email, employee ID or phone matches the search." />
@@ -120,7 +136,8 @@ const AdminTeachersScreen = ({ navigation }: any) => {
         renderItem={({ item, index }) => (
           <TeacherListRow
             teacher={item}
-            onOpen={() => navigation.navigate('AdminTeacherDetail', { id: item.id })}
+            skeleton={skeleton}
+            onOpen={() => navigation.navigate('AdminTeacherDetail', { id: item.id, row: item })}
             isLast={index === list.length - 1}
           />
         )}
@@ -186,7 +203,6 @@ const __mk_s = () => StyleSheet.create({
   // List
   list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
   listEmpty: { flexGrow: 1 },
-  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
 
   // Error
   centered: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 24, gap: 10 },

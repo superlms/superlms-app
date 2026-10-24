@@ -264,7 +264,7 @@ const QrPayScreen = ({ navigation, route }: any) => {
               )}
               {!!qr.image_url && (
                 <View style={s.flex}>
-                  <FeeButton compact outline label="Save QR" icon="download-outline" busy={saving} onPress={onSaveQr} />
+                  <FeeButton compact outline label="Save QR" icon="download-outline" busy={saving} busyKind="download" busyLabel="Saving QR" onPress={onSaveQr} />
                 </View>
               )}
             </View>
@@ -393,7 +393,7 @@ const QrPayScreen = ({ navigation, route }: any) => {
             </Pressable>
 
             <View style={s.send}>
-              <FeeButton label={sending ? 'Sending…' : 'Send to school'} icon="paper-plane" busy={sending} onPress={onSend} />
+              <FeeButton label="Send to school" icon="paper-plane" busy={sending} busyLabel="Sending" onPress={onSend} />
             </View>
             <Note>The school checks it; your receipt then shows in Fees.</Note>
           </Card>

@@ -57,6 +57,7 @@ import {
   mimeOf,
   openInPhoneApp,
 } from './chatFiles';
+import { TransferIcon, UploadStatus } from '../../components/TransferToast';
 
 // The clipboard is a native module; it is required lazily so a build without it
 // still runs, and Copy then says to update the app.
@@ -227,12 +228,16 @@ const Bubble = ({
             {file?.type === 'image' && (
               <TouchableOpacity activeOpacity={0.85} onPress={tapFile} onLongPress={onLongPress} disabled={skeleton}>
                 {local && !skeleton ? (
-                  <Image source={{ uri: local }} style={s.photo} />
+                  <View>
+                    <Image source={{ uri: local }} style={s.photo} />
+                    {/* Going up: the rising arrow and how far along it is */}
+                    {msg.pending && <UploadStatus compact color="#fff" style={s.photoUploading} />}
+                  </View>
                 ) : (
                   <View style={[s.photo, s.mediaEmpty]}>
                     {!skeleton &&
                       (fetching ? (
-                        <ActivityIndicator size="small" color={CH.accent} />
+                        <TransferIcon kind="download" size={24} color={CH.accent} />
                       ) : (
                         <>
                           <VectorIcon iconSet="Ionicons" iconName="image-outline" size={24} color={CH.muted} />
@@ -262,7 +267,8 @@ const Bubble = ({
                     !!file.size && <Text style={s.fileSize}>{fileSize(file.size)}</Text>
                   )}
                 </View>
-                {fetching && <ActivityIndicator size="small" color={CH.accent} />}
+                {fetching && <TransferIcon kind="download" size={18} color={CH.accent} />}
+                {msg.pending && !fetching && <TransferIcon kind="upload" size={18} color={CH.accent} />}
               </TouchableOpacity>
             )}
             {!!msg.body && <Text style={[s.bubbleText, !!file && s.bubbleTextAfter]}>{msg.body}</Text>}
@@ -1109,6 +1115,17 @@ const __mk_s = () => StyleSheet.create({
 
   // Attachments
   photo: { width: 220, height: 165, borderRadius: 12, backgroundColor: CH.page },
+  photoUploading: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
   file: { flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 180, paddingVertical: 2 },
   fileText: { flexShrink: 1 },
   fileName: { fontSize: 14, fontWeight: '500', color: CH.ink },

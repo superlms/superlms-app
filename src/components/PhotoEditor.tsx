@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CroppedPhoto from './CroppedPhoto';
 import type { CropRect } from './PhotoCropper';
+import { UploadStatus } from './TransferToast';
 
 /**
  * A photo cropped from any side before it is saved — the web panel's photo
@@ -234,7 +235,7 @@ export const PhotoEditorView = ({
           <Text style={[c.cancel, busy && c.off]}>Cancel</Text>
         </TouchableOpacity>
         {busy ? (
-          <ActivityIndicator color="#fff" />
+          <UploadStatus color="#fff" label="Saving" />
         ) : (
           <TouchableOpacity onPress={() => current && onDone(current)} disabled={!current} hitSlop={10} activeOpacity={0.6}>
             <Text style={[c.done, !current && c.off]}>{doneLabel}</Text>
