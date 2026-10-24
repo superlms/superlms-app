@@ -1,98 +1,85 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import moment from 'moment';
+import React, { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AppRefreshControl from '../../components/AppRefreshControl';
+import { AppAlert } from '../../components/AppDialog';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
-import { quietCaps } from '../../utils/quietCaps';
 import { DocHeader } from '../more/docUi';
 import { dashboardErrorMessage } from '../../api/dashboardApi';
-import { getAdminAnalytics, type AdminAnalyticsData as Data } from '../../api/adminDashboardApi';
 import {
-  COMPARE,
-  Card,
-  CardHead,
-  Columns,
-  DashError,
-  DashSkeleton,
-  Initial,
-  KpiGrid,
-  LOW_ATTENDANCE,
-  LineRow,
-  NEUTRAL,
-  Note,
-  PRESENT,
-  PctRow,
-  Pill,
-  SplitBar,
-  bandFor,
-  deltaOf,
-} from '../home/dashboardUi';
-import { ClassAttendanceRows } from '../home/dashTeacher';
-import { FigureRow, Legend, LineChart } from '../analytics/charts';
-import { Hero, Tabs, changeText, inr, monthShort, pctOrDash, plural } from '../analytics/analyticsUi';
-import { AwayRows, Caption, DayColumns, inrShort, listNames, sessionLabel, useAdminLinks } from './adminDashUi';
+  assignPanelArrangement,
+  getPanelAnalytics,
+  type PanelAnalytics as Data,
+  type PanelAnalyticsFilters as Filters,
+  type PanelBars,
+  type PanelRanker,
+} from '../../api/adminPanelApi';
+import { Card, CardHead, DashError, KpiGrid, LineRow, Note, PageLine } from '../home/dashboardUi';
+import { C, BarChart, Doughnut, HBarChart, Key, LineChart, inrAxis, inrFull } from './panelCharts';
+import {
+  Avatar,
+  CenterFigures,
+  Filter,
+  PanelAnalyticsSkeleton,
+  Progress,
+  RankBar,
+  SectionHeading,
+  StatCells,
+  Tag,
+  ValueLines,
+  bandColor,
+} from './panelUi';
+import { useAdminLinks } from './adminDashUi';
 
-type Tab = 'overview' | 'attendance' | 'staff' | 'results' | 'fees' | 'homework' | 'admissions';
+const num = (n: number) => Number(n || 0).toLocaleString('en-IN');
+const money = (n: number) => inrFull(Math.round(Number(n) || 0));
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'attendance', label: 'Attendance' },
-  { key: 'staff', label: 'Teachers' },
-  { key: 'results', label: 'Results' },
-  { key: 'fees', label: 'Fees' },
-  { key: 'homework', label: 'Homework' },
-  { key: 'admissions', label: 'Admissions' },
-];
-
-const WEEKDAYS: Record<string, string> = {
-  Mon: 'Mondays',
-  Tue: 'Tuesdays',
-  Wed: 'Wednesdays',
-  Thu: 'Thursdays',
-  Fri: 'Fridays',
-  Sat: 'Saturdays',
+// The WhatsApp kinds' colours, and how far a message got, as the panel draws them.
+const WA_COLORS: Record<string, string> = {
+  absent_alert: C.rose,
+  fee_received: 'rgba(16,185,129,0.75)',
+  credentials: 'rgba(99,102,241,0.75)',
+  welcome: C.slate,
+};
+const WA_BAR: Record<string, string> = { read: '#10B981', delivered: '#3B82F6', sent: '#9CA3AF', failed: '#EF4444' };
+const WA_STATUS: Record<string, { label: string; color: string; bg: string }> = {
+  read: { label: 'Read', color: '#047857', bg: '#ECFDF5' },
+  delivered: { label: 'Delivered', color: '#1D4ED8', bg: '#EFF6FF' },
+  sent: { label: 'Sent', color: '#4B5563', bg: '#F3F4F6' },
+  failed: { label: 'Not delivered', color: '#B91C1C', bg: '#FEF2F2' },
+};
+const ENQUIRY_TAG: Record<string, { color: string; bg: string }> = {
+  Responded: { color: '#047857', bg: '#ECFDF5' },
+  Pending: { color: '#B45309', bg: '#FFFBEB' },
+  New: { color: '#0369A1', bg: '#F0F9FF' },
 };
 
-const STUDENTS_VS_TEACHERS = [
-  { label: 'Students', color: theme.colors.primary, line: true },
-  { label: 'Teachers', color: COMPARE, line: true },
-];
-
-type Links = ReturnType<typeof useAdminLinks>;
-
-// "▲ 4%" in a pill, green up and red down.
-const ChangePill = ({ now, before }: { now: number; before: number | null | undefined }) =>
-  before == null ? null : (
-    <Pill text={`${now >= before ? '▲' : '▼'} ${Math.abs(now - before)}%`} tone={now >= before ? 'good' : 'bad'} />
-  );
-
 /**
- * The school's Analytics, as the student and teacher ones are drawn: a row of
- * tabs — Overview, Attendance, Teachers, Results, Fees, Homework and
- * Admissions — over cards of graphs and figures on the page's grey, each set
- * against something: the month or exam before, the class beside it, the
- * students beside the teachers.
+ * The school's Analytics: the web panel's page, figure for figure and in its
+ * order, drawn the app's way — Key Metrics; Attendance (the 30-day rate trend,
+ * today's student split, each month's volume and the class ranking); Student
+ * Performance (the top and bottom ten by exam marks, by class and section);
+ * Admissions & Enquiries; Fee (by class, recovery, and transport by class and
+ * route); WhatsApp; and Operations (today's absent teachers' periods, to cover).
  */
-const AdminAnalyticsScreen = ({ navigation, route }: any) => {
-  const [tab, setTab] = useState<Tab>(route?.params?.tab ?? 'overview');
+const AdminAnalyticsScreen = ({ navigation }: any) => {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const filters = useRef<Filters>({});
   const links = useAdminLinks(navigation);
 
-  // The dashboard's cards open a tab of their own.
-  const asked = route?.params?.tab as Tab | undefined;
-  const askedAt = route?.params?.at;
-  useEffect(() => {
-    if (asked && TABS.some(t => t.key === asked)) setTab(asked);
-  }, [asked, askedAt]);
+  // Operations: the teacher picked for each period, and the one just saved.
+  const [chosen, setChosen] = useState<Record<number, number>>({});
+  const [saving, setSaving] = useState<number | null>(null);
+  const [saved, setSaved] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      setData(await getAdminAnalytics());
+      setData(await getPanelAnalytics(filters.current));
     } catch (e: any) {
-      console.log('[getAdminAnalytics] Error:', e?.response?.status, e?.message);
+      console.log('[getPanelAnalytics] Error:', e?.response?.status, e?.message);
       setError(dashboardErrorMessage(e));
     }
   }, []);
@@ -100,43 +87,79 @@ const AdminAnalyticsScreen = ({ navigation, route }: any) => {
   const { refreshing, onRefresh } = useRefresh(load);
   useFocusLoad(load);
 
-  const go = (key: Tab) => () => setTab(key);
-  const body = (() => {
-    if (!data) return null;
-    switch (tab) {
-      case 'attendance':
-        return <AttendanceTab data={data} links={links} />;
-      case 'staff':
-        return <StaffTab data={data} links={links} />;
-      case 'results':
-        return <ResultsTab data={data} links={links} />;
-      case 'fees':
-        return <FeesTab data={data} />;
-      case 'homework':
-        return <HomeworkTab data={data} links={links} />;
-      case 'admissions':
-        return <AdmissionsTab data={data} navigation={navigation} links={links} />;
-      default:
-        return <Overview data={data} go={go} />;
+  // A filter changed: read the page again with it.
+  const refilter = async (next: Filters) => {
+    filters.current = { ...filters.current, ...next };
+    setBusy(true);
+    try {
+      await load();
+    } finally {
+      setBusy(false);
     }
-  })();
+  };
+
+  const assign = async (id: number) => {
+    const teacher = chosen[id];
+    if (!teacher) return;
+    setSaving(id);
+    try {
+      await assignPanelArrangement(id, teacher);
+      setSaved(true);
+      await load();
+    } catch (e: any) {
+      AppAlert.alert('Arrangement', e?.response?.data?.message || 'Could not save. Please try again.');
+    } finally {
+      setSaving(null);
+    }
+  };
 
   return (
     <View style={s.root}>
       <DocHeader
         title="Analytics"
         onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
+        rightSlot={busy ? <ActivityIndicator size="small" color={theme.colors.primary} /> : undefined}
       />
-      <Tabs tabs={TABS} active={tab} onChange={setTab} />
       {!data ? (
-        error ? <DashError message={error} onRetry={load} /> : <DashSkeleton kpis={false} />
+        error ? (
+          <DashError message={error} onRetry={load} />
+        ) : (
+          <ScrollView showsVerticalScrollIndicator={false} scrollEnabled={false}>
+            <PanelAnalyticsSkeleton />
+          </ScrollView>
+        )
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={s.scroll}
           refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          {body}
+          <PageLine text={data.date} />
+          <Card>
+            <CenterFigures
+              top={false}
+              items={[
+                { value: num(data.stats.totalStudents), label: 'Students' },
+                { value: `${data.kpis.student_rate}%`, label: 'Attendance' },
+                { value: `${data.kpis.collect_rate}%`, label: 'Collected' },
+              ]}
+            />
+          </Card>
+
+          <KeyMetrics data={data} />
+          <Attendance data={data} />
+          <Performance data={data} onFilter={refilter} />
+          <Admissions data={data} onFilter={refilter} navigation={navigation} canEnquiries={links.can('enquiries')} />
+          <Fee data={data} />
+          <WhatsApp data={data} onFilter={refilter} />
+          <Operations
+            data={data}
+            chosen={chosen}
+            onChoose={(id, t) => setChosen(c => ({ ...c, [id]: t }))}
+            saving={saving}
+            saved={saved}
+            onAssign={assign}
+          />
         </ScrollView>
       )}
     </View>
@@ -145,810 +168,598 @@ const AdminAnalyticsScreen = ({ navigation, route }: any) => {
 
 export default AdminAnalyticsScreen;
 
-// ── Overview ─────────────────────────────────────────────────────────────────
-const Overview = ({ data, go }: { data: Data; go: (t: Tab) => () => void }) => {
-  const a = data.attendance;
-  const months = a.months;
-  const staffMonths = data.staff.months;
-  const lastMonth = months[months.length - 2];
-  const staffNow = staffMonths[staffMonths.length - 1];
-  const staffBefore = staffMonths[staffMonths.length - 2];
-  const f = data.fees.summary;
-  const r = data.results.latest;
-  const sc = data.school;
-  const feeMost = Math.max(1, ...data.fees.months.map(m => m.amount));
-
+// ── Key Metrics ──────────────────────────────────────────────────────────────
+// Eight tiles: Fee Collection is the share of the whole fee (academic +
+// transport + Last Year Dues) that has come in; the three after it are what
+// that whole fee is made of.
+const KeyMetrics = ({ data }: { data: Data }) => {
+  const k = data.kpis;
+  const d = k.student_delta;
   return (
     <>
+      <SectionHeading title="Key Metrics" />
       <KpiGrid
         items={[
           {
             icon: 'people-outline',
-            label: 'Attendance',
-            value: pctOrDash(a.this_month),
-            note: `Students · ${moment().format('MMMM')}`,
-            delta: deltaOf(a.this_month, a.last_month, lastMonth ? monthShort(lastMonth.month) : ''),
-            low: a.this_month != null && a.this_month < LOW_ATTENDANCE,
-            onPress: go('attendance'),
+            label: 'Student Attendance',
+            value: `${k.student_rate}%`,
+            note: !k.student_marked ? 'Not marked yet today' : d === 0 ? '0% vs yesterday' : null,
+            delta: k.student_marked && d !== 0 ? { text: `${d > 0 ? '▲' : '▼'} ${Math.abs(d)}% vs yesterday`, good: d > 0 } : null,
           },
-          {
-            icon: 'school-outline',
-            label: 'Teachers',
-            value: pctOrDash(staffNow?.percentage),
-            note: `Days in · ${moment().format('MMMM')}`,
-            delta: deltaOf(staffNow?.percentage, staffBefore?.percentage, staffBefore ? monthShort(staffBefore.month) : ''),
-            low: staffNow?.percentage != null && staffNow.percentage < LOW_ATTENDANCE,
-            onPress: go('staff'),
-          },
-          {
-            icon: 'trophy-outline',
-            label: 'School average',
-            value: r ? `${r.average}%` : '—',
-            note: r ? r.exam_name ?? 'Latest exam' : 'No marks yet',
-            delta: r ? deltaOf(r.average, r.previous_average, 'exam before') : null,
-            low: !!r && r.average < data.results.pass_percentage,
-            onPress: go('results'),
-          },
-          {
-            icon: 'wallet-outline',
-            label: 'Fees collected',
-            value: pctOrDash(f.rate),
-            note: f.total_billable > 0 ? `${inrShort(f.total_collected)} of ${inrShort(f.total_billable)}` : 'No fees set yet',
-            onPress: go('fees'),
-          },
+          { icon: 'school-outline', label: 'Teacher Attendance', value: `${k.teacher_rate}%`, note: 'Today' },
+          { icon: 'wallet-outline', label: 'Fee Collection', value: `${k.collect_rate}%`, note: `of ${money(data.fee.stats.totalFee)} total fee` },
+          { icon: 'book-outline', label: 'Academic Fee', value: money(k.academic_fee), note: 'total' },
+          { icon: 'bus-outline', label: 'Transport Fee', value: money(k.transport_fee), note: 'total' },
+          { icon: 'time-outline', label: 'Last Year Dues', value: money(k.last_year_dues), note: 'total' },
+          { icon: 'alert-circle-outline', label: 'Unpaid Students', value: num(k.unpaid_students), note: 'no payment yet', low: true },
+          { icon: 'person-add-outline', label: 'New Admissions', value: num(k.new_admissions), note: 'last 30 days' },
         ]}
       />
-
-      {(months.some(m => m.percentage != null) || staffMonths.some(m => m.percentage != null)) && (
-        <Card>
-          <CardHead icon="trending-up-outline" title="Attendance trend" sub="Last six months, students and teachers" action="More" onAction={go('attendance')} />
-          <LineChart
-            labels={months.map(m => monthShort(m.month))}
-            series={[
-              { key: 'students', label: 'Students', points: months.map(m => m.percentage) },
-              { key: 'teachers', label: 'Teachers', points: staffMonths.map(m => m.percentage), compare: true },
-            ]}
-          />
-          <Legend items={STUDENTS_VS_TEACHERS} />
-          <View style={s.gap} />
-        </Card>
-      )}
-
-      {data.results.exams.length > 0 && (
-        <Card>
-          <CardHead icon="stats-chart-outline" title="Results trend" sub="School average, exam by exam" action="More" onAction={go('results')} />
-          <LineChart
-            labels={data.results.exams.map(e => e.exam_name || 'Exam')}
-            subs={data.results.exams.map(e => (e.date ? moment(e.date, 'YYYY-MM-DD').format('MMM') : null))}
-            series={[{ key: 'avg', label: 'Average', points: data.results.exams.map(e => e.average) }]}
-          />
-        </Card>
-      )}
-
-      <Card>
-        <CardHead icon="cash-outline" title="Fees month by month" sub="What came in, academic and transport" action="More" onAction={go('fees')} />
-        <Columns
-          max={feeMost}
-          format={inrShort}
-          data={data.fees.months.map(m => ({ key: m.month, label: monthShort(m.month), value: m.amount }))}
-        />
-      </Card>
-
-      <Card>
-        <CardHead icon="business-outline" title="The school" sub={sessionLabel(sc.session)} />
-        <FigureRow
-          items={[
-            { label: 'Students', value: String(sc.students) },
-            { label: 'Teachers', value: String(sc.teachers) },
-            { label: 'Classes', value: String(sc.classes) },
-            { label: 'Sections', value: String(sc.sections) },
-          ]}
-        />
-        <Note>
-          {[plural(sc.subjects, 'subject'), sc.per_teacher != null ? `about ${sc.per_teacher} students to a teacher` : null]
-            .filter(Boolean)
-            .join(' · ')}
-        </Note>
-      </Card>
     </>
   );
 };
 
-// ── Attendance (students) ────────────────────────────────────────────────────
-const AttendanceTab = ({ data, links }: { data: Data; links: Links }) => {
+// ── Attendance ───────────────────────────────────────────────────────────────
+const Attendance = ({ data }: { data: Data }) => {
   const a = data.attendance;
-  const t = a.today;
-  const counted = a.weekdays.filter(w => w.percentage != null);
-  const weakest = counted.length > 1 ? [...counted].sort((x, y) => (x.percentage ?? 0) - (y.percentage ?? 0))[0] : null;
-  const more = Math.max(a.watch.total - a.watch.students.length, 0);
-
-  if (a.by_class.length === 0) {
-    return <Hero kicker="Attendance" value="No classes yet" caption="Attendance appears here once classes have students." />;
-  }
+  const t = a.daily_trend;
+  const split = a.split;
+  const marked = split.present + split.absent;
+  const m = a.monthly;
 
   return (
     <>
-      <Hero
-        kicker="Students · today"
-        value={t.holiday ? 'Holiday' : t.percentage != null ? `${t.percentage}%` : 'Not marked'}
-        low={t.percentage != null && t.percentage < LOW_ATTENDANCE}
-        band={!t.holiday && t.percentage != null ? bandFor(t.percentage) : null}
-        caption={
-          t.holiday
-            ? 'No school today'
-            : [
-                t.percentage != null ? `${t.present} of ${t.marked} marked present` : `${t.students} students`,
-                t.not_marked.length > 0 ? `${plural(t.not_marked.length, 'class', 'classes')} not marked` : null,
-              ]
-                .filter(Boolean)
-                .join(' · ')
-        }
-        stats={[
-          { label: moment().format('MMMM'), value: pctOrDash(a.this_month), low: a.this_month != null && a.this_month < LOW_ATTENDANCE },
-          { label: 'Absent today', value: String(t.absent) },
-          { label: 'Under 75% this month', value: String(a.watch.total), low: a.watch.total > 0 },
-        ]}
-      />
+      <SectionHeading title="Attendance" />
 
       <Card>
-        <CardHead icon="people-outline" title="Today by class" sub={`${plural(a.by_class.length, 'class', 'classes')} · present out of marked`} action="Mark" onAction={links.open('attendance')} />
-        <ClassAttendanceRows rows={a.by_class} />
-      </Card>
-
-      <Card>
-        <CardHead icon="bar-chart-outline" title="Last 7 days" sub="Present out of marked, whole school" />
-        <DayColumns days={a.week} />
-      </Card>
-
-      {a.months.some(m => m.percentage != null) && (
-        <Card>
-          <CardHead icon="trending-up-outline" title="Six months" sub="Students, month by month" />
-          <LineChart labels={a.months.map(m => monthShort(m.month))} series={[{ key: 'all', label: 'Students', points: a.months.map(m => m.percentage) }]} />
-        </Card>
-      )}
-
-      {a.month_by_class.length > 0 && (
-        <Card>
-          <CardHead icon="podium-outline" title={`${moment().format('MMMM')}, class by class`} sub="Present so far, and school days marked" />
-          {a.month_by_class.map((c, i) => {
-            const behind = Math.max(c.school_days - c.marked_days, 0);
-            return (
-              <PctRow
-                key={c.class}
-                label={c.class}
-                pct={c.percentage ?? 0}
-                empty={c.percentage == null}
-                value={c.percentage == null ? 'Not marked' : undefined}
-                low={c.percentage != null && c.percentage < LOW_ATTENDANCE}
-                tag={behind > 0 ? <Pill text={`${behind} ${behind === 1 ? 'day' : 'days'} unmarked`} tone="bad" /> : null}
-                meta={`${plural(c.students, 'student')} · marked on ${c.marked_days} of ${plural(c.school_days, 'school day')}`}
-                isLast={i === a.month_by_class.length - 1}
-              />
-            );
-          })}
-        </Card>
-      )}
-
-      {counted.length > 0 && (
-        <Card>
-          <CardHead
-            icon="calendar-outline"
-            title="Weekday by weekday"
-            sub={weakest ? `Six months · lowest on ${WEEKDAYS[weakest.day] ?? weakest.day}` : 'Six months'}
-          />
-          <Columns
-            selected={weakest?.day}
-            data={a.weekdays.map(w => ({ key: w.day, label: w.day, value: w.percentage, low: w.percentage != null && w.percentage < LOW_ATTENDANCE }))}
-          />
-        </Card>
-      )}
-
-      <Card>
-        <CardHead
-          icon="alert-circle-outline"
-          title="Students to watch"
-          sub={a.watch.total > 0 ? `${a.watch.total} under ${LOW_ATTENDANCE}% this month` : `Everyone is at ${LOW_ATTENDANCE}% or above this month`}
-        />
-        {a.watch.students.map((st, i) => (
-          <LineRow
-            key={`${st.name}-${st.class}-${i}`}
-            lead={<Initial text={st.name} />}
-            title={st.name || 'Student'}
-            meta={[st.class, st.roll_no != null && st.roll_no !== '' ? `Roll ${st.roll_no}` : null, `${st.present_days} of ${st.working_days} days`]
-              .filter(Boolean)
-              .join(' · ')}
-            trailing={<Text style={[s.trailValue, s.low]}>{st.percentage}%</Text>}
-            isLast={i === a.watch.students.length - 1 && more === 0}
-          />
-        ))}
-        {more > 0 && <Note>and {more} more</Note>}
-      </Card>
-    </>
-  );
-};
-
-// ── Teachers ─────────────────────────────────────────────────────────────────
-const StaffTab = ({ data, links }: { data: Data; links: Links }) => {
-  const st = data.staff;
-  const t = st.today;
-  const inToday = t.present + t.half_day;
-  const w = st.workload;
-  const busiest = Math.max(1, ...w.by_teacher.map(x => x.periods));
-  const away = st.month_by_teacher;
-
-  if (st.total === 0) {
-    return <Hero kicker="Teachers" value="No teachers yet" caption="Teachers’ attendance appears here once teachers are added." />;
-  }
-
-  return (
-    <>
-      <Hero
-        kicker="Teachers · today"
-        value={t.holiday ? 'Holiday' : t.percentage != null ? `${t.percentage}%` : 'Not marked'}
-        low={t.percentage != null && t.percentage < LOW_ATTENDANCE}
-        band={!t.holiday && t.percentage != null ? bandFor(t.percentage) : null}
-        caption={
-          t.holiday
-            ? 'No school today'
-            : t.marked > 0
-            ? [`${inToday} of ${t.marked} marked are in`, t.half_day > 0 ? `${t.half_day} on a half day` : null].filter(Boolean).join(' · ')
-            : `${plural(st.total, 'teacher')} · not marked yet`
-        }
-        stats={[
-          { label: 'Teachers', value: String(st.total) },
-          { label: 'Absent today', value: String(t.absent), low: t.absent > 0 },
-          { label: 'Not marked', value: String(t.not_marked), low: !t.holiday && t.not_marked > 0 },
-        ]}
-      />
-
-      {!t.holiday && (
-        <Card>
-          <CardHead icon="person-remove-outline" title="Away today" sub={st.absent.length > 0 ? plural(st.absent.length, 'teacher') : 'Nobody marked away'} action="Arrangement" onAction={links.open('arrangement')} />
-          {st.absent.length > 0 ? (
-            <AwayRows rows={st.absent} isLast={st.not_marked.length === 0 && st.arrangements.total === 0} />
-          ) : (
-            <Note>{t.marked > 0 ? 'Every teacher marked today is in.' : 'Teachers’ attendance hasn’t been marked today.'}</Note>
-          )}
-          {st.arrangements.total > 0 && (
-            <LineRow
-              title="Arrangements"
-              meta={`${st.arrangements.covered} of ${plural(st.arrangements.total, 'period')} covered by a substitute`}
-              trailing={
-                st.arrangements.covered < st.arrangements.total ? (
-                  <Pill text={`${st.arrangements.total - st.arrangements.covered} open`} tone="bad" />
-                ) : (
-                  <Pill text="All covered" tone="good" />
-                )
-              }
-              isLast={st.not_marked.length === 0}
-            />
-          )}
-          {st.not_marked.length > 0 && (
-            <Text style={s.alert}>
-              <Text style={s.alertStrong}>Not marked: </Text>
-              {listNames(st.not_marked, 6)}
-            </Text>
-          )}
-        </Card>
-      )}
-
-      <Card>
-        <CardHead icon="bar-chart-outline" title="Last 7 days" sub="Teachers in, out of those marked" />
-        <DayColumns days={st.week} />
-      </Card>
-
-      {st.months.some(m => m.percentage != null) && (
-        <Card>
-          <CardHead icon="trending-up-outline" title="Six months" sub="Teachers, with the students beside them" />
-          <LineChart
-            labels={st.months.map(m => monthShort(m.month))}
-            series={[
-              { key: 'teachers', label: 'Teachers', points: st.months.map(m => m.percentage) },
-              { key: 'students', label: 'Students', points: data.attendance.months.map(m => m.percentage), compare: true },
-            ]}
-          />
-          <Legend
-            items={[
-              { label: 'Teachers', color: theme.colors.primary, line: true },
-              { label: 'Students', color: COMPARE, line: true },
-            ]}
-          />
-          <View style={s.gap} />
-        </Card>
-      )}
-
-      <Card>
-        <CardHead
-          icon="calendar-clear-outline"
-          title={`${moment().format('MMMM')}, days away`}
-          sub={away.total > 0 ? `${plural(away.total, 'teacher')} away at least once` : 'Nobody has been away this month'}
-        />
-        {away.teachers.map((x, i) => (
-          <LineRow
-            key={`${x.name}-${i}`}
-            lead={<Initial text={x.name} />}
-            title={x.name}
-            meta={[
-              x.absent > 0 ? `${plural(x.absent, 'day')} absent` : null,
-              x.half_day > 0 ? `${plural(x.half_day, 'half day')}` : null,
-              `of ${plural(x.working, 'day')} marked`,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-            trailing={
-              <Text style={[s.trailValue, x.percentage != null && x.percentage < LOW_ATTENDANCE && s.low]}>{pctOrDash(x.percentage)}</Text>
-            }
-            isLast={i === away.teachers.length - 1 && away.total <= away.teachers.length}
-          />
-        ))}
-        {away.total > away.teachers.length && <Note>and {away.total - away.teachers.length} more</Note>}
-      </Card>
-
-      {w.by_teacher.length > 0 && (
-        <Card>
-          <CardHead
-            icon="time-outline"
-            title="Periods a week"
-            sub={[`${w.periods} on the timetable`, w.idle > 0 ? `${plural(w.idle, 'teacher')} with none` : null].filter(Boolean).join(' · ')}
-            action="Timetable"
-            onAction={links.open('timetable')}
-          />
-          {w.by_teacher.map((x, i) => {
-            const h = Math.floor(x.minutes / 60);
-            const m = x.minutes % 60;
-            return (
-              <PctRow
-                key={`${x.name}-${i}`}
-                label={x.name}
-                pct={Math.round((x.periods / busiest) * 100)}
-                value={plural(x.periods, 'period')}
-                meta={x.minutes > 0 ? `${h} h${m ? ` ${m} min` : ''} a week` : null}
-                isLast={i === w.by_teacher.length - 1}
-              />
-            );
-          })}
-        </Card>
-      )}
-    </>
-  );
-};
-
-// ── Results ──────────────────────────────────────────────────────────────────
-const ResultsTab = ({ data, links }: { data: Data; links: Links }) => {
-  const r = data.results;
-  const l = r.latest;
-  const up = r.upload;
-  const pass = r.pass_percentage;
-  const grades = l ? l.grades.filter(g => g.grade !== 'AB' || g.count > 0) : [];
-  const most = Math.max(1, ...grades.map(g => g.count));
-
-  return (
-    <>
-      <Hero
-        kicker={l ? `School average · ${l.exam_name ?? 'latest exam'}` : 'School average'}
-        value={l ? `${l.average}%` : 'No marks yet'}
-        low={!!l && l.average < pass}
-        band={l ? bandFor(l.average) : null}
-        caption={
-          l
-            ? [plural(l.students, 'student'), changeText(l.average, l.previous_average, l.previous_exam || 'the exam before')].filter(Boolean).join(' · ')
-            : 'Averages appear here once marks are saved.'
-        }
-        stats={
-          l && l.students > 0
-            ? [
-                { label: 'Passed', value: `${Math.round((l.passed / l.students) * 100)}%`, low: l.passed / l.students < 0.75 },
-                { label: 'Papers', value: String(l.papers) },
-                { label: 'Absent papers', value: String(l.absent), low: l.absent > 0 },
-              ]
-            : undefined
-        }
-      />
-
-      {!!up && (
-        <Card>
-          <CardHead
-            icon="create-outline"
-            title={`Marks entry · ${up.exam_name ?? 'Current exam'}`}
-            sub={`Complete for ${up.done} of ${plural(up.total, 'class subject')}`}
-          />
-          {up.by_class.map((c, i) => (
-            <PctRow
-              key={c.class}
-              label={c.class}
-              pct={c.expected > 0 ? Math.round((c.marks / c.expected) * 100) : 0}
-              value={`${c.complete}/${c.subjects}`}
-              empty={c.marks === 0}
-              tag={c.complete >= c.subjects ? <Pill text="Done" tone="good" /> : null}
-              meta={`${c.complete} of ${plural(c.subjects, 'subject')} complete · marks for ${c.marks} of ${c.expected} papers`}
-              isLast={i === up.by_class.length - 1}
-            />
-          ))}
-        </Card>
-      )}
-
-      {r.exams.length > 0 && (
-        <Card>
-          <CardHead icon="trending-up-outline" title="Exam by exam" sub="School average, every class and subject" />
-          <LineChart
-            labels={r.exams.map(e => e.exam_name || 'Exam')}
-            subs={r.exams.map(e => (e.date ? moment(e.date, 'YYYY-MM-DD').format('MMM') : null))}
-            series={[{ key: 'avg', label: 'Average', points: r.exams.map(e => e.average) }]}
-          />
-        </Card>
-      )}
-
-      {!!l && l.by_class.length > 0 && (
-        <Card>
-          <CardHead
-            icon="podium-outline"
-            title="Class by class"
-            sub={l.previous_exam ? `The tick is ${l.previous_exam}` : l.exam_name}
-            action="Performance"
-            onAction={links.open('performance')}
-          />
-          {!!l.previous_exam && (
-            <Legend items={[{ label: 'Latest exam', color: theme.colors.primary }, { label: 'Exam before', color: theme.colors.textSecondary }]} />
-          )}
-          {l.by_class.map((c, i) => (
-            <PctRow
-              key={c.class}
-              label={c.class}
-              pct={c.average}
-              low={c.average < pass}
-              mark={c.previous_average}
-              tag={<ChangePill now={c.average} before={c.previous_average} />}
-              meta={[`high ${c.highest}% · low ${c.lowest}%`, `${c.passed}/${c.students} passed`].join(' · ')}
-              isLast={i === l.by_class.length - 1}
-            />
-          ))}
-        </Card>
-      )}
-
-      {!!l && l.by_subject.length > 0 && (
-        <Card>
-          <CardHead icon="library-outline" title="Subject by subject" sub={`${l.exam_name ?? 'Latest exam'} · every class`} />
-          {l.by_subject.map((sb, i) => (
-            <PctRow
-              key={sb.subject}
-              label={quietCaps(sb.subject)}
-              pct={sb.average}
-              low={sb.average < pass}
-              meta={`high ${sb.highest}% · low ${sb.lowest}% · ${plural(sb.papers, 'paper')}`}
-              isLast={i === l.by_subject.length - 1}
-            />
-          ))}
-        </Card>
-      )}
-
-      {grades.some(g => g.count > 0) && (
-        <Card>
-          <CardHead icon="ribbon-outline" title="Grades given" sub={`${l?.exam_name ?? 'Latest exam'}, paper by paper`} />
-          <Columns
-            max={most}
-            format={v => String(v)}
-            selected={grades.reduce((a, b) => (b.count > a.count ? b : a), grades[0])?.grade}
-            data={grades.map(g => ({ key: g.grade, label: g.grade, value: g.count, low: g.grade === 'F' || g.grade === 'AB' }))}
-          />
-        </Card>
-      )}
-
-      {!!l && l.toppers.length > 0 && (
-        <Card>
-          <CardHead icon="star-outline" title="Toppers" sub={`${l.exam_name ?? 'Latest exam'} · all papers together`} />
-          {l.toppers.map((tp, i) => (
-            <LineRow
-              key={`${tp.name}-${i}`}
-              lead={<Initial text={String(i + 1)} />}
-              title={tp.name || 'Student'}
-              meta={tp.class}
-              trailing={<Text style={s.trailValue}>{tp.percentage}%</Text>}
-              isLast={i === l.toppers.length - 1}
-            />
-          ))}
-        </Card>
-      )}
-    </>
-  );
-};
-
-// ── Fees ─────────────────────────────────────────────────────────────────────
-const FeesTab = ({ data }: { data: Data }) => {
-  const fe = data.fees;
-  const f = fe.summary;
-  const p = fe.periods;
-  const days = fe.days.slice(-7);
-  const dayMost = Math.max(1, ...days.map(d => d.amount));
-  const monthMost = Math.max(1, ...fe.months.map(m => m.amount));
-  const week = days.reduce((n, d) => n + d.amount, 0);
-  const payments = days.reduce((n, d) => n + d.count, 0);
-  const rate = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : null);
-  const academic = rate(f.academic_collected, f.academic_billable);
-  const transport = rate(f.transport_collected, f.transport_billable);
-  const ledger = fe.ledger;
-
-  return (
-    <>
-      <Hero
-        kicker="Fees collected · this session"
-        value={pctOrDash(f.rate)}
-        caption={
-          f.total_billable > 0
-            ? `${inr(f.total_collected)} of ${inr(f.total_billable)} · ${inr(f.total_due)} due`
-            : 'Fees appear here once fee heads are set for classes.'
-        }
-        stats={[
-          { label: 'Today', value: inrShort(p.today.amount) },
-          { label: moment().format('MMMM'), value: inrShort(p.this_month.amount) },
-          { label: 'Students with dues', value: String(f.with_dues), low: f.with_dues > 0 },
-        ]}
-      />
-
-      <Card>
-        <CardHead icon="layers-outline" title="Academic and transport" sub={`${plural(f.students, 'student')} · ${plural(f.riders, 'rider')} on the bus`} />
-        <PctRow
-          label="Academic"
-          pct={academic ?? 0}
-          empty={academic == null}
-          value={academic == null ? 'Not set' : `${academic}%`}
-          meta={f.academic_billable > 0 ? `${inr(f.academic_collected)} of ${inr(f.academic_billable)} · ${inr(f.academic_due)} due` : 'No academic fee heads yet'}
-          isLast={f.riders === 0 && f.penalty_collected === 0}
-        />
-        {f.riders > 0 && (
-          <PctRow
-            label="Transport"
-            pct={transport ?? 0}
-            empty={transport == null}
-            value={transport == null ? '—' : `${transport}%`}
-            meta={`${inr(f.transport_collected)} of ${inr(f.transport_billable)} · ${inr(f.transport_due)} due`}
-            isLast={f.penalty_collected === 0}
-          />
-        )}
-        {f.penalty_collected > 0 && <Note>Late fees collected: {inr(f.penalty_collected)}</Note>}
-      </Card>
-
-      <Card>
-        <CardHead icon="bar-chart-outline" title="Last 7 days" sub={`${inr(week)} in ${plural(payments, 'payment')}`} />
-        <Columns
-          max={dayMost}
-          format={inrShort}
-          data={days.map(d => ({
-            key: d.date,
-            label: moment(d.date, 'YYYY-MM-DD').format('ddd'),
-            sub: moment(d.date, 'YYYY-MM-DD').format('D'),
-            value: d.amount,
-          }))}
-        />
-        <Caption>
-          Yesterday {inrShort(p.yesterday.amount)} · this week {inrShort(p.this_week.amount)} · last month {inrShort(p.last_month.amount)}
-        </Caption>
-        <View style={s.gap} />
-      </Card>
-
-      <Card>
-        <CardHead icon="trending-up-outline" title="Month by month" sub="Last six months" />
-        <Columns
-          max={monthMost}
-          format={inrShort}
-          data={fe.months.map(m => ({ key: m.month, label: monthShort(m.month), value: m.amount }))}
-        />
-      </Card>
-
-      {fe.by_class.length > 0 && (
-        <Card>
-          <CardHead icon="podium-outline" title="Class by class" sub="Collected out of billed" />
-          {fe.by_class.map((c, i) => (
-            <PctRow
-              key={c.class}
-              label={c.class}
-              pct={c.rate ?? 0}
-              empty={c.rate == null}
-              value={c.rate == null ? 'No fees set' : `${c.rate}%`}
-              low={c.rate != null && c.rate < 50}
-              meta={c.billable > 0 ? `${inr(c.collected)} of ${inr(c.billable)} · ${plural(c.students, 'student')}` : plural(c.students, 'student')}
-              isLast={i === fe.by_class.length - 1}
-            />
-          ))}
-        </Card>
-      )}
-
-      {fe.modes.length > 0 && (
-        <Card>
-          <CardHead icon="card-outline" title="How it was paid" sub="Every payment so far" />
-          {fe.modes.map((m, i) => (
-            <PctRow
-              key={m.mode}
-              label={m.mode}
-              pct={m.share ?? 0}
-              value={inrShort(m.amount)}
-              meta={`${m.share ?? 0}% · ${plural(m.count, 'payment')}`}
-              isLast={i === fe.modes.length - 1}
-            />
-          ))}
-        </Card>
-      )}
-
-      {fe.top_due.length > 0 && (
-        <Card>
-          <CardHead icon="alert-circle-outline" title="Biggest dues" sub={`${plural(f.with_dues, 'student')} with fees left to pay`} />
-          {fe.top_due.map((d, i) => (
-            <LineRow
-              key={`${d.name}-${d.admission_no}-${i}`}
-              lead={<Initial text={d.name} />}
-              title={d.name}
-              meta={[d.class, d.admission_no ? `Adm ${d.admission_no}` : null, `paid ${inr(d.collected)} of ${inr(d.billable)}`]
-                .filter(Boolean)
-                .join(' · ')}
-              trailing={<Text style={[s.trailValue, s.low]}>{inrShort(d.due)}</Text>}
-              isLast={i === fe.top_due.length - 1}
-            />
-          ))}
-        </Card>
-      )}
-
-      {fe.qr_pending > 0 && (
-        <Card>
-          <CardHead icon="qr-code-outline" title="QR payments" sub="Paid on the school’s QR, waiting to be checked" />
-          <Note>
-            {plural(fe.qr_pending, 'payment')} to approve or reject — Fees → QR Payments in the admin panel.
-          </Note>
-        </Card>
-      )}
-
-      <Card>
-        <CardHead icon="calculator-outline" title="Ledger" sub="Credit and expense so far" />
-        <FigureRow
-          items={[
-            { label: 'Credit', value: inrShort(ledger.credit) },
-            { label: 'Expense', value: inrShort(ledger.expense) },
-            { label: ledger.balance >= 0 ? 'Balance' : 'Short by', value: inrShort(Math.abs(ledger.balance)), low: ledger.balance < 0 },
+        <CardHead icon="trending-up-outline" title="Attendance Rate Trend" sub="Daily % · last 30 days" />
+        <Key items={[{ label: 'Students', color: C.emerald }, { label: 'Teachers', color: C.blue }]} />
+        <LineChart
+          labels={t.labels}
+          max={100}
+          yFormat={v => `${v}%`}
+          sets={[
+            { label: 'Students', data: t.student, color: C.emerald, fill: C.emeraldFill },
+            { label: 'Teachers', data: t.teacher, color: C.blue },
           ]}
+          tip={i => {
+            const lines = [];
+            if (t.student[i] != null)
+              lines.push({ text: `Students: ${t.student[i]}% · Present ${num(t.studentPresent[i])} · Absent ${num(t.studentAbsent[i])}`, color: C.emerald });
+            if (t.teacher[i] != null)
+              lines.push({ text: `Teachers: ${t.teacher[i]}% · Present ${num(t.teacherPresent[i])} · Absent ${num(t.teacherAbsent[i])}`, color: C.blue });
+            return lines.length ? { title: t.labels[i], lines } : { title: t.labels[i], lines: [{ text: 'Nobody marked' }] };
+          }}
         />
       </Card>
-    </>
-  );
-};
 
-// ── Homework ─────────────────────────────────────────────────────────────────
-const HomeworkTab = ({ data, links }: { data: Data; links: Links }) => {
-  const hw = data.homework;
-  const most = Math.max(1, ...hw.weeks.map(w => w.set));
-  return (
-    <>
-      <Hero
-        kicker="Homework marked done · this session"
-        value={pctOrDash(hw.completion)}
-        caption={
-          hw.total > 0
-            ? `By students, across ${plural(hw.total, 'homework', 'homework')} set by ${plural(hw.teachers, 'teacher')}`
-            : 'Homework teachers set, and how much of it students mark done, appears here.'
-        }
-        stats={[
-          { label: 'Set this session', value: String(hw.total) },
-          { label: 'This week', value: String(hw.this_week) },
-          { label: 'Last week', value: String(hw.last_week) },
-        ]}
-      />
+      {/* Student split: today's students, present against absent */}
       <Card>
-        <CardHead icon="bar-chart-outline" title="Week by week" sub="Homework set each week" action="Open" onAction={links.open('homework')} />
-        <Columns max={most} format={v => String(v)} data={hw.weeks.map(w => ({ key: w.week, label: w.label, value: w.set }))} />
-      </Card>
-      {hw.by_class.length > 0 && (
-        <Card>
-          <CardHead icon="people-outline" title="By class" sub="How much students have marked done" />
-          {hw.by_class.map((c, i) => (
-            <PctRow
-              key={c.class}
-              label={c.class}
-              pct={c.percentage ?? 0}
-              empty={c.percentage == null}
-              low={c.percentage != null && c.percentage < 50}
-              meta={`${plural(c.set, 'homework', 'homework')} set · ${plural(c.students, 'student')} · ${c.done} marked done`}
-              isLast={i === hw.by_class.length - 1}
-            />
-          ))}
-        </Card>
-      )}
-      {hw.by_teacher.length > 0 && (
-        <Card>
-          <CardHead icon="school-outline" title="By teacher" sub="Most set first · marked done by students" />
-          {hw.by_teacher.map((x, i) => (
-            <PctRow
-              key={`${x.name}-${i}`}
-              label={x.name}
-              pct={x.percentage ?? 0}
-              empty={x.percentage == null}
-              low={x.percentage != null && x.percentage < 50}
-              meta={`${plural(x.set, 'homework', 'homework')} set`}
-              isLast={i === hw.by_teacher.length - 1}
-            />
-          ))}
-        </Card>
-      )}
-    </>
-  );
-};
-
-// ── Admissions ───────────────────────────────────────────────────────────────
-const AdmissionsTab = ({ data, navigation, links }: { data: Data; navigation: any; links: Links }) => {
-  const ad = data.admissions;
-  const e = ad.enquiries;
-  const most = Math.max(1, ...ad.months.map(m => m.count));
-  const biggest = Math.max(1, ...ad.by_class.map(c => c.students));
-  const openAdmissions = links.can('more')
-    ? () => navigation.navigate('AdminMore', { screen: 'AdminAdmissions', initial: false })
-    : undefined;
-
-  return (
-    <>
-      <Hero
-        kicker={`Students · ${sessionLabel(data.school.session) ?? 'this session'}`}
-        value={String(ad.students)}
-        caption={`${plural(ad.session_total, 'admission')} this session · ${ad.this_month} this month, ${ad.last_month} last month`}
-        stats={[
-          { label: 'Boys', value: String(ad.gender.boys) },
-          { label: 'Girls', value: String(ad.gender.girls) },
-          { label: 'Classes', value: String(data.school.classes) },
-        ]}
-      />
-
-      {ad.months.length > 0 && (
-        <Card>
-          <CardHead icon="bar-chart-outline" title="Admissions month by month" sub="On the admission date the school recorded" />
-          <Columns max={most} format={v => String(v)} data={ad.months.map(m => ({ key: m.month, label: monthShort(m.month), value: m.count }))} />
-        </Card>
-      )}
-
-      {ad.by_class.length > 0 && (
-        <Card>
-          <CardHead icon="people-outline" title="Class by class" sub="Students in each class" action="Students" onAction={links.open('students')} />
-          {ad.by_class.map((c, i) => (
-            <PctRow
-              key={c.class}
-              label={c.class}
-              pct={Math.round((c.students / biggest) * 100)}
-              value={String(c.students)}
-              meta={[
-                c.sections > 0 ? plural(c.sections, 'section') : null,
-                c.boys + c.girls > 0 ? `${c.boys} boys · ${c.girls} girls` : null,
-              ]
-                .filter(Boolean)
-                .join(' · ') || null}
-              isLast={i === ad.by_class.length - 1}
-            />
-          ))}
-        </Card>
-      )}
-
-      <Card>
-        <CardHead
-          icon="clipboard-outline"
-          title="Admission enquiries"
-          sub={e.total > 0 ? `${e.total} in all · ${e.total > 0 ? Math.round((e.admitted / e.total) * 100) : 0}% admitted` : 'None yet'}
-          action="Open"
-          onAction={openAdmissions}
-        />
-        {e.total > 0 ? (
-          <SplitBar
+        <CardHead icon="pie-chart-outline" title="Student Split" sub={`Today · ${data.today_label}`} />
+        {marked > 0 ? (
+          <Doughnut
             parts={[
-              { label: 'Admitted', value: e.admitted, color: PRESENT },
-              { label: 'Pending', value: e.pending, color: theme.colors.primary },
-              { label: 'Other', value: e.other, color: NEUTRAL },
+              { label: 'Present', value: split.present, color: C.emeraldPie },
+              { label: 'Absent', value: split.absent, color: C.redPie },
             ]}
+            tip={i =>
+              i === 0
+                ? `Present: ${split.presentPct}% (${num(split.present)})`
+                : `Absent: ${split.absentPct}% (${num(split.absent)})`
+            }
           />
         ) : (
-          <Note>Admission enquiries appear here as they come in.</Note>
+          <Note>Student attendance is not marked yet today.</Note>
         )}
-        {e.recent.map((q, i) => (
-          <LineRow
-            key={q.id}
-            lead={<Initial text={q.name} />}
-            title={q.name || 'Enquiry'}
-            meta={[q.class, q.date ? moment(q.date, 'YYYY-MM-DD').format('D MMM') : null, 'Pending'].filter(Boolean).join(' · ')}
-            onPress={openAdmissions}
-            isLast={i === e.recent.length - 1}
+        <CenterFigures
+          items={[
+            { value: `${split.presentPct}%`, label: `Present · ${num(split.present)}`, color: C.emerald600 },
+            { value: `${split.absentPct}%`, label: `Absent · ${num(split.absent)}`, color: C.red500 },
+          ]}
+        />
+      </Card>
+
+      {/* Volume: each month's average attendance %, from 1 April of the session */}
+      {(
+        [
+          ['Student Attendance Volume', m.student, C.emeraldBar, C.emerald],
+          ['Teacher Attendance Volume', m.teacher, C.blueBar, C.blue],
+        ] as const
+      ).map(([title, series, bar, key]) => (
+        <Card key={title}>
+          <CardHead icon="bar-chart-outline" title={title} sub={`Average of the days' % per month · from ${m.from}`} />
+          <Key items={[{ label: 'Attendance %', color: key }]} />
+          <BarChart
+            labels={m.labels}
+            sets={[{ label: 'Attendance', data: series as (number | null)[], color: bar }]}
+            max={100}
+            yFormat={v => `${v}%`}
+            tip={i => (series[i] == null ? null : { lines: [{ text: `${series[i]}%` }] })}
           />
+        </Card>
+      ))}
+
+      {/* Class-wise ranking */}
+      <Card>
+        <CardHead icon="podium-outline" title="Class-wise Attendance Ranking" sub="Average of each day's attendance % · overall" />
+        {a.class_rank.length > 0 ? (
+          a.class_rank.map((r, i) => (
+            <RankBar
+              key={`${r.name}-${i}`}
+              rank={i + 1}
+              label={r.name}
+              pct={r.pct}
+              color={bandColor(r.pct, 85, 70)}
+              isLast={i === a.class_rank.length - 1}
+            />
+          ))
+        ) : (
+          <Note>No attendance recorded yet.</Note>
+        )}
+      </Card>
+    </>
+  );
+};
+
+// ── Student Performance ──────────────────────────────────────────────────────
+const RankerRows = ({ list, tone }: { list: PanelRanker[]; tone: string }) => (
+  <>
+    {list.map((st, i) => (
+      <View key={`${st.rank}-${i}`} style={[s.ranker, i < list.length - 1 && s.rowLine]}>
+        <Text style={s.rankerNo}>{st.rank}</Text>
+        <Avatar uri={st.photo} name={st.name} />
+        <View style={s.rankerBody}>
+          <Text style={s.rankerName} numberOfLines={1}>
+            {st.name}
+          </Text>
+          <Text style={s.rankerMeta} numberOfLines={1}>
+            {st.class} · {st.section}
+          </Text>
+        </View>
+        <View style={s.rankerScore}>
+          <Text style={[s.rankerPct, { color: tone }]}>{st.score}%</Text>
+          <Text style={s.rankerMarks}>
+            {Number(st.obtained)} / {Number(st.max)}
+          </Text>
+        </View>
+      </View>
+    ))}
+  </>
+);
+
+const Performance = ({ data, onFilter }: { data: Data; onFilter: (f: Filters) => void }) => {
+  const p = data.performance;
+  return (
+    <>
+      <SectionHeading title="Student Performance" />
+      <View style={s.filters}>
+        <Filter
+          title="Class"
+          value={p.class ?? ''}
+          options={[{ label: 'All Classes', value: '' }, ...p.standards.map(c => ({ label: c.name, value: c.id }))]}
+          onChange={v => onFilter({ class: v === '' ? null : Number(v), section: null })}
+        />
+        {p.sections.length > 0 && (
+          <Filter
+            title="Section"
+            value={p.section ?? ''}
+            options={[{ label: 'All Sections', value: '' }, ...p.sections.map(c => ({ label: c.name, value: c.id }))]}
+            onChange={v => onFilter({ section: v === '' ? null : Number(v) })}
+          />
+        )}
+      </View>
+
+      {/* Ranked on exam marks: the first ten and the last ten */}
+      {(
+        [
+          ['Top 10 Rankers', p.top, C.emerald600, 'trophy-outline'],
+          ['Bottom 10 Rankers', p.bottom, C.red500, 'trending-down-outline'],
+        ] as const
+      ).map(([title, list, tone, icon]) => (
+        <Card key={title}>
+          <CardHead icon={icon} title={title} />
+          {list.length > 0 ? (
+            <RankerRows list={list as PanelRanker[]} tone={tone} />
+          ) : (
+            <Note>{p.top.length ? 'Everyone with exam marks is in the top 10.' : 'No exam marks for the selected filters.'}</Note>
+          )}
+        </Card>
+      ))}
+    </>
+  );
+};
+
+// ── Admissions & Enquiries ───────────────────────────────────────────────────
+const Admissions = ({
+  data,
+  onFilter,
+  navigation,
+  canEnquiries,
+}: {
+  data: Data;
+  onFilter: (f: Filters) => void;
+  navigation: any;
+  canEnquiries: boolean;
+}) => {
+  const ad = data.admissions;
+  const tr = ad.trend;
+  const e = data.enquiries.stats;
+  const shownDates = tr.labels.length;
+
+  return (
+    <>
+      <SectionHeading title="Admissions & Enquiries" />
+
+      <Card>
+        <CardHead
+          icon="person-add-outline"
+          title="Admissions Trend"
+          sub={`${num(ad.total)} admission${ad.total === 1 ? '' : 's'} · ${
+            tr.dates > shownDates ? `the last ${shownDates} admission dates` : 'counted on admission date'
+          }`}
+        />
+        <View style={s.filters}>
+          <Filter
+            title="School year"
+            value={ad.year}
+            options={ad.years.map(y => ({ label: `Apr ${y} – Mar ${y + 1}`, value: y }))}
+            onChange={v => onFilter({ admission_year: Number(v) })}
+          />
+        </View>
+        {/* One bar for each date students were admitted on, its number over it */}
+        <BarChart
+          labels={tr.labels}
+          sets={[{ label: 'Admissions', data: tr.data, color: C.violetBar }]}
+          maxBar={30}
+          integer
+          rotate={tr.labels.length > 4}
+          values={v => num(v)}
+          tip={i => ({ title: tr.labels[i], lines: [{ text: `Admissions: ${tr.data[i]}`, color: C.violetBar }] })}
+        />
+        {ad.total === 0 && (
+          <Note>
+            Nothing recorded for this school year — try an earlier one. Students with no admission date are counted on the
+            day their record was created.
+          </Note>
+        )}
+      </Card>
+
+      {/* Enquiry funnel + the latest */}
+      <Card>
+        <CardHead icon="funnel-outline" title="Enquiry Funnel" />
+        <CenterFigures
+          top={false}
+          items={[
+            { value: String(e.total), label: 'Total' },
+            { value: String(e.responded), label: 'Responded', color: C.emerald600 },
+            { value: String(e.pending), label: 'Pending', color: C.amber600 },
+          ]}
+        />
+        <Text style={s.centerNote}>
+          {e.student} student · {e.teacher} teacher · {e.website} website
+        </Text>
+        <Progress label="Response rate" value={`${e.rate}%`} pct={e.rate} color="#10B981" />
+        <Text style={s.caption}>LATEST ENQUIRIES</Text>
+        {data.enquiries.latest.length > 0 ? (
+          data.enquiries.latest.map((q, i) => {
+            const tag = ENQUIRY_TAG[q.status] ?? ENQUIRY_TAG.New;
+            return (
+              <LineRow
+                key={`${q.name}-${i}`}
+                lead={<Avatar name={q.name} size={32} />}
+                title={q.name}
+                meta={`${q.source} · ${q.time}`}
+                trailing={<Tag text={q.status} color={tag.color} bg={tag.bg} />}
+                onPress={
+                  canEnquiries
+                    ? () => navigation.navigate('AdminEnquiries', { screen: 'AdminEnquiriesHome', params: { tab: q.tab } })
+                    : undefined
+                }
+                isLast={i === data.enquiries.latest.length - 1}
+              />
+            );
+          })
+        ) : (
+          <Note>No enquiries yet.</Note>
+        )}
+      </Card>
+    </>
+  );
+};
+
+// ── Fee ──────────────────────────────────────────────────────────────────────
+const ClassBars = ({ bars, colors }: { bars: PanelBars; colors: [string, string] }) => (
+  <BarChart
+    labels={bars.labels}
+    sets={[
+      { label: 'Collected', data: bars.collected, color: colors[0] },
+      { label: 'Remaining', data: bars.remaining, color: colors[1] },
+    ]}
+    yFormat={inrAxis}
+    tip={i => ({
+      title: bars.labels[i],
+      lines: [
+        { text: `Collected: ${inrFull(bars.collected[i])}`, color: colors[0] },
+        { text: `Remaining: ${inrFull(bars.remaining[i])}`, color: colors[1] },
+      ],
+    })}
+  />
+);
+
+const Fee = ({ data }: { data: Data }) => {
+  const f = data.fee;
+  const tf = f.transport;
+  return (
+    <>
+      <SectionHeading title="Fee" />
+      <Card>
+        <StatCells
+          items={[
+            { label: 'Total Fee', value: money(f.stats.totalFee) },
+            { label: 'Collected', value: money(f.stats.collected), color: C.emerald600 },
+            { label: 'Remaining', value: money(f.stats.remaining), color: C.red500 },
+            { label: 'Transport Fee', value: money(f.stats.transportFee) },
+          ]}
+        />
+      </Card>
+
+      <Card>
+        <CardHead icon="bar-chart-outline" title="Fee Collection by Class" sub="Collected vs remaining" />
+        <Key items={[{ label: 'Collected', color: C.emerald }, { label: 'Remaining', color: C.red400 }]} />
+        <ClassBars bars={f.by_class} colors={[C.emeraldBar, C.redBar]} />
+      </Card>
+
+      <Card>
+        <CardHead icon="speedometer-outline" title="Recovery Rate by Class" />
+        {f.rate_by_class.length > 0 ? (
+          f.rate_by_class.map((r, i) => (
+            <Progress key={`${r.name}-${i}`} label={r.name} value={`${r.pct}%`} pct={r.pct} color={bandColor(r.pct, 80, 50)} />
+          ))
+        ) : (
+          <Note>No fee data available.</Note>
+        )}
+      </Card>
+
+      {/* Transport: billed off the route's monthly fee, so a pair of its own */}
+      <Card>
+        <CardHead icon="bus-outline" title="Transport Fee" sub={`${tf.rate}% recovered · ${tf.riders} riders`} />
+        <ValueLines
+          rows={[
+            { label: 'Expected', value: money(tf.expected) },
+            { label: 'Collected', value: money(tf.collected) },
+            { label: 'Remaining', value: money(tf.remaining) },
+          ]}
+        />
+      </Card>
+
+      <Card>
+        <CardHead icon="bar-chart-outline" title="Transport Fee by Class" sub="Collected vs remaining" />
+        <Key items={[{ label: 'Collected', color: 'rgb(14,165,233)' }, { label: 'Remaining', color: 'rgb(251,146,60)' }]} />
+        {f.transport_class.labels.length > 0 ? (
+          <ClassBars bars={f.transport_class} colors={[C.sky, C.orange]} />
+        ) : (
+          <Note>No transport riders assigned yet.</Note>
+        )}
+      </Card>
+
+      <Card>
+        <CardHead icon="git-branch-outline" title="Transport Fee by Route" sub="Collected vs remaining · fare × each student's months" />
+        <Key items={[{ label: 'Collected', color: 'rgb(14,165,233)' }, { label: 'Remaining', color: 'rgb(251,146,60)' }]} />
+        {f.transport_route.labels.length > 0 ? (
+          <HBarChart
+            labels={f.transport_route.labels}
+            sets={[
+              { label: 'Collected', data: f.transport_route.collected, color: C.sky },
+              { label: 'Remaining', data: f.transport_route.remaining, color: C.orange },
+            ]}
+            format={inrAxis}
+            tip={i => ({
+              title: f.transport_route.labels[i],
+              lines: [
+                { text: `Collected: ${inrFull(f.transport_route.collected[i])}`, color: C.sky },
+                { text: `Remaining: ${inrFull(f.transport_route.remaining[i])}`, color: C.orange },
+              ],
+            })}
+          />
+        ) : (
+          <Note>No transport routes yet.</Note>
+        )}
+      </Card>
+    </>
+  );
+};
+
+// ── WhatsApp ─────────────────────────────────────────────────────────────────
+// The school's messages, to read: the last 30 days or a month — each kind day
+// by day, what the charged ones came to, delivery and the messages themselves.
+const WhatsApp = ({ data, onFilter }: { data: Data; onFilter: (f: Filters) => void }) => {
+  const wa = data.whatsapp;
+  if (!wa) return null;
+  const list = wa.messages;
+  const filtered = wa.feature !== '' || wa.status !== '';
+
+  return (
+    <>
+      <SectionHeading title="WhatsApp" />
+
+      <Card>
+        <Text style={s.waLine}>
+          {wa.switches.map((sw, i) => (
+            <Text key={sw.key}>
+              {sw.label}: <Text style={[s.waOn, { color: sw.on ? C.emerald600 : theme.colors.textMuted }]}>{sw.on ? 'On' : 'Off'}</Text>
+              {i < wa.switches.length - 1 ? <Text style={s.waDot}> · </Text> : null}
+            </Text>
+          ))}
+        </Text>
+        <Text style={s.waRate}>{wa.rate} a message · not charged when it is not delivered</Text>
+        <View style={s.filtersInCard}>
+          <Filter
+            title="Period"
+            value={wa.period}
+            options={wa.periods.map(p => ({ label: p.label, value: p.value }))}
+            onChange={v => onFilter({ wa_period: String(v), wa_shown: 25 })}
+          />
+        </View>
+      </Card>
+
+      <Card>
+        <StatCells items={wa.tiles} />
+      </Card>
+
+      <Card>
+        <CardHead icon="chatbubble-ellipses-outline" title="Messages a Day" sub={`${wa.label} · ${wa.daily.avg} a day on average`} />
+        <Key items={wa.daily.kinds.map(k => ({ label: k.label, color: WA_COLORS[k.key] ?? C.slate }))} />
+        <BarChart
+          labels={wa.daily.labels}
+          stacked
+          integer
+          maxBar={22}
+          sets={wa.daily.kinds.map(k => ({ label: k.label, data: k.data, color: WA_COLORS[k.key] ?? C.slate }))}
+          tip={i => ({
+            title: wa.daily.labels[i],
+            lines: wa.daily.kinds
+              .filter(k => (k.data[i] ?? 0) > 0)
+              .map(k => ({ text: `${k.label}: ${k.data[i]}`, color: WA_COLORS[k.key] ?? C.slate })),
+            footer: `Total: ${wa.daily.kinds.reduce((sum, k) => sum + (k.data[i] ?? 0), 0)}`,
+          })}
+        />
+      </Card>
+
+      <Card>
+        <CardHead icon="checkmark-done-outline" title="Delivery" />
+        {wa.delivery.map(d => (
+          <Progress key={d.key} label={d.label} value={`${num(d.count)} (${d.share}%)`} pct={d.share} color={WA_BAR[d.key] ?? C.gray400} />
         ))}
+        <ValueLines
+          rows={[{ label: 'Busiest day', value: wa.busiest ? `${wa.busiest.label} · ${num(wa.busiest.count)}` : '—', rule: true }]}
+        />
+      </Card>
+
+      <Card>
+        <CardHead icon="list-outline" title={`Messages · ${wa.label}`} sub={num(list.count)} />
+        <View style={s.filtersInCard}>
+          <Filter
+            title="Kind"
+            value={wa.feature}
+            options={[{ label: 'All kinds', value: '' }, ...wa.daily.kinds.map(k => ({ label: k.label, value: k.key }))]}
+            onChange={v => onFilter({ wa_feature: String(v), wa_shown: 25 })}
+          />
+          <Filter
+            title="Status"
+            value={wa.status}
+            options={[
+              { label: 'All statuses', value: '' },
+              ...Object.entries(WA_STATUS).map(([key, st]) => ({ label: st.label, value: key })),
+            ]}
+            onChange={v => onFilter({ wa_status: String(v), wa_shown: 25 })}
+          />
+        </View>
+        {list.count === 0 ? (
+          <Note>
+            No messages in {wa.period === '' ? 'the last 30 days' : wa.label}
+            {filtered ? ' for this filter' : ''}.
+          </Note>
+        ) : (
+          <>
+            {list.rows.map((m, i) => {
+              const st = WA_STATUS[m.status] ?? { label: m.status, color: '#4B5563', bg: '#F3F4F6' };
+              return (
+                <View key={m.id} style={[s.msg, i < list.rows.length - 1 && s.rowLine]}>
+                  <Text style={s.msgNo}>{i + 1}</Text>
+                  <View style={s.msgBody}>
+                    <View style={s.msgLine}>
+                      <View style={[s.msgDot, { backgroundColor: WA_COLORS[m.feature] ?? C.gray400 }]} />
+                      <Text style={s.msgKind} numberOfLines={1}>
+                        {m.label}
+                      </Text>
+                      <Text style={[s.msgCharge, m.charged && s.msgCharged]}>{m.charge}</Text>
+                    </View>
+                    <Text style={s.msgMeta} numberOfLines={1}>
+                      {[m.name || '—', m.phone].join(' · ')}
+                    </Text>
+                    <View style={s.msgLine}>
+                      <Text style={[s.msgMeta, s.msgWhen]}>
+                        {m.date} · {m.time}
+                      </Text>
+                      <Tag text={st.label} color={st.color} bg={st.bg} />
+                    </View>
+                    {m.status === 'failed' && !!m.error && (
+                      <Text style={s.msgError} numberOfLines={2}>
+                        {m.error}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+            {list.count > list.rows.length && (
+              <TouchableOpacity style={s.more} activeOpacity={0.6} onPress={() => onFilter({ wa_shown: wa.shown + 50 })}>
+                <Text style={s.moreText}>Show more ({num(list.count - list.rows.length)} more)</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        )}
+      </Card>
+    </>
+  );
+};
+
+// ── Operations ───────────────────────────────────────────────────────────────
+const Operations = ({
+  data,
+  chosen,
+  onChoose,
+  saving,
+  saved,
+  onAssign,
+}: {
+  data: Data;
+  chosen: Record<number, number>;
+  onChoose: (id: number, teacher: number) => void;
+  saving: number | null;
+  saved: boolean;
+  onAssign: (id: number) => void;
+}) => {
+  const { arrangements, available_teachers: teachers } = data.operations;
+  const options = teachers.map(t => ({ label: t.name || `Teacher #${t.id}`, value: t.id }));
+  return (
+    <>
+      <SectionHeading title="Operations" />
+      <Card>
+        <CardHead icon="swap-horizontal-outline" title="Today's Absent Teachers — Arrangement" sub={saved ? 'Saved' : null} />
+        {arrangements.length > 0 ? (
+          arrangements.map((a, i) => (
+            <View key={a.id} style={[s.arr, i < arrangements.length - 1 && s.rowLine]}>
+              <View style={s.arrHead}>
+                <Text style={s.arrClass} numberOfLines={1}>
+                  {a.class} · {a.section}
+                </Text>
+                <Tag
+                  text={a.status === 'assigned' ? 'Assigned' : 'Pending'}
+                  color={a.status === 'assigned' ? '#047857' : '#B45309'}
+                  bg={a.status === 'assigned' ? '#ECFDF5' : '#FFFBEB'}
+                />
+              </View>
+              <Text style={s.arrMeta} numberOfLines={1}>
+                <Text style={s.arrAbsent}>{a.absent_teacher}</Text> · {a.time}
+              </Text>
+              <View style={s.arrPick}>
+                <Filter title="Select Teacher" value={chosen[a.id] ?? ''} options={options} onChange={v => onChoose(a.id, Number(v))} />
+                <TouchableOpacity
+                  style={[s.assign, !chosen[a.id] && s.assignOff]}
+                  activeOpacity={0.8}
+                  disabled={!chosen[a.id] || saving === a.id}
+                  onPress={() => onAssign(a.id)}
+                >
+                  {saving === a.id ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={s.assignText}>Assign</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        ) : (
+          <Note>All teachers are present today — no arrangements needed.</Note>
+        )}
       </Card>
     </>
   );
@@ -956,12 +767,62 @@ const AdmissionsTab = ({ data, navigation, links }: { data: Data; navigation: an
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { paddingBottom: 32 },
-  gap: { height: 6 },
-  low: { color: theme.colors.danger },
-  trailValue: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary },
-  alert: { fontSize: 13, lineHeight: 19, color: theme.colors.textSecondary, paddingTop: 6, paddingBottom: 10 },
-  alertStrong: { fontWeight: '600', color: theme.colors.danger },
+  scroll: { paddingBottom: 40 },
+  rowLine: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
+
+  filters: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: -4 },
+  filtersInCard: { flexDirection: 'row', gap: 10, marginTop: -6, marginBottom: 6 },
+
+  // Rankers
+  ranker: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+  rankerNo: { width: 22, fontSize: 12, color: theme.colors.textMuted },
+  rankerBody: { flex: 1, minWidth: 0 },
+  rankerName: { fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
+  rankerMeta: { fontSize: 12, color: theme.colors.textMuted, marginTop: 1 },
+  rankerScore: { alignItems: 'flex-end' },
+  rankerPct: { fontSize: 14, fontWeight: '700' },
+  rankerMarks: { fontSize: 10, color: theme.colors.textMuted, marginTop: 1 },
+
+  // Enquiries
+  centerNote: { fontSize: 11, color: theme.colors.textMuted, textAlign: 'center', marginBottom: 4 },
+  caption: { fontSize: 10, fontWeight: '600', letterSpacing: 0.6, color: theme.colors.textMuted, marginTop: 10 },
+
+  // WhatsApp
+  waLine: { fontSize: 12, lineHeight: 18, color: theme.colors.textSecondary },
+  waOn: { fontWeight: '700' },
+  waDot: { color: theme.colors.border },
+  waRate: { fontSize: 12, color: theme.colors.textMuted, marginTop: 4 },
+  msg: { flexDirection: 'row', gap: 10, paddingVertical: 10 },
+  msgNo: { width: 20, fontSize: 12, color: theme.colors.textMuted, paddingTop: 1 },
+  msgBody: { flex: 1, gap: 3, minWidth: 0 },
+  msgLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  msgDot: { width: 8, height: 8, borderRadius: 4 },
+  msgKind: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.colors.textPrimary },
+  msgCharge: { fontSize: 13, color: theme.colors.textMuted },
+  msgCharged: { fontWeight: '700', color: theme.colors.textPrimary },
+  msgMeta: { fontSize: 12, color: theme.colors.textMuted },
+  msgWhen: { flex: 1 },
+  msgError: { fontSize: 11, color: '#B91C1C' },
+  more: { alignItems: 'center', paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border },
+  moreText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
+
+  // Operations
+  arr: { paddingVertical: 10, gap: 3 },
+  arrHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  arrClass: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary },
+  arrMeta: { fontSize: 12, color: theme.colors.textMuted },
+  arrAbsent: { color: '#DC2626', fontWeight: '500' },
+  arrPick: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  assign: {
+    height: 44,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#111827',
+  },
+  assignOff: { opacity: 0.4 },
+  assignText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.
