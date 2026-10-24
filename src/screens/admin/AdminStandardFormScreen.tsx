@@ -20,8 +20,8 @@ import { ChipChoices, FieldLabel, FormCard, FormError, Hint, OptionSheet, Picker
 /**
  * Add or edit a class, a section or a subject — the panel's Academic
  * Structure form, field for field:
- *   Class    its name, its code (the next one suggested; roll numbers start
- *            with its last digit), its display order (blank goes last) and
+ *   Class    its name, its code (the next one suggested; a roll number is the
+ *            code + 001, 002…), its display order (blank goes last) and
  *            whether it is active.
  *   Section  its name — once per class — its class, and whether it is active.
  *   Subject  its name, its class and the sections of it that have it (a name
@@ -87,8 +87,8 @@ const AdminStandardFormScreen = ({ navigation, route }: any) => {
     setError('');
   };
 
-  // "code 03 gives 301, 302, 303…"
-  const rollDigit = (code.replace(/\D/g, '') || '0').slice(-1);
+  // "code 05 gives 05001, 05002, 05003…"
+  const rollPrefix = code.trim() || '01';
 
   const save = async () => {
     const n = name.trim();
@@ -161,7 +161,7 @@ const AdminStandardFormScreen = ({ navigation, route }: any) => {
                   maxLength={10}
                   autoCapitalize="characters"
                 />
-                <Hint>{`Roll numbers for this class start with the last digit of the code — code ${code.trim() || '—'} gives ${rollDigit}01, ${rollDigit}02, ${rollDigit}03…`}</Hint>
+                <Hint>{`Roll numbers for this class are the code followed by 001, 002… — code ${code.trim() || '—'} gives ${rollPrefix}001, ${rollPrefix}002, ${rollPrefix}003…${isEdit ? ' Changing the code changes every roll number of the class with it.' : ''}`}</Hint>
               </View>
               <FormCard
                 label="Display order"
