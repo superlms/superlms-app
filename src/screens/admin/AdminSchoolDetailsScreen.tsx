@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import { Skeleton } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
@@ -8,13 +8,18 @@ import { PlainRow } from './adminExamUi';
 import { Block, BlockTitle, day, useSchoolProfile } from './adminProfileUi';
 
 /**
- * School Details — the panel's School Profile tab, opened from Profile: every
- * field the super-admin set when adding the school, its bank details, and the
- * signed-in account — for a sub-admin, their own details and the screens
- * granted to them, as the panel's sub-admin card has them — each block a
- * heading over plain lines, a dash where the school has nothing. Change
- * Password is at the foot.
+ * School Profile — the panel's School Profile tab, opened from Profile: the
+ * school's logo first, then every field the super-admin set when adding the
+ * school, its bank details, and the signed-in account — for a sub-admin, their
+ * own details and the screens granted to them, as the panel's sub-admin card
+ * has them — each block a heading over plain lines, a dash where the school
+ * has nothing. Change Password is at the foot.
  */
+
+const TITLE = 'School Profile';
+
+// The logo's box on its line.
+const LOGO = 56;
 
 const cap = (v?: string | null) => (v ? v.charAt(0).toUpperCase() + v.slice(1) : v);
 
@@ -22,7 +27,7 @@ const AdminSchoolDetailsScreen = ({ navigation }: any) => {
   const { profile, loading, error, load, refreshing, onRefresh } = useSchoolProfile();
 
   if (loading && !profile) return <DetailsLoading onBack={() => navigation.goBack()} />;
-  if (error && !profile) return <DocError title="School Details" message={error} onRetry={load} />;
+  if (error && !profile) return <DocError title={TITLE} message={error} onRetry={load} />;
   if (!profile) return null;
 
   const org = profile.organization;
@@ -32,7 +37,7 @@ const AdminSchoolDetailsScreen = ({ navigation }: any) => {
 
   return (
     <View style={s.root}>
-      <DocHeader title="School Details" onBackPress={() => navigation.goBack()} />
+      <DocHeader title={TITLE} onBackPress={() => navigation.goBack()} />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.body}
@@ -42,6 +47,14 @@ const AdminSchoolDetailsScreen = ({ navigation }: any) => {
           first
           title="School Details"
           lines={[
+            {
+              label: 'School Logo',
+              node: org?.logo ? (
+                <View style={s.logoBox}>
+                  <Image source={{ uri: org.logo }} style={s.logo} resizeMode="contain" />
+                </View>
+              ) : undefined,
+            },
             { label: 'School Name', value: org?.name },
             { label: 'Email', value: org?.email },
             { label: 'Mobile Number', value: org?.mobile_number },
@@ -118,10 +131,14 @@ const AdminSchoolDetailsScreen = ({ navigation }: any) => {
 // The page as it will stand: a heading, then its lines — a label and a value.
 const DetailsLoading = ({ onBack }: { onBack: () => void }) => (
   <View style={s.root}>
-    <DocHeader title="School Details" onBackPress={onBack} />
+    <DocHeader title={TITLE} onBackPress={onBack} />
     <View style={s.body}>
       <View style={s.skTitle}>
         <Skeleton width={110} height={10} />
+      </View>
+      <View style={[s.skRow, s.skRowDivider, s.skLogoRow]}>
+        <Skeleton width={90} height={12} />
+        <Skeleton width={LOGO} height={LOGO} radius={10} />
       </View>
       {['58%', '44%', '36%', '30%', '50%', '26%', '40%', '34%'].map((w, i, all) => (
         <View key={i} style={[s.skRow, i < all.length - 1 && s.skRowDivider]}>
@@ -148,12 +165,26 @@ const __mk_s = () => StyleSheet.create({
   },
   chipText: { fontSize: 12, fontWeight: '500', color: theme.colors.primary },
   muted: { fontSize: 13, color: theme.colors.textMuted, marginTop: 10 },
+  logoBox: {
+    width: LOGO,
+    height: LOGO,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  logo: { width: LOGO - 8, height: LOGO - 8 },
   passwordRow: { marginTop: 24, borderTopWidth: 1, borderTopColor: theme.colors.border },
 
   // Loading
   skTitle: { height: 14, justifyContent: 'center', marginTop: 18, marginBottom: 2 },
   skRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 15 },
   skRowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  // The logo's line: the box and the line's own padding (12 a side).
+  skLogoRow: { paddingVertical: 12 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

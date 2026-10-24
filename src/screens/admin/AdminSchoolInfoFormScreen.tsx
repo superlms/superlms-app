@@ -24,7 +24,7 @@ import { FormError, Hint, SubmitButton, confirmDestructive } from './adminFormUi
 import { schoolInfoErrors, useRevealFocused } from './adminProfileUi';
 
 /**
- * Edit School Profile — the panel's School Info form, drawn as Add Student is:
+ * Edit School Details — the panel's School Info form, drawn as Add Student is:
  * a small heading over each block, then fields that are an outline and
  * nothing else. It holds what the panel's form holds, in its order: About,
  * Vision, Mission, Values and Goals; the school's own sections (Add Section,
@@ -175,7 +175,7 @@ const AdminSchoolInfoFormScreen = ({ navigation }: any) => {
 
   return (
     <View style={s.root}>
-      <DocHeader title="Edit School Profile" onBackPress={() => navigation.goBack()} />
+      <DocHeader title="Edit School Details" onBackPress={() => navigation.goBack()} />
       {loading ? (
         <View style={s.skeleton}>
           {[0, 1, 2, 3, 4, 5].map(i => (

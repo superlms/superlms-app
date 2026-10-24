@@ -214,9 +214,9 @@ const AppNavigator = () => {
 
       {/* School Admin — dashboard + the web panel's sidebar */}
       <Stack.Screen name="AdminDashboard" component={AdminDrawerNavigator} />
-      {/* Profile — the school, then the panel's two tabs as rows: School Details
-          and School Profile, each its own page; the School Profile form, a member,
-          a document and Change Password */}
+      {/* Profile — the school, then the panel's two tabs as rows: School Profile
+          (AdminSchoolDetails) and School Details (AdminSchoolInfo), each its own
+          page; the School Details form, a member, a document and Change Password */}
       <Stack.Screen name="AdminProfile" component={AdminProfileHubScreen} />
       <Stack.Screen name="AdminSchoolDetails" component={AdminSchoolDetailsScreen} />
       <Stack.Screen name="AdminSchoolInfo" component={AdminSchoolInfoScreen} />

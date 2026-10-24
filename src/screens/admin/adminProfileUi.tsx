@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Keyboard, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import moment from 'moment';
 import VectorIcon from '../../components/VectorIcon';
 import { useFocusLoad, useRefresh } from '../../hooks/useRefresh';
@@ -8,10 +8,11 @@ import { apiErr } from '../../utils/filePickers';
 import { AdminProfile, SchoolInfoData, getAdminProfile } from '../../api/adminProfileApi';
 
 /**
- * The pieces the admin app's Profile pages share (School Details, School
- * Profile, its form, a member, a document, Change Password), drawn as the
+ * The pieces the admin app's Profile pages share (School Profile, School
+ * Details, its form, a member, a document, Change Password), drawn as the
  * student app draws a person: a small heading over plain lines on hairlines,
- * and fields that are an outline and nothing else.
+ * and fields that are an outline and nothing else. (Change Password's boxes
+ * are the student form's, from outlinedFormUi.)
  */
 
 // ── Loading ──────────────────────────────────────────────────────────────────
@@ -49,6 +50,8 @@ export const useSchoolProfile = () => {
 export interface Line {
   label: string;
   value?: string | null;
+  /** Drawn in place of the value — a picture, say (the school's logo). */
+  node?: React.ReactNode;
 }
 
 /** A value, or the panel's dash when the school has nothing there. */
@@ -74,9 +77,9 @@ export const Block = ({ title, lines, first }: { title: string; lines: Line[]; f
   <View>
     <Text style={[s.blockTitle, first && s.blockTitleFirst]}>{title.toUpperCase()}</Text>
     {lines.map((l, i) => (
-      <View key={l.label} style={[s.line, i < lines.length - 1 && s.lineDivider]}>
+      <View key={l.label} style={[s.line, !!l.node && s.lineCentered, i < lines.length - 1 && s.lineDivider]}>
         <Text style={s.lineLabel}>{l.label}</Text>
-        <Text style={s.lineValue}>{dash(l.value)}</Text>
+        {l.node ? <View style={s.lineNode}>{l.node}</View> : <Text style={s.lineValue}>{dash(l.value)}</Text>}
       </View>
     ))}
   </View>
@@ -96,52 +99,6 @@ export const PASSWORD_RULES: { label: string; test: (p: string) => boolean }[] =
   { label: 'A number', test: p => /[0-9]/.test(p) },
   { label: 'A symbol (!@#$…)', test: p => /[^A-Za-z0-9]/.test(p) },
 ];
-
-//   Current Password
-//   ┌──────────────────────────────┐
-//   │ ••••••••                  👁  │
-//   └──────────────────────────────┘
-// An outline like the form's other fields, with its own eye to show the text.
-export const PasswordField = ({
-  label,
-  value,
-  onChangeText,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (t: string) => void;
-}) => {
-  const [shown, setShown] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const marked = focused || value !== '';
-  return (
-    <View style={s.field}>
-      <Text style={s.fieldLabel}>{label}</Text>
-      <View style={[s.pwBox, marked && s.pwBoxMarked]}>
-        <TextInput
-          style={s.pwInput}
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={label}
-          placeholderTextColor={theme.colors.textMuted}
-          secureTextEntry={!shown}
-          autoCapitalize="none"
-          autoCorrect={false}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-        />
-        <TouchableOpacity onPress={() => setShown(v => !v)} hitSlop={10} activeOpacity={0.6}>
-          <VectorIcon
-            iconSet="Ionicons"
-            iconName={shown ? 'eye-off-outline' : 'eye-outline'}
-            size={18}
-            color={theme.colors.textMuted}
-          />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
 
 /** The rules under the new password, each ticked as it is met. */
 export const PasswordRules = ({ password }: { password: string }) => (
@@ -249,24 +206,11 @@ const __mk_s = () => StyleSheet.create({
   blockTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 1, color: theme.colors.textMuted, marginTop: 24, marginBottom: 2 },
   blockTitleFirst: { marginTop: 18 },
   line: { flexDirection: 'row', alignItems: 'flex-start', gap: 16, paddingVertical: 12 },
+  lineCentered: { alignItems: 'center' },
+  lineNode: { flex: 1, alignItems: 'flex-end' },
   lineDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   lineLabel: { fontSize: 13, color: theme.colors.textSecondary, flexShrink: 0 },
   lineValue: { fontSize: 14, color: theme.colors.textPrimary, flex: 1, textAlign: 'right' },
-
-  // Password field — the outline of the student form's fields
-  field: { marginTop: 12 },
-  fieldLabel: { fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 6 },
-  pwBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-  },
-  pwBoxMarked: { borderColor: theme.colors.primary },
-  pwInput: { flex: 1, paddingVertical: 10, fontSize: 14, color: theme.colors.textPrimary },
 
   // Rules
   rules: { marginTop: 18, gap: 8 },

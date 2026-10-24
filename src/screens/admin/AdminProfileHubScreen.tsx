@@ -26,22 +26,22 @@ import { useSchoolProfile } from './adminProfileUi';
  * the website; then the panel's two tabs as plain rows, the way the Exams hub
  * lists its pages. A row opens its own page:
  *
- *  • School Details (the panel's School Profile tab) — the school, its bank
- *    details, the account, and Change Password.
- *  • School Profile (the panel's School Info tab) — about, vision, the
+ *  • School Profile (the panel's School Profile tab) — the school's logo and
+ *    details, its bank details, the account, and Change Password.
+ *  • School Details (the panel's School Info tab) — about, vision, the
  *    school's sections, the management team and documents, with Edit.
  */
 
 const ENTRIES: { route: string; title: string; icon: string; sub: string }[] = [
   {
     route: 'AdminSchoolDetails',
-    title: 'School Details',
+    title: 'School Profile',
     icon: 'business-outline',
     sub: 'School, bank and account details',
   },
   {
     route: 'AdminSchoolInfo',
-    title: 'School Profile',
+    title: 'School Details',
     icon: 'information-circle-outline',
     sub: 'About, vision, management and documents',
   },

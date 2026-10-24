@@ -16,7 +16,8 @@ import { theme, onThemeChange } from '../../utils/theme';
 /**
  * The teacher's student form, drawn the outlined way: each field a thin
  * outline with its name set into the top border, a quiet heading with a line
- * over each block, and the yes-or-no choices as cards that tick.
+ * over each block, and the yes-or-no choices as cards that tick. The Change
+ * Password screens (Settings, and the admin's) are drawn with the same pieces.
  *
  * The name in the border sits on the page's own white (theme card), so these
  * belong on a card-coloured screen.
@@ -232,6 +233,90 @@ export const OutlinedField = forwardRef<TextInput, {
   );
 });
 
+// ── A password, the same outline with an eye ────────────────────────────────
+//   ╭─ New Password * ──────────────╮
+//   │ ••••••••                   👁  │
+//   ╰───────────────────────────────╯
+// The eye shows what was typed, and hides it again.
+export const OutlinedPasswordField = forwardRef<TextInput, {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  error?: string | null;
+  [key: string]: any;
+}>(({ label, required, hint, error, ...props }, ref) => {
+  const [focused, setFocused] = useState(false);
+  const [shown, setShown] = useState(false);
+
+  return (
+    <View style={s.field}>
+      <View style={[s.box, s.boxRow, focused && s.boxFocused, !!error && s.boxError]}>
+        <TextInput
+          ref={ref}
+          style={[s.input, s.inputFill]}
+          placeholderTextColor={theme.colors.textMuted + 'B3'}
+          secureTextEntry={!shown}
+          autoCapitalize="none"
+          autoCorrect={false}
+          {...props}
+          onFocus={(e: any) => {
+            setFocused(true);
+            props.onFocus?.(e);
+          }}
+          onBlur={(e: any) => {
+            setFocused(false);
+            props.onBlur?.(e);
+          }}
+        />
+        <TouchableOpacity
+          onPress={() => setShown(v => !v)}
+          hitSlop={10}
+          activeOpacity={0.6}
+          accessibilityLabel={shown ? 'Hide password' : 'Show password'}
+        >
+          <VectorIcon
+            iconSet="Ionicons"
+            iconName={shown ? 'eye-off-outline' : 'eye-outline'}
+            size={18}
+            color={focused ? theme.colors.primary : theme.colors.textMuted}
+          />
+        </TouchableOpacity>
+      </View>
+      <BorderLabel text={label} required={required} focused={focused} error={!!error} />
+      {error ? <Text style={s.error}>{error}</Text> : !!hint && <Text style={s.hint}>{hint}</Text>}
+    </View>
+  );
+});
+
+/** One of a change-password form's three boxes. */
+export type PasswordBox = 'current' | 'next' | 'confirm';
+export type PasswordWrong = { box: PasswordBox | null; message: string };
+
+// The server's names for the three boxes.
+const PASSWORD_SERVER_BOXES: [string, PasswordBox][] = [
+  ['current_password', 'current'],
+  ['new_password', 'next'],
+  ['new_password_confirmation', 'confirm'],
+];
+
+/**
+ * What the server said when it refused a new password, set against the box it
+ * is about: the first of its field errors, or its message ("Current password
+ * is incorrect" is the first box's), or the fallback.
+ */
+export const passwordServerWrong = (e: any, fallback: string): PasswordWrong => {
+  const data = e?.response?.data;
+  const errors = data?.errors;
+  if (errors && typeof errors === 'object') {
+    for (const [key, box] of PASSWORD_SERVER_BOXES) {
+      const first = Array.isArray(errors[key]) ? errors[key][0] : null;
+      if (first) return { box, message: String(first) };
+    }
+  }
+  const message = (typeof data?.message === 'string' && data.message) || e?.message || fallback;
+  return { box: /current/i.test(message) ? 'current' : null, message };
+};
+
 // The name set into the top border: drawn over the line on the page's colour.
 export const BorderLabel = ({
   text,
@@ -314,6 +399,9 @@ const __mk_s = () => StyleSheet.create({
   // The width of the outline stays the same, so the text doesn't shift on focus.
   boxFocused: { borderColor: theme.colors.primary },
   boxError: { borderColor: theme.colors.danger },
+  // A box with something beside the text (the password's eye).
+  boxRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  inputFill: { flex: 1 },
   input: {
     minHeight: 44,
     paddingVertical: 9,

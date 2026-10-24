@@ -15,7 +15,7 @@ import { useRevealFocused } from './adminProfileUi';
  * Add Document — the panel's document panel, drawn as the app's other forms
  * are: a Title (needed; the PDF's own name until one is typed) and the PDF
  * itself, PDF only and up to 2 MB, as the panel allows. It is uploaded at once
- * and joins the School Profile's documents.
+ * and joins the School Details' documents.
  */
 
 const TWO_MB = 2 * 1024 * 1024;

@@ -1,21 +1,31 @@
-import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React, { useRef, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
 import VectorIcon from '../../components/VectorIcon';
+import { useKeyboardLiftStyle } from '../../hooks/useKeyboardLift';
 import { theme, onThemeChange } from '../../utils/theme';
 import { updatePassword } from '../../api/authApi';
 import { DocHeader } from '../more/docUi';
 import { AppDialog } from '../../components/AppDialog';
+import { useRevealFocused } from '../admin/adminProfileUi';
+import {
+  FormHeading,
+  OutlinedPasswordField,
+  PasswordBox,
+  PasswordWrong,
+  SaveButton,
+  SaveState,
+  passwordServerWrong,
+} from '../teacherStudents/outlinedFormUi';
+
+/**
+ * Change Password, drawn as Add Student is: each box an outline with its name
+ * in the top border (and an eye to show what was typed), a quiet heading over
+ * each block, and Change Password at the foot, above the keyboard. A box the
+ * save stops at turns red with what is wrong under it, one at a time, until
+ * it is typed in again.
+ */
 
 // A met rule's tick and text: a deeper green than the theme's success colour,
 // which is too light to read as text on white.
@@ -31,168 +41,156 @@ const passwordRules: { label: string; test: (p: string) => boolean }[] = [
   { label: 'One special character (@ $ ! % * # ? &)', test: p => /[@$!%*#?&]/.test(p) },
 ];
 
-// ── Password field: label, plain bordered input, show/hide toggle ─────────────
-const PasswordField = ({
-  label,
-  placeholder,
-  value,
-  onChangeText,
-}: {
-  label: string;
-  placeholder: string;
-  value: string;
-  onChangeText: (t: string) => void;
-}) => {
-  const [focused, setFocused] = useState(false);
-  const [show, setShow] = useState(false);
-
-  return (
-    <View>
-      <Text style={s.label}>{label}</Text>
-      <View style={[s.inputRow, focused && s.inputRowFocused]}>
-        <TextInput
-          style={s.input}
-          placeholder={placeholder}
-          placeholderTextColor={theme.colors.textMuted}
-          secureTextEntry={!show}
-          autoCapitalize="none"
-          value={value}
-          onChangeText={onChangeText}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-        />
-        <TouchableOpacity onPress={() => setShow(v => !v)} hitSlop={10}>
-          <VectorIcon
-            iconSet="Ionicons"
-            iconName={show ? 'eye-off-outline' : 'eye-outline'}
-            size={20}
-            color={theme.colors.textSecondary}
-          />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
-
 const ChangePasswordScreen = () => {
   const navigation = useNavigation<any>();
   const [current, setCurrent] = useState('');
   const [newPass, setNewPass] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  // The box the last save stopped at (or none, for what the server said of the whole).
+  const [wrong, setWrong] = useState<PasswordWrong | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
   const [successMsg, setSuccessMsg] = useState('');
+  // A quick second tap, before the button has greyed out, does nothing.
+  const busy = useRef(false);
+
+  const currentRef = useRef<TextInput>(null);
+  const nextRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
+  const refs: Record<PasswordBox, React.RefObject<TextInput | null>> = {
+    current: currentRef,
+    next: nextRef,
+    confirm: confirmRef,
+  };
+
+  const lift = useKeyboardLiftStyle();
+  const { ref: scrollRef, scrollProps } = useRevealFocused();
+
+  // Typing in the box that was wrong clears it.
+  const typed = (box: PasswordBox, set: (v: string) => void) => (v: string) => {
+    set(v);
+    setWrong(w => (w && (w.box === box || w.box === null) ? null : w));
+  };
+  const errorOf = (box: PasswordBox) => (wrong?.box === box ? wrong.message : null);
+
+  const stop = (w: PasswordWrong) => {
+    setWrong(w);
+    if (w.box) refs[w.box].current?.focus();
+  };
 
   const handleChange = async () => {
-    if (!current) {
-      setError('Enter your current password.');
-      return;
-    }
+    if (busy.current) return;
+    if (!current) return stop({ box: 'current', message: 'Enter your current password.' });
+    if (!newPass) return stop({ box: 'next', message: 'Enter a new password.' });
     const unmet = passwordRules.find(r => !r.test(newPass));
-    if (unmet) {
-      setError(`Password needs: ${unmet.label.toLowerCase()}.`);
-      return;
-    }
-    if (newPass !== confirm) {
-      setError('Passwords do not match.');
-      return;
-    }
+    if (unmet) return stop({ box: 'next', message: `Password needs: ${unmet.label.toLowerCase()}.` });
+    if (!confirm) return stop({ box: 'confirm', message: 'Enter the new password again.' });
+    if (newPass !== confirm) return stop({ box: 'confirm', message: 'Passwords do not match.' });
 
-    setError('');
-    setLoading(true);
+    setWrong(null);
+    busy.current = true;
+    setSaveState('saving');
     try {
       const res = await updatePassword(current, newPass, confirm);
+      setSaveState('done');
       setSuccessMsg(res.message || 'Your password has been changed.');
     } catch (err: any) {
-      setError(
-        err?.response?.data?.message ??
-          err?.message ??
-          'Failed to change password. Please try again.',
-      );
-    } finally {
-      setLoading(false);
+      busy.current = false;
+      setSaveState('idle');
+      stop(passwordServerWrong(err, 'Failed to change password. Please try again.'));
     }
   };
 
-  const canSubmit = !!current && !!newPass && !!confirm && !loading;
   const matches = newPass === confirm;
 
   return (
-    <KeyboardAvoidingView
-      style={s.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <View style={s.root}>
       <DocHeader title="Change Password" />
-      <ScrollView
-        contentContainerStyle={s.scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <PasswordField
-          label="Current Password"
-          placeholder="Enter current password"
-          value={current}
-          onChangeText={t => { setCurrent(t); setError(''); }}
-        />
-        <PasswordField
-          label="New Password"
-          placeholder="Enter new password"
-          value={newPass}
-          onChangeText={t => { setNewPass(t); setError(''); }}
-        />
-        <PasswordField
-          label="Confirm New Password"
-          placeholder="Confirm new password"
-          value={confirm}
-          onChangeText={t => { setConfirm(t); setError(''); }}
-        />
+      <Animated.View style={[s.flex, lift]}>
+        <ScrollView ref={scrollRef} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} {...scrollProps}>
+          <FormHeading title="Current" first />
+          <OutlinedPasswordField
+            ref={currentRef}
+            required
+            label="Current Password"
+            placeholder="Enter current password"
+            value={current}
+            onChangeText={typed('current', setCurrent)}
+            error={errorOf('current')}
+            returnKeyType="next"
+            onSubmitEditing={() => nextRef.current?.focus()}
+          />
 
-        {/* Requirements checklist */}
-        <View style={s.rules}>
-          {passwordRules.map(rule => {
-            const met = rule.test(newPass);
-            return (
-              <View key={rule.label} style={s.ruleRow}>
+          <FormHeading title="New" />
+          <OutlinedPasswordField
+            ref={nextRef}
+            required
+            label="New Password"
+            placeholder="Enter new password"
+            value={newPass}
+            onChangeText={typed('next', setNewPass)}
+            error={errorOf('next')}
+            returnKeyType="next"
+            onSubmitEditing={() => confirmRef.current?.focus()}
+          />
+          <OutlinedPasswordField
+            ref={confirmRef}
+            required
+            label="Confirm New Password"
+            placeholder="Confirm new password"
+            value={confirm}
+            onChangeText={typed('confirm', setConfirm)}
+            error={errorOf('confirm')}
+            returnKeyType="done"
+            onSubmitEditing={handleChange}
+          />
+
+          {/* Requirements checklist */}
+          <View style={s.rules}>
+            {passwordRules.map(rule => {
+              const met = rule.test(newPass);
+              return (
+                <View key={rule.label} style={s.ruleRow}>
+                  <VectorIcon
+                    iconSet="Ionicons"
+                    iconName={met ? 'checkmark' : 'ellipse-outline'}
+                    size={14}
+                    color={met ? MET : theme.colors.textSecondary}
+                  />
+                  <Text style={[s.ruleText, met && s.ruleTextMet]}>{rule.label}</Text>
+                </View>
+              );
+            })}
+            {!!confirm && (
+              <View style={s.ruleRow}>
                 <VectorIcon
                   iconSet="Ionicons"
-                  iconName={met ? 'checkmark' : 'ellipse-outline'}
+                  iconName={matches ? 'checkmark' : 'close'}
                   size={14}
-                  color={met ? MET : theme.colors.textSecondary}
+                  color={matches ? MET : theme.colors.danger}
                 />
-                <Text style={[s.ruleText, met && s.ruleTextMet]}>{rule.label}</Text>
+                <Text style={[s.ruleText, matches ? s.ruleTextMet : s.ruleTextFail]}>Passwords match</Text>
               </View>
-            );
-          })}
-          {!!confirm && (
-            <View style={s.ruleRow}>
-              <VectorIcon
-                iconSet="Ionicons"
-                iconName={matches ? 'checkmark' : 'close'}
-                size={14}
-                color={matches ? MET : theme.colors.danger}
-              />
-              <Text style={[s.ruleText, matches ? s.ruleTextMet : s.ruleTextFail]}>
-                Passwords match
-              </Text>
-            </View>
-          )}
+            )}
+          </View>
+
+          {/* What the server said that is about none of the boxes */}
+          {!!wrong && !wrong.box && <Text style={s.errorText}>{wrong.message}</Text>}
+
+          <View style={s.tail} />
+        </ScrollView>
+
+        {/* Change Password stays in reach at the foot */}
+        <View style={s.footer}>
+          <SaveButton
+            state={saveState}
+            icon="lock-closed-outline"
+            label="Change Password"
+            busyLabel="Changing password"
+            doneLabel="Password changed"
+            onPress={handleChange}
+          />
         </View>
-
-        {!!error && <Text style={s.errorText}>{error}</Text>}
-
-        <TouchableOpacity
-          style={[s.button, !canSubmit && s.buttonDisabled]}
-          onPress={handleChange}
-          activeOpacity={0.85}
-          disabled={!canSubmit}
-        >
-          {loading ? (
-            <ActivityIndicator color={theme.colors.white} size="small" />
-          ) : (
-            <Text style={s.buttonText}>Change Password</Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
+      </Animated.View>
 
       {/* Success acknowledgement */}
       <AppDialog
@@ -210,7 +208,7 @@ const ChangePasswordScreen = () => {
         ]}
         onRequestClose={() => navigation.goBack()}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -218,26 +216,12 @@ export default ChangePasswordScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
-  scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40, gap: 18 },
-
-  // Fields — labels in the main text colour, a touch heavier, so they read clearly
-  label: { fontSize: 13, fontWeight: '500', color: theme.colors.textPrimary, marginBottom: 6 },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    height: 48,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.card,
-  },
-  inputRowFocused: { borderColor: theme.colors.primary },
-  input: { flex: 1, fontSize: 15, color: theme.colors.textPrimary, padding: 0 },
+  flex: { flex: 1 },
+  scroll: { paddingHorizontal: 20, paddingTop: 8 },
+  tail: { height: 24 },
 
   // Rules
-  rules: { gap: 6 },
+  rules: { gap: 6, marginTop: 18 },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // Unmet rules in the secondary text colour (not the faint muted one)
   ruleText: { fontSize: 13, color: theme.colors.textSecondary, lineHeight: 18 },
@@ -245,21 +229,18 @@ const __mk_s = () => StyleSheet.create({
   ruleTextFail: { color: theme.colors.danger },
 
   // Error
-  errorText: { fontSize: 13, color: theme.colors.danger, lineHeight: 18 },
+  errorText: { fontSize: 13, color: theme.colors.danger, lineHeight: 18, marginTop: 16 },
 
-  // Submit
-  button: {
-    height: 48,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
+  // Save, at the foot (the app's root keeps clear of the phone's own bar below)
+  footer: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.card,
   },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { fontSize: 15, fontWeight: '600', color: theme.colors.white },
 });
-
 
 // Themed stylesheets — rebuilt on light/dark toggle.
 let s = __mk_s();

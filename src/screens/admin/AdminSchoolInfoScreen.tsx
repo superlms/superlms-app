@@ -19,7 +19,7 @@ import {
 import { stampOf, useSchoolProfile } from './adminProfileUi';
 
 /**
- * School Profile — the panel's School Info tab, opened from Profile, read as
+ * School Details — the panel's School Info tab, opened from Profile, read as
  * the student's School Info: About, Vision, Mission, Values, Goals and the
  * school's own sections as headed paragraphs, the management team, the
  * documents (a tap opens one) and when it was last saved. The pencil in the
@@ -27,7 +27,7 @@ import { stampOf, useSchoolProfile } from './adminProfileUi';
  * says so and Add School Info opens it.
  */
 
-const TITLE = 'School Profile';
+const TITLE = 'School Details';
 
 const AdminSchoolInfoScreen = ({ navigation }: any) => {
   const { profile, loading, error, load, refreshing, onRefresh } = useSchoolProfile();
@@ -78,7 +78,7 @@ const AdminSchoolInfoScreen = ({ navigation }: any) => {
             </View>
             <Text style={s.emptyTitle}>No School Info Yet</Text>
             <Text style={s.emptySub}>
-              Add your school's about, vision, management team and documents to bring this profile to life.
+              Add your school's about, vision, management team and documents to bring this page to life.
             </Text>
             <TouchableOpacity style={s.addBtn} activeOpacity={0.85} onPress={openForm}>
               <VectorIcon iconSet="Ionicons" iconName="add" size={16} color={theme.colors.white} />
