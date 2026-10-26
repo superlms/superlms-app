@@ -230,3 +230,178 @@ export const getSalaryPayments = async (p: { month?: string; search?: string; em
   const { data } = await apiClient.get('/admin/payroll/payments', { params: p });
   return unwrap(data);
 };
+
+// ── The panel's newer screens ────────────────────────────────────────────────
+// Mark Attendance for everyone at once (teachers too), a date's statuses with
+// their remarks, the Mark Salary tab, Payments narrowed to a type, and
+// Add → Driver.
+
+/** This month's present days out of working days (holidays apart; a half day is half). */
+export interface MonthAttendance {
+  present: number;
+  working: number;
+  absent: number;
+  half: number;
+  leave: number;
+}
+
+export type EmployeeWithMonth = Employee & { month_attendance?: MonthAttendance | null };
+
+export const getEmployeesWithMonth = async (
+  p: { search?: string; type?: string; sort?: EmpSort } = {},
+): Promise<{ employees: EmployeeWithMonth[]; stats: EmpStats; month?: string }> => {
+  const { data } = await apiClient.get('/admin/payroll/employees', { params: p });
+  return unwrap(data);
+};
+
+/** What a row may be marked in the panel's Mark Attendance — the same four for everyone. */
+export type SheetStatus = 'present' | 'absent' | 'half_day' | 'holiday';
+export const SHEET_STATUS: { key: SheetStatus; label: string; short: string }[] = [
+  { key: 'present', label: 'Present', short: 'P' },
+  { key: 'absent', label: 'Absent', short: 'A' },
+  { key: 'half_day', label: 'Half day', short: 'H' },
+  { key: 'holiday', label: 'Holiday', short: 'Hol' },
+];
+
+export interface DayRow extends Employee {
+  status: string | null;
+  remark: string;
+}
+
+export interface DayAttendance {
+  date: string;
+  label: string;
+  employees: DayRow[];
+  counts: Record<'present' | 'absent' | 'half_day' | 'holiday' | 'leave' | 'not_marked', number>;
+}
+
+export const getDayAttendance = async (date: string): Promise<DayAttendance> => {
+  const { data } = await apiClient.get('/admin/payroll/attendance/day', { params: { date } });
+  return unwrap(data);
+};
+
+export interface SheetRow extends Employee {
+  status: SheetStatus | '';
+  remark: string;
+}
+
+export interface AttendanceSheet {
+  date: string;
+  label: string;
+  existing: boolean;
+  rows: SheetRow[];
+}
+
+export const getAttendanceSheet = async (date: string): Promise<AttendanceSheet> => {
+  const { data } = await apiClient.get('/admin/payroll/attendance/sheet', { params: { date } });
+  return unwrap(data);
+};
+
+export const saveAttendanceSheet = async (
+  date: string,
+  rows: Record<number, { status: SheetStatus | ''; remark: string }>,
+): Promise<string> => {
+  const { data } = await apiClient.post('/admin/payroll/attendance/sheet', { date, rows });
+  return data?.message ?? 'Attendance saved.';
+};
+
+export interface AccountPayment {
+  id: number;
+  amount: number;
+  date: string;
+  from?: string | null;
+  remark?: string | null;
+  mode?: string | null;
+}
+
+export interface AccountMonth {
+  ym: string;
+  label: string;
+  running: boolean;
+  base: number;
+  present: number;
+  absent: number;
+  half: number;
+  leave: number;
+  payable: number;
+  paid_leave: number;
+  cut_days: number;
+  per_day: number;
+  deduction: number;
+  paid: number;
+  payments: AccountPayment[];
+}
+
+export interface SalaryAccount {
+  employee: Employee & {
+    bank_name?: string | null;
+    bank_account_no?: string | null;
+    bank_ifsc?: string | null;
+    bank_holder_name?: string | null;
+  };
+  months: AccountMonth[];
+  payable: number;
+  paid: number;
+  balance: number;
+  paid_leaves_a_month: number;
+}
+
+export const getSalaryAccount = async (id: number): Promise<SalaryAccount> => {
+  const { data } = await apiClient.get(`/admin/payroll/account/${id}`);
+  return unwrap(data);
+};
+
+export const addSalaryAccountPayment = async (
+  id: number,
+  f: { amount: string; date: string; from: string; remark: string; month?: string },
+): Promise<string> => {
+  const { data } = await apiClient.post(`/admin/payroll/account/${id}/payments`, { ...f, amount: f.amount.trim() });
+  return data?.message ?? 'Payment added.';
+};
+
+export const getSalaryPaymentsByType = async (
+  p: { type?: string; employee_id?: number; month?: string } = {},
+): Promise<{ payments: PaymentRow[]; total: number }> => {
+  const { data } = await apiClient.get('/admin/payroll/payments', { params: p });
+  return unwrap(data);
+};
+
+export const getPayrollRoutes = async (): Promise<{ id: number; name: string; vehicle_type?: string | null }[]> => {
+  const { data } = await apiClient.get('/admin/payroll/lookups');
+  return unwrap(data)?.routes ?? [];
+};
+
+export interface DriverForm {
+  name: string;
+  mobile: string;
+  email: string;
+  license_no: string;
+  vehicle_no: string;
+  experience: string;
+  is_active: boolean;
+  route_ids: number[];
+  salary: string;
+  designation: string;
+  joining_date: string;
+  address: string;
+  bank_name: string;
+  bank_holder_name: string;
+  bank_account_no: string;
+  bank_ifsc: string;
+  bank_branch: string;
+  photo?: PickedFile | null;
+}
+
+export const addDriver = async (f: DriverForm): Promise<string> => {
+  const form = new FormData();
+  (Object.keys(f) as (keyof DriverForm)[]).forEach(k => {
+    if (k === 'photo' || k === 'route_ids' || k === 'is_active') return;
+    const v = f[k];
+    if (v !== undefined && v !== null && String(v) !== '') form.append(k, String(v).trim());
+  });
+  form.append('is_active', f.is_active ? '1' : '0');
+  f.route_ids.forEach(id => form.append('route_ids[]', String(id)));
+  if (f.photo) form.append('photo', { uri: f.photo.uri, type: f.photo.type || 'image/jpeg', name: f.photo.name || 'driver.jpg' } as any);
+  const { data } = await apiClient.post('/admin/payroll/drivers', form, MULTIPART);
+  return data?.message ?? 'Driver added!';
+};

@@ -110,7 +110,7 @@ const AdminPayrollEmployeeScreen = ({ navigation, route }: any) => {
 
         <Section title="Payroll">
           <InfoRow label="Attendance" value={d.is_teacher ? 'From the Teacher module' : 'Month by month'} onPress={() => navigation.navigate('AdminPayrollCalendar', { id: d.id, name: d.name })} />
-          <InfoRow label="Salary payments" value="History" onPress={() => navigation.navigate('AdminPayrollPayments', { employeeId: d.id, name: d.name })} last />
+          <InfoRow label="Mark Salary" value="Month by month" onPress={() => navigation.navigate('AdminPayrollHome', { tab: 'salary', empId: d.id, type: d.type })} last />
         </Section>
 
         <View style={s.quiet}>

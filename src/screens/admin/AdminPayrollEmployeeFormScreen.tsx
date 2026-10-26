@@ -9,12 +9,12 @@ import { Skeleton } from '../../components/Skeleton';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr, pickImage, takePhoto } from '../../utils/filePickers';
 import { PickedFile } from '../../api/adminProfileApi';
-import { EMP_TYPES, EmpType, EmployeeForm, getEmployee, saveEmployee } from '../../api/adminPayrollApi';
+import { EMP_TYPES, EmpType, EmployeeForm, addDriver, getEmployee, getPayrollRoutes, saveEmployee } from '../../api/adminPayrollApi';
 import { DocHeader } from '../more/docUi';
 import { FormField, FormPair, FormSection } from '../teacherStudents/studentFormUi';
 import { useKeyboardLiftStyle } from '../../hooks/useKeyboardLift';
 import { fromApiDate, toApiDate, typeDate } from '../../utils/dayMonthYear';
-import { FormError, Hint, SubmitButton } from './adminFormUi';
+import { FormError, Hint, OptionSheet, SubmitButton, SwitchRow } from './adminFormUi';
 
 /**
  * Add or edit someone on payroll — the panel's Employee form, drawn as Add
@@ -26,6 +26,11 @@ import { FormError, Hint, SubmitButton } from './adminFormUi';
  * 1 MB). The joining date is typed DD/MM/YYYY and sent as YYYY-MM-DD. The
  * page rides above the keyboard, and the box being typed in is scrolled into
  * view.
+ *
+ * Adding a driver is the panel's Add → Driver: the driver is made as Transport
+ * makes one — a login on password 123456, the driver record with the licence,
+ * vehicle and experience, the routes picked — and their payroll row carries
+ * the salary and bank details from here. The mobile is needed for it.
  */
 
 // A profile picture needs no more than this on its longest side — it keeps the
@@ -44,7 +49,13 @@ const blank: EmployeeForm = {
 
 const AdminPayrollEmployeeFormScreen = ({ navigation, route }: any) => {
   const editId: number | undefined = route?.params?.id;
-  const [form, setForm] = useState<EmployeeForm>(blank);
+  const startType: EmpType | undefined = route?.params?.type;
+  const [form, setForm] = useState<EmployeeForm>(() => (startType && !editId ? { ...blank, type: startType } : blank));
+  // Add → Driver: the Transport driver's own fields.
+  const [drv, setDrv] = useState({ license_no: '', vehicle_no: '', experience: '', is_active: true, route_ids: [] as number[] });
+  const [routes, setRoutes] = useState<{ id: number; name: string; vehicle_type?: string | null }[]>([]);
+  const [routesOpen, setRoutesOpen] = useState(false);
+  const newDriver = !editId && form.type === 'driver';
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [loading, setLoading] = useState(!!editId);
   const [asking, setAsking] = useState(false);
@@ -89,6 +100,11 @@ const AdminPayrollEmployeeFormScreen = ({ navigation, route }: any) => {
   }, []);
 
   useEffect(() => {
+    if (!newDriver || routes.length) return;
+    getPayrollRoutes().then(setRoutes).catch(() => {});
+  }, [newDriver, routes.length]);
+
+  useEffect(() => {
     if (!editId) return;
     (async () => {
       try {
@@ -130,12 +146,18 @@ const AdminPayrollEmployeeFormScreen = ({ navigation, route }: any) => {
     const joined = toApiDate(form.joining_date);
     if (joined === null) return setError('Enter the joining date as DD/MM/YYYY — a real date — or leave it empty.');
     if (joined && joined > moment().format('YYYY-MM-DD')) return setError('The joining date cannot be after today.');
+    if (newDriver && !form.mobile) return setError('Mobile number is required.');
     if (form.mobile && !/^[6-9]\d{9}$/.test(form.mobile)) return setError('Enter a valid 10-digit mobile number.');
+    if (newDriver && drv.experience && (!/^\d{1,2}$/.test(drv.experience) || Number(drv.experience) > 50)) return setError('Enter the experience in whole years (0–50).');
     if (form.bank_account_no && !/^\d{6,20}$/.test(form.bank_account_no)) return setError('Account number must be 6–20 digits.');
     if (form.bank_ifsc && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(form.bank_ifsc)) return setError('Enter a valid IFSC code (e.g. HDFC0001234).');
     setSaving(true);
     try {
-      setSavedMsg(await saveEmployee({ ...form, joining_date: joined || '' }, editId));
+      setSavedMsg(
+        newDriver
+          ? await addDriver({ ...form, ...drv, joining_date: joined || '', photo: form.photo ?? null })
+          : await saveEmployee({ ...form, joining_date: joined || '' }, editId),
+      );
     } catch (e) {
       setError(apiErr(e, 'Could not save this employee.'));
     } finally {
@@ -150,7 +172,7 @@ const AdminPayrollEmployeeFormScreen = ({ navigation, route }: any) => {
 
   return (
     <View style={s.root}>
-      <DocHeader title={editId ? 'Edit Employee' : 'Add Employee'} onBackPress={() => navigation.goBack()} />
+      <DocHeader title={editId ? 'Edit Employee' : startType ? `New ${EMP_TYPES.find(t => t.key === startType)?.label ?? 'Employee'}` : 'Add Employee'} onBackPress={() => navigation.goBack()} />
       {loading ? (
         <View style={s.skeleton}>
           {[0, 1, 2, 3, 4, 5].map(i => <Skeleton key={i} width="100%" height={54} radius={12} />)}
@@ -190,8 +212,8 @@ const AdminPayrollEmployeeFormScreen = ({ navigation, route }: any) => {
             <FormSection title="Employee" first />
             <Field label="Full Name" value={form.name} onChangeText={(t: string) => set('name', t)} placeholder="Full name" maxLength={255} autoCapitalize="words" />
             <View style={s.select}>
-              <Select plain markChosen label="Type" placeholder="Select type" value={form.type} options={TYPE_OPTIONS} onChange={v => set('type', v as EmpType)} />
-              {form.type === 'driver' && !editId && <Hint>A driver who is on Transport → Drivers is listed here on their own.</Hint>}
+              <Select plain markChosen label="Type" placeholder="Select type" value={form.type} options={editId ? TYPE_OPTIONS : TYPE_OPTIONS.filter(o => o.value !== 'teacher')} onChange={v => set('type', v as EmpType)} />
+              {newDriver && <Hint>Saved as a Transport driver too — their login’s password is 123456.</Hint>}
             </View>
             <Field label="Designation" value={form.designation} onChangeText={(t: string) => set('designation', t)} placeholder="e.g. Accountant" maxLength={100} />
             <FormPair>
@@ -199,8 +221,28 @@ const AdminPayrollEmployeeFormScreen = ({ navigation, route }: any) => {
               <Field half label="Joining Date" value={form.joining_date} onChangeText={(t: string) => set('joining_date', typeDate(t, form.joining_date))} placeholder="DD/MM/YYYY" keyboardType="number-pad" maxLength={10} />
             </FormPair>
 
+            {newDriver && (
+              <>
+                <FormSection title="Driver" />
+                <FormPair>
+                  <Field half label="License No." value={drv.license_no} onChangeText={(t: string) => setDrv(d => ({ ...d, license_no: t }))} placeholder="Optional" maxLength={50} autoCapitalize="characters" />
+                  <Field half label="Vehicle No." value={drv.vehicle_no} onChangeText={(t: string) => setDrv(d => ({ ...d, vehicle_no: t }))} placeholder="Optional" maxLength={30} autoCapitalize="characters" />
+                </FormPair>
+                <Field label="Experience (years)" value={drv.experience} onChangeText={(t: string) => setDrv(d => ({ ...d, experience: t.replace(/\D/g, '') }))} placeholder="Optional" keyboardType="number-pad" maxLength={2} />
+                <TouchableOpacity style={s.routes} activeOpacity={0.7} onPress={() => setRoutesOpen(true)}>
+                  <Text style={s.routesLabel}>Routes</Text>
+                  <Text style={s.routesValue} numberOfLines={2}>
+                    {drv.route_ids.length
+                      ? routes.filter(r => drv.route_ids.includes(r.id)).map(r => r.name).join(', ')
+                      : routes.length ? 'None — tap to pick the routes they drive' : 'No routes yet'}
+                  </Text>
+                </TouchableOpacity>
+                <SwitchRow label="Active" value={drv.is_active} onValueChange={(v: boolean) => setDrv(d => ({ ...d, is_active: v }))} />
+              </>
+            )}
+
             <FormSection title="Contact" />
-            <Field label="Mobile" value={form.mobile} onChangeText={(t: string) => set('mobile', t.replace(/\D/g, ''))} placeholder="10 digits (optional)" keyboardType="number-pad" maxLength={10} />
+            <Field label={newDriver ? 'Mobile *' : 'Mobile'} value={form.mobile} onChangeText={(t: string) => set('mobile', t.replace(/\D/g, ''))} placeholder={newDriver ? '10 digits' : '10 digits (optional)'} keyboardType="number-pad" maxLength={10} />
             <Field label="Email" value={form.email} onChangeText={(t: string) => set('email', t.trim())} placeholder="Optional" keyboardType="email-address" autoCapitalize="none" maxLength={255} />
             <Field label="Address" value={form.address} onChangeText={(t: string) => set('address', t)} placeholder="Optional" multiline maxLength={500} />
 
@@ -215,7 +257,7 @@ const AdminPayrollEmployeeFormScreen = ({ navigation, route }: any) => {
 
             <View style={s.submit}>
               <FormError>{error}</FormError>
-              <SubmitButton label={editId ? 'Save changes' : 'Add Employee'} busy={saving} onPress={save} />
+              <SubmitButton label={editId ? 'Save changes' : newDriver ? 'Add Driver' : 'Add Employee'} busy={saving} onPress={save} />
             </View>
 
             <View style={s.tail} />
@@ -234,9 +276,19 @@ const AdminPayrollEmployeeFormScreen = ({ navigation, route }: any) => {
         ]}
         onRequestClose={() => setAsking(false)}
       />
+      <OptionSheet
+        visible={routesOpen}
+        title="Routes"
+        multi
+        options={routes.map(r => ({ key: String(r.id), label: r.name, sub: r.vehicle_type ?? undefined }))}
+        selected={drv.route_ids.map(String)}
+        onPick={k => setDrv(d => ({ ...d, route_ids: d.route_ids.includes(Number(k)) ? d.route_ids.filter(x => x !== Number(k)) : [...d.route_ids, Number(k)] }))}
+        onClose={() => setRoutesOpen(false)}
+        emptyText="No routes yet — they are made in Transportation."
+      />
       <AppDialog
         visible={!!savedMsg}
-        title={editId ? 'Employee updated' : 'Employee added'}
+        title={editId ? 'Employee updated' : newDriver ? 'Driver added' : 'Employee added'}
         message={savedMsg}
         actions={[{ text: 'Done', onPress: closeSaved }]}
         onRequestClose={closeSaved}
@@ -275,6 +327,11 @@ const __mk_s = () => StyleSheet.create({
 
   // Select sits in the fields' rhythm
   select: { marginTop: 12 },
+
+  // A new driver's routes
+  routes: { marginTop: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, gap: 2 },
+  routesLabel: { fontSize: 12, color: theme.colors.textMuted },
+  routesValue: { fontSize: 14, color: theme.colors.textPrimary },
 
   submit: { marginTop: 28, gap: 12 },
 });

@@ -1,106 +1,162 @@
-import React, { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import moment from 'moment';
-import VectorIcon from '../../components/VectorIcon';
-import { SkeletonIcon } from '../../components/Skeleton';
-import AppRefreshControl from '../../components/AppRefreshControl';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useFocusLoad } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
-import { EmpStats, getEmployees, getSalary } from '../../api/adminPayrollApi';
+import { EmpStats, getEmployees } from '../../api/adminPayrollApi';
 import { DocHeader } from '../more/docUi';
-import { Words } from '../exam/examUi';
-import { formatINR } from './adminTransportUi';
-import { TITLE, lastMonth } from './payrollUi';
+import { UnderlineTabs } from './adminExamUi';
+import { OptionSheet } from './adminFormUi';
+import { HeadActions, HeadBtn, HeadLink, Strip } from './feeSetupUi';
+import { TITLE } from './payrollUi';
+import PayrollEmployeesTab from './PayrollEmployeesTab';
+import PayrollAttendanceTab from './PayrollAttendanceTab';
+import PayrollSalaryTab, { SalaryHeadAction } from './PayrollSalaryTab';
+import PayrollPaymentsTab from './PayrollPaymentsTab';
 
 /**
- * Payroll, laid out as a student's hub is: one plain row for each of the
- * admin panel's tabs — Employees, Attendance, Salary and Payments — each
- * saying where things stand (staff by type, today's marking, last month's
- * payable and what is paid of it).
+ * Payroll — the panel's page, as it lays it out: the staff counts across the
+ * top (total, management, drivers, employees, teachers), then its four tabs —
+ *
+ *   Employees    everyone on payroll, searched, narrowed and sorted; + adds
+ *                someone (management, an employee, a driver — made a
+ *                Transport driver too — or a teacher, on the Teachers form)
+ *   Attendance   a person's months, or a date's statuses; Mark Attendance
+ *                marks a day for everyone, teachers too
+ *   Mark Salary  one person's salary month by month, and Add Payment against
+ *                a month
+ *   Payments     every salary paid, by type, person and month
+ *
+ * Each tab keeps its filters while another is open, as the panel does.
  */
 
-const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+type Tab = 'employees' | 'attendance' | 'salary' | 'payments';
 
-const AdminPayrollScreen = ({ navigation }: any) => {
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'employees', label: 'Employees' },
+  { key: 'attendance', label: 'Attendance' },
+  { key: 'salary', label: 'Mark Salary' },
+  { key: 'payments', label: 'Payments' },
+];
+
+const ADD_CHOICES = [
+  { key: 'management', label: 'Management', sub: 'On payroll here' },
+  { key: 'teacher', label: 'Teacher', sub: 'Added on the Teachers form — given a payroll row' },
+  { key: 'driver', label: 'Driver', sub: 'Also listed under Transport → Drivers' },
+  { key: 'employee', label: 'Employee', sub: 'On payroll here' },
+];
+
+const AdminPayrollScreen = ({ navigation, route }: any) => {
+  const [tab, setTab] = useState<Tab>((route.params?.tab as Tab) ?? 'employees');
+  const [seen, setSeen] = useState<Record<Tab, boolean>>({ employees: false, attendance: false, salary: false, payments: false, [tab]: true } as Record<Tab, boolean>);
   const [stats, setStats] = useState<EmpStats | null>(null);
-  const [salary, setSalary] = useState<{ payable: number; paid: number; label: string } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [salaryAction, setSalaryAction] = useState<SalaryHeadAction | null>(null);
+  const [adding, setAdding] = useState(false);
 
-  const load = useCallback(async () => {
+  // Opened for one person (their Employee page's Salary), or back from marking a day.
+  const [salaryFor, setSalaryFor] = useState<{ type?: string; empId?: number } | null>(null);
+  const [marked, setMarked] = useState<{ date: string; at: number } | null>(null);
+  useEffect(() => {
+    const p = route.params ?? {};
+    if (p.tab) {
+      setTab(p.tab);
+      setSeen(prev => ({ ...prev, [p.tab]: true }));
+    }
+    if (p.empId) setSalaryFor({ type: p.type, empId: p.empId });
+    if (p.markedDate) setMarked({ date: p.markedDate, at: p.markedAt ?? Date.now() });
+  }, [route.params]);
+
+  const loadStats = useCallback(async () => {
     try {
-      const [emp, sal] = await Promise.all([getEmployees(), getSalary(lastMonth())]);
-      setStats(emp.stats);
-      setSalary({ ...sal.totals, label: sal.month_label });
+      setStats((await getEmployees()).stats);
     } catch {
-      // The rows still open their pages; the figures just stay as they were.
-    } finally {
-      setLoading(false);
+      // The tabs still open; the counts stay as they were.
     }
   }, []);
 
-  useFocusLoad(() => load());
+  // Back from a form, every tab reads afresh.
+  const first = useRef(true);
+  useFocusLoad(() => {
+    loadStats();
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    setReloadKey(k => k + 1);
+  });
 
-  const skeleton = loading && !stats;
-  const st = stats ?? { total: 12, management: 2, driver: 3, employee: 4, teacher: 3 };
-  const sal = salary ?? { payable: 250000, paid: 0, label: moment().subtract(1, 'month').format('MMMM YYYY') };
+  const choose = (t: Tab) => {
+    setTab(t);
+    setSeen(prev => ({ ...prev, [t]: true }));
+  };
 
-  const entries = [
-    {
-      title: 'Employees',
-      sub: `${plural(st.total, 'person')} · ${st.management} management · ${st.driver} drivers · ${st.teacher} teachers`,
-      icon: 'people-outline',
-      route: 'AdminPayrollEmployees',
-    },
-    {
-      title: 'Attendance',
-      sub: 'Staff by date, or one person month by month',
-      icon: 'calendar-outline',
-      route: 'AdminPayrollAttendance',
-    },
-    {
-      title: 'Salary',
-      sub: `${sal.label} · ${formatINR(sal.payable)} payable · ${formatINR(sal.paid)} paid`,
-      icon: 'cash-outline',
-      route: 'AdminPayrollSalary',
-    },
-    {
-      title: 'Payments',
-      sub: 'Every salary paid, by month or person',
-      icon: 'receipt-outline',
-      route: 'AdminPayrollPayments',
-    },
-  ];
+  const onSalaryAction = useCallback((a: SalaryHeadAction | null) => setSalaryAction(a), []);
+
+  const addAs = (kind: string) => {
+    setAdding(false);
+    if (kind === 'teacher') navigation.navigate('AdminPayrollTeacherForm');
+    else navigation.navigate('AdminPayrollEmployeeForm', { type: kind });
+  };
+
+  const right = () => {
+    if (tab === 'employees') return <HeadBtn icon="add" onPress={() => setAdding(true)} />;
+    if (tab === 'attendance') return <HeadLink label="Mark Attendance" onPress={() => navigation.navigate('AdminPayrollMark')} />;
+    if (tab === 'salary' && salaryAction) return <HeadLink label={salaryAction.label} onPress={salaryAction.onPress} />;
+    return null;
+  };
+
+  const st = stats ?? { total: 0, management: 0, driver: 0, employee: 0, teacher: 0 };
+  const pane = (t: Tab) => [s.pane, tab !== t && s.hidden];
 
   return (
     <View style={s.root}>
       <DocHeader
         title={TITLE}
         onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
+        rightSlot={<HeadActions>{right()}</HeadActions>}
       />
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={s.scroll}
-        refreshControl={<AppRefreshControl refreshing={false} onRefresh={() => { setLoading(true); load(); }} />}
-      >
-        {entries.map((item, i) => (
-          <TouchableOpacity key={item.title} style={s.row} activeOpacity={0.6} onPress={() => navigation.navigate(item.route)}>
-            <View style={s.rowIcon}>
-              {skeleton ? (
-                <SkeletonIcon iconName={item.icon} size={20} />
-              ) : (
-                <VectorIcon iconSet="Ionicons" iconName={item.icon} size={20} color={theme.colors.textSecondary} />
-              )}
-            </View>
-            <View style={[s.rowMain, i < entries.length - 1 && s.rowDivider]}>
-              <View style={s.rowText}>
-                <Words skeleton={skeleton} style={s.rowTitle}>{item.title}</Words>
-                <Words skeleton={skeleton} style={s.rowSub} numberOfLines={1}>{item.sub}</Words>
-              </View>
-              <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={16} color={theme.colors.textMuted} />
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={s.stats}>
+        <Strip
+          items={[
+            { label: 'Total', value: stats ? st.total : '…' },
+            { label: 'Management', value: stats ? st.management : '…', color: '#7C3AED' },
+            { label: 'Drivers', value: stats ? st.driver : '…', color: '#D97706' },
+            { label: 'Employees', value: stats ? st.employee : '…', color: '#059669' },
+            { label: 'Teachers', value: stats ? st.teacher : '…', color: '#2563EB' },
+          ]}
+        />
+      </View>
+      <UnderlineTabs tabs={TABS} active={tab} onChange={choose} />
+
+      {seen.employees && (
+        <View style={pane('employees')}>
+          <PayrollEmployeesTab navigation={navigation} reloadKey={reloadKey} />
+        </View>
+      )}
+      {seen.attendance && (
+        <View style={pane('attendance')}>
+          <PayrollAttendanceTab reloadKey={reloadKey} jump={marked} />
+        </View>
+      )}
+      {seen.salary && (
+        <View style={pane('salary')}>
+          <PayrollSalaryTab navigation={navigation} reloadKey={reloadKey} onAction={onSalaryAction} initial={salaryFor} />
+        </View>
+      )}
+      {seen.payments && (
+        <View style={pane('payments')}>
+          <PayrollPaymentsTab reloadKey={reloadKey} />
+        </View>
+      )}
+
+      <OptionSheet
+        visible={adding}
+        title="Who are you adding?"
+        options={ADD_CHOICES}
+        selected={[]}
+        onPick={addAs}
+        onClose={() => setAdding(false)}
+      />
     </View>
   );
 };
@@ -109,14 +165,9 @@ export default AdminPayrollScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
-  scroll: { paddingTop: 4, paddingBottom: 40 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingLeft: 20 },
-  rowIcon: { width: 22, alignItems: 'center' },
-  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 15, paddingRight: 20 },
-  rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
-  rowText: { flex: 1 },
-  rowTitle: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
-  rowSub: { fontSize: 13, color: theme.colors.textMuted, marginTop: 2 },
+  stats: { paddingHorizontal: 20, paddingBottom: 6 },
+  pane: { flex: 1 },
+  hidden: { display: 'none' },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

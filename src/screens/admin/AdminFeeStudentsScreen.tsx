@@ -72,8 +72,10 @@ const AdminFeeStudentsScreen = ({ navigation }: any) => {
 
   return (
     <View style={s.root}>
-      <DocHeader title="Fee Submission" onBackPress={() => navigation.goBack()} />
-      <SearchBar value={search} onChangeText={setSearch} placeholder="Search student or father name…" />
+      <DocHeader title="View & Submit Fee" onBackPress={() => navigation.goBack()} />
+      <View style={s.search}>
+        <SearchBar value={search} onChangeText={setSearch} placeholder="Search student or father name…" />
+      </View>
       <View style={s.filters}>
         <ClassPills
           classes={classes}
@@ -136,9 +138,10 @@ export default AdminFeeStudentsScreen;
 
 const __mk_s = () => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.card },
-  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingBottom: 8 },
-  count: { fontSize: 12, color: theme.colors.textMuted, paddingHorizontal: 20, paddingVertical: 6 },
-  list: { paddingBottom: 40 },
+  search: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 10 },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  count: { fontSize: 12, color: theme.colors.textMuted, paddingTop: 12, paddingBottom: 2 },
+  list: { paddingHorizontal: 20, paddingBottom: 40 },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.

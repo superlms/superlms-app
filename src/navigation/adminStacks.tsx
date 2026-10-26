@@ -47,14 +47,11 @@ import TransportReceiptScreen from '../screens/transport/TransportReceiptScreen'
 import AdminLedgerScreen from '../screens/admin/AdminLedgerScreen';
 import AdminLedgerFormScreen from '../screens/admin/AdminLedgerFormScreen';
 import AdminPayrollScreen from '../screens/admin/AdminPayrollScreen';
-import AdminPayrollEmployeesScreen from '../screens/admin/AdminPayrollEmployeesScreen';
 import AdminPayrollEmployeeScreen from '../screens/admin/AdminPayrollEmployeeScreen';
 import AdminPayrollEmployeeFormScreen from '../screens/admin/AdminPayrollEmployeeFormScreen';
-import AdminPayrollAttendanceScreen from '../screens/admin/AdminPayrollAttendanceScreen';
 import AdminPayrollCalendarScreen from '../screens/admin/AdminPayrollCalendarScreen';
-import AdminPayrollSalaryScreen from '../screens/admin/AdminPayrollSalaryScreen';
-import AdminPayrollPayScreen from '../screens/admin/AdminPayrollPayScreen';
-import AdminPayrollPaymentsScreen from '../screens/admin/AdminPayrollPaymentsScreen';
+import AdminPayrollMarkScreen from '../screens/admin/AdminPayrollMarkScreen';
+import AdminPayrollAddPaymentScreen from '../screens/admin/AdminPayrollAddPaymentScreen';
 // Fees
 import AdminFeesScreen from '../screens/admin/AdminFeesScreen';
 import AdminFeeStudentsScreen from '../screens/admin/AdminFeeStudentsScreen';
@@ -64,6 +61,21 @@ import AdminFeePaymentsScreen from '../screens/admin/AdminFeePaymentsScreen';
 import AdminFeeAnalyticsScreen from '../screens/admin/AdminFeeAnalyticsScreen';
 import AdminFeeQrScreen from '../screens/admin/AdminFeeQrScreen';
 import AdminFeeQrReviewScreen from '../screens/admin/AdminFeeQrReviewScreen';
+import AdminFeeStructureScreen from '../screens/admin/AdminFeeStructureScreen';
+import AdminFeeStructureFormScreen from '../screens/admin/AdminFeeStructureFormScreen';
+import AdminFeeDuesScreen from '../screens/admin/AdminFeeDuesScreen';
+import AdminFeeRouteFormScreen from '../screens/admin/AdminFeeRouteFormScreen';
+import AdminFeePenaltiesScreen from '../screens/admin/AdminFeePenaltiesScreen';
+import AdminFeeWaiverScreen from '../screens/admin/AdminFeeWaiverScreen';
+import AdminFeeCycleScreen from '../screens/admin/AdminFeeCycleScreen';
+import AdminFeeCycleFormScreen from '../screens/admin/AdminFeeCycleFormScreen';
+import AdminFeeCycleEditScreen from '../screens/admin/AdminFeeCycleEditScreen';
+import AdminFeeConcessionsScreen from '../screens/admin/AdminFeeConcessionsScreen';
+import AdminFeeConcessionFormScreen from '../screens/admin/AdminFeeConcessionFormScreen';
+import AdminFeePaymentQrFormScreen from '../screens/admin/AdminFeePaymentQrFormScreen';
+import AdminFeeAccountUsersScreen from '../screens/admin/AdminFeeAccountUsersScreen';
+import AdminFeeAccountUserScreen from '../screens/admin/AdminFeeAccountUserScreen';
+import AdminFeeAccountUserFormScreen from '../screens/admin/AdminFeeAccountUserFormScreen';
 // Enquiries
 import AdminEnquiriesScreen from '../screens/admin/AdminEnquiriesScreen';
 import AdminEnquiryDetailScreen from '../screens/admin/AdminEnquiryDetailScreen';
@@ -262,15 +274,15 @@ export const AdminLedgerStack = () => (
 
 export const AdminPayrollStack = () => (
   <Stack.Navigator screenOptions={opts}>
+    {/* The panel's page: Employees, Attendance, Mark Salary and Payments as its tabs */}
     <Stack.Screen name="AdminPayrollHome" component={AdminPayrollScreen} />
-    <Stack.Screen name="AdminPayrollEmployees" component={AdminPayrollEmployeesScreen} />
     <Stack.Screen name="AdminPayrollEmployee" component={AdminPayrollEmployeeScreen} />
     <Stack.Screen name="AdminPayrollEmployeeForm" component={AdminPayrollEmployeeFormScreen} />
-    <Stack.Screen name="AdminPayrollAttendance" component={AdminPayrollAttendanceScreen} />
+    {/* Add → Teacher: the Teachers page's own form; the teacher is given a payroll row */}
+    <Stack.Screen name="AdminPayrollTeacherForm" component={AdminTeacherFormScreen} />
     <Stack.Screen name="AdminPayrollCalendar" component={AdminPayrollCalendarScreen} />
-    <Stack.Screen name="AdminPayrollSalary" component={AdminPayrollSalaryScreen} />
-    <Stack.Screen name="AdminPayrollPay" component={AdminPayrollPayScreen} />
-    <Stack.Screen name="AdminPayrollPayments" component={AdminPayrollPaymentsScreen} />
+    <Stack.Screen name="AdminPayrollMark" component={AdminPayrollMarkScreen} />
+    <Stack.Screen name="AdminPayrollAddPayment" component={AdminPayrollAddPaymentScreen} />
   </Stack.Navigator>
 );
 
@@ -284,6 +296,24 @@ export const AdminFeesStack = () => (
     <Stack.Screen name="AdminFeeAnalytics" component={AdminFeeAnalyticsScreen} />
     <Stack.Screen name="AdminFeeQr" component={AdminFeeQrScreen} />
     <Stack.Screen name="AdminFeeQrReview" component={AdminFeeQrReviewScreen} />
+    {/* The panel's other sections: Fee Structure (Add Dues, a route's fee), Penalties,
+        Fee Cycle (Calculator), Concession, Payment QR and Accounts user */}
+    <Stack.Screen name="AdminFeeStructure" component={AdminFeeStructureScreen} />
+    <Stack.Screen name="AdminFeeStructureForm" component={AdminFeeStructureFormScreen} />
+    <Stack.Screen name="AdminFeeDues" component={AdminFeeDuesScreen} />
+    <Stack.Screen name="AdminFeeRouteForm" component={AdminFeeRouteFormScreen} />
+    <Stack.Screen name="AdminFeePenalties" component={AdminFeePenaltiesScreen} />
+    <Stack.Screen name="AdminFeeWaiver" component={AdminFeeWaiverScreen} />
+    <Stack.Screen name="AdminFeeCycle" component={AdminFeeCycleScreen} />
+    <Stack.Screen name="AdminFeeCycleForm" component={AdminFeeCycleFormScreen} />
+    <Stack.Screen name="AdminFeeCycleEdit" component={AdminFeeCycleEditScreen} />
+    <Stack.Screen name="AdminFeeConcessions" component={AdminFeeConcessionsScreen} />
+    <Stack.Screen name="AdminFeeConcessionForm" component={AdminFeeConcessionFormScreen} />
+    <Stack.Screen name="AdminFeePaymentQrForm" component={AdminFeePaymentQrFormScreen} />
+    <Stack.Screen name="AdminFeeQrImage" component={FeeImageScreen} />
+    <Stack.Screen name="AdminFeeAccountUsers" component={AdminFeeAccountUsersScreen} />
+    <Stack.Screen name="AdminFeeAccountUser" component={AdminFeeAccountUserScreen} />
+    <Stack.Screen name="AdminFeeAccountUserForm" component={AdminFeeAccountUserFormScreen} />
   </Stack.Navigator>
 );
 

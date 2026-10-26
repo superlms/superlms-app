@@ -1,180 +1,112 @@
 import React, { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
-import AppRefreshControl from '../../components/AppRefreshControl';
+import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import VectorIcon from '../../components/VectorIcon';
+import AppRefreshControl from '../../components/AppRefreshControl';
+import { Skeleton, SkeletonIcon, SkeletonText } from '../../components/Skeleton';
 import { useFocusLoad, useRefresh } from '../../hooks/useRefresh';
 import { theme, onThemeChange } from '../../utils/theme';
-import { apiErr } from '../../utils/filePickers';
 import { FeeAnalytics, getFeeAnalytics, getQrRequests } from '../../api/adminFeeApi';
 import { DocHeader } from '../more/docUi';
-import { Card, CardHead, Chevron, DashError, DashSkeleton, KpiGrid, LineRow, PageLine, PctRow, Pill, type Kpi } from '../home/dashboardUi';
-import { TITLE, inr } from './adminFeeUi';
+import { ListCount } from './adminStudentsUi';
+import { TITLE } from './adminFeeUi';
+import { rupees0 } from './feeSetupUi';
 
 /**
- * The school's Fees, drawn as a student's Fees is — white cards on the page's
- * grey. Four figures to open on (collected, still due, today and this month,
- * all by the panel's Analytics), what has come in of each fee, and the
- * panel's sections: Fee Submission (a student's ledger, and collecting from
- * them), Payments, Analytics and QR Payments, with how many of those wait to
- * be checked.
+ * Fees — the panel's Fee page, its sections drawn as the Students list draws
+ * the classes: a count, then a plain row for each section in the panel's own
+ * order — Fee Structure, View & Submit Fee, Analytics, Payments, Penalties,
+ * Fee Cycle, Concession, QR Payments and Accounts user — each with a small
+ * tile, its name and what it holds, and the QR payments waiting to be checked
+ * beside QR Payments. A row opens that section, laid out as the panel lays it
+ * out.
  */
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+interface FeeSection {
+  key: string;
+  icon: string;
+  title: string;
+  meta: string;
+  route: string;
+}
 
-const Lead = ({ icon }: { icon: string }) => (
-  <View style={s.lead}>
-    <VectorIcon iconSet="Ionicons" iconName={icon} size={18} color={theme.colors.primary} />
-  </View>
-);
+// The panel's $feeTabs, in its order, each with its own line.
+const SECTIONS: FeeSection[] = [
+  { key: 'fee_structure', icon: 'clipboard-outline', title: 'Fee Structure', meta: 'Class-wise fee heads & amounts', route: 'AdminFeeStructure' },
+  { key: 'view_fee', icon: 'document-text-outline', title: 'View & Submit Fee', meta: 'A student’s fee ledger — collect fee from it', route: 'AdminFeeStudents' },
+  { key: 'analytics', icon: 'bar-chart-outline', title: 'Analytics', meta: 'Collections & dues overview', route: 'AdminFeeAnalytics' },
+  { key: 'payments', icon: 'receipt-outline', title: 'Payments', meta: 'All recorded fee payments', route: 'AdminFeePayments' },
+  { key: 'penalties', icon: 'warning-outline', title: 'Penalties', meta: 'Late-fee penalties', route: 'AdminFeePenalties' },
+  { key: 'cycle', icon: 'repeat-outline', title: 'Fee Cycle', meta: 'Installments & due dates', route: 'AdminFeeCycle' },
+  { key: 'concession', icon: 'pricetag-outline', title: 'Concession', meta: 'Discounts & waivers', route: 'AdminFeeConcessions' },
+  { key: 'qr_payments', icon: 'qr-code-outline', title: 'QR Payments', meta: 'Check payments · your QR & UPI ID', route: 'AdminFeeQr' },
+  { key: 'account_users', icon: 'people-outline', title: 'Accounts user', meta: 'Cashier / account logins', route: 'AdminFeeAccountUsers' },
+];
+
+//   [▣]  QR Payments                                  3 to check  >
+//        Check payments · your QR & UPI ID
+const SectionRow = ({
+  item,
+  badge,
+  isLast,
+  skeleton,
+  onPress,
+}: {
+  item: FeeSection;
+  badge?: number;
+  isLast: boolean;
+  skeleton?: boolean;
+  onPress: () => void;
+}) =>
+  skeleton ? (
+    <View style={[s.row, !isLast && s.rowDivider]}>
+      <Skeleton width={30} height={30} radius={6} />
+      <View style={s.body}>
+        <SkeletonText style={s.name} numberOfLines={1}>{item.title}</SkeletonText>
+        <SkeletonText style={s.meta} numberOfLines={1}>{item.meta}</SkeletonText>
+      </View>
+      <SkeletonIcon iconName="chevron-forward" size={13} />
+    </View>
+  ) : (
+    <TouchableOpacity style={[s.row, !isLast && s.rowDivider]} activeOpacity={0.6} onPress={onPress}>
+      <View style={s.tile}>
+        <VectorIcon iconSet="Ionicons" iconName={item.icon} size={17} color={theme.colors.primary} />
+      </View>
+      <View style={s.body}>
+        <Text style={s.name} numberOfLines={1}>{item.title}</Text>
+        <Text style={s.meta} numberOfLines={1}>{item.meta}</Text>
+      </View>
+      {!!badge && badge > 0 && (
+        <View style={s.badge}>
+          <Text style={s.badgeText}>{badge > 99 ? '99+' : badge} to check</Text>
+        </View>
+      )}
+      <VectorIcon iconSet="Ionicons" iconName="chevron-forward" size={13} color={theme.colors.textMuted} />
+    </TouchableOpacity>
+  );
 
 const AdminFeesScreen = ({ navigation }: any) => {
-  const [data, setData] = useState<FeeAnalytics | null>(null);
+  const [summary, setSummary] = useState<FeeAnalytics['summary'] | null>(null);
   const [qrPending, setQrPending] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
 
-  // Coming back refetches quietly — the skeleton only shows the first time.
+  // The figures over the list are a help, not the page: a section opens
+  // whether or not they came.
   const load = useCallback(async () => {
-    setError(null);
-    try {
-      const [a, q] = await Promise.all([
-        getFeeAnalytics(),
-        getQrRequests({ status: 'pending' }).catch(() => null),
-      ]);
-      setData(a);
-      setQrPending(q?.stats.pending ?? 0);
-    } catch (e) {
-      setError(apiErr(e, 'Could not load fees.'));
-    } finally {
-      setLoading(false);
-    }
+    const [a, q] = await Promise.all([
+      getFeeAnalytics().catch(() => null),
+      getQrRequests({ status: 'pending' }).catch(() => null),
+    ]);
+    if (a) setSummary(a.summary);
+    if (q) setQrPending(q.stats.pending ?? 0);
+    setLoaded(true);
   }, []);
 
   useFocusLoad(load);
   const { refreshing, onRefresh } = useRefresh(load);
 
-  const go = (route: string, params?: object) => () => navigation.navigate(route, params);
-
-  const body = () => {
-    if (!data) return null;
-    const sm = data.summary;
-    const today = data.periods?.Today ?? { amount: 0, count: 0 };
-    const month = data.periods?.['This Month'] ?? { amount: 0, count: 0 };
-
-    const kpis: Kpi[] = [
-      {
-        icon: 'checkmark-done-outline',
-        label: 'Collected',
-        value: inr(sm.total_collected),
-        note: `${sm.rate}% of ${inr(sm.total_billable)}`,
-        onPress: go('AdminFeeAnalytics'),
-      },
-      {
-        icon: 'wallet-outline',
-        label: 'Still due',
-        value: inr(sm.total_due),
-        note: sm.defaulters > 0 ? `${plural(sm.defaulters, 'student')} owe` : 'Nothing owed',
-        low: sm.total_due > 0,
-        onPress: go('AdminFeeAnalytics'),
-      },
-      {
-        icon: 'today-outline',
-        label: 'Today',
-        value: inr(today.amount),
-        note: plural(today.count, 'payment'),
-        onPress: go('AdminFeePayments', { preset: 'today' }),
-      },
-      {
-        icon: 'calendar-outline',
-        label: 'This month',
-        value: inr(month.amount),
-        note: plural(month.count, 'payment'),
-        onPress: go('AdminFeePayments', { preset: 'this_month' }),
-      },
-    ];
-
-    const parts = [
-      { label: 'Academic', paid: sm.academic_collected, due: sm.academic_billable },
-      { label: 'Transport', paid: sm.transport_collected, due: sm.transport_billable },
-    ].filter(p => p.due > 0 || p.paid > 0);
-
-    const sections = [
-      {
-        icon: 'person-add-outline',
-        title: 'Fee Submission',
-        meta: 'Find a student, see their fees and collect',
-        route: 'AdminFeeStudents',
-      },
-      {
-        icon: 'receipt-outline',
-        title: 'Payments',
-        meta: 'Every payment recorded, each with its receipt',
-        route: 'AdminFeePayments',
-      },
-      {
-        icon: 'bar-chart-outline',
-        title: 'Analytics',
-        meta: 'Collections and dues, by class and student',
-        route: 'AdminFeeAnalytics',
-      },
-      {
-        icon: 'qr-code-outline',
-        title: 'QR Payments',
-        meta: qrPending > 0 ? 'Paid on the school QR — check the UTR, then approve' : 'Paid on the school QR, from the app',
-        route: 'AdminFeeQr',
-        pending: qrPending,
-      },
-    ];
-
-    return (
-      <>
-        <PageLine text={`${plural(sm.students, 'student')} · ${plural(sm.riders, 'on transport', 'on transport')}`} />
-        <KpiGrid items={kpis} />
-
-        {parts.length > 0 && (
-          <Card>
-            <CardHead icon="pie-chart-outline" title="Collected, by fee" sub={`${inr(sm.total_collected)} of ${inr(sm.total_billable)}`} />
-            {parts.map((p, i) => {
-              const left = Math.max(0, p.due - p.paid);
-              return (
-                <PctRow
-                  key={p.label}
-                  label={p.label}
-                  pct={p.due > 0 ? Math.min(100, Math.round((p.paid / p.due) * 100)) : 100}
-                  value={`${inr(p.paid)} / ${inr(p.due)}`}
-                  meta={left > 0 ? `${inr(left)} due` : 'Collected in full'}
-                  isLast={i === parts.length - 1 && sm.penalty_collected <= 0}
-                />
-              );
-            })}
-            {sm.penalty_collected > 0 && (
-              <LineRow title="Penalties collected" trailing={<Pill text={inr(sm.penalty_collected)} />} isLast />
-            )}
-          </Card>
-        )}
-
-        <Card>
-          <CardHead icon="grid-outline" title="Manage fees" />
-          {sections.map((it, i) => (
-            <LineRow
-              key={it.title}
-              lead={<Lead icon={it.icon} />}
-              title={it.title}
-              meta={it.meta}
-              trailing={
-                <View style={s.trailing}>
-                  {!!it.pending && <Pill text={`${it.pending} to check`} tone="accent" />}
-                  <Chevron />
-                </View>
-              }
-              onPress={go(it.route)}
-              isLast={i === sections.length - 1}
-            />
-          ))}
-        </Card>
-      </>
-    );
-  };
+  const count = summary
+    ? `${rupees0(summary.total_collected)} collected · ${rupees0(summary.total_due)} due`
+    : `${SECTIONS.length} sections`;
 
   return (
     <View style={s.root}>
@@ -182,19 +114,22 @@ const AdminFeesScreen = ({ navigation }: any) => {
         title={TITLE}
         onBackPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('PanelHome'))}
       />
-      {loading && !data ? (
-        <DashSkeleton />
-      ) : error && !data ? (
-        <DashError message={error} onRetry={() => { setLoading(true); load(); }} />
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={s.scroll}
-          refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        >
-          {body()}
-        </ScrollView>
-      )}
+      <FlatList
+        data={SECTIONS}
+        keyExtractor={it => it.key}
+        contentContainerStyle={s.list}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListHeaderComponent={<ListCount skeleton={!loaded} text={count} />}
+        renderItem={({ item, index }) => (
+          <SectionRow
+            item={item}
+            badge={item.key === 'qr_payments' ? qrPending : 0}
+            isLast={index === SECTIONS.length - 1}
+            onPress={() => navigation.navigate(item.route)}
+          />
+        )}
+      />
     </View>
   );
 };
@@ -202,17 +137,24 @@ const AdminFeesScreen = ({ navigation }: any) => {
 export default AdminFeesScreen;
 
 const __mk_s = () => StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.colors.background },
-  scroll: { flexGrow: 1, paddingBottom: 32 },
-  lead: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  root: { flex: 1, backgroundColor: theme.colors.card },
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
+
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 13 },
+  rowDivider: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  tile: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.colors.primary + '12',
+    backgroundColor: theme.colors.primaryLight,
   },
-  trailing: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  body: { flex: 1, gap: 3 },
+  name: { fontSize: 15, fontWeight: '500', color: theme.colors.textPrimary },
+  meta: { fontSize: 13, color: theme.colors.textSecondary },
+  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: '#F59E0B' + '22' },
+  badgeText: { fontSize: 11, fontWeight: '700', color: '#B45309' },
 });
 
 // Themed stylesheets — rebuilt on light/dark toggle.
