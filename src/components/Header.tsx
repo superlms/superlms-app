@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  LayoutChangeEvent,
   StatusBar,
   StyleSheet,
   Text,
@@ -28,19 +30,42 @@ interface HeaderProps {
   height?: number;
 }
 
-/** A round icon button as the header draws it — for a rightSlot holding several. */
+/**
+ * A round icon button as the header draws it — for a rightSlot holding several.
+ * Busy: a small spinner in the circle in place of the icon, and no tap.
+ */
 export const HeaderIconButton = ({
   icon,
   onPress,
   size = 20,
+  busy,
+  accessibilityLabel,
 }: {
   icon: string;
   onPress: () => void;
   size?: number;
+  busy?: boolean;
+  accessibilityLabel?: string;
 }) => (
-  <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={styles.backButton}>
-    <VectorIcon iconSet="Ionicons" iconName={icon} size={size} color={theme.colors.primary} />
+  <TouchableOpacity
+    onPress={onPress}
+    disabled={busy}
+    activeOpacity={0.7}
+    style={styles.backButton}
+    accessibilityRole="button"
+    accessibilityLabel={accessibilityLabel}
+  >
+    {busy ? (
+      <ActivityIndicator size="small" color={theme.colors.primary} />
+    ) : (
+      <VectorIcon iconSet="Ionicons" iconName={icon} size={size} color={theme.colors.primary} />
+    )}
   </TouchableOpacity>
+);
+
+/** Several header buttons side by side, for a rightSlot. */
+export const HeaderActions = ({ children }: { children: React.ReactNode }) => (
+  <View style={styles.actions}>{children}</View>
 );
 
 const Header = ({
@@ -64,6 +89,14 @@ const Header = ({
   // Default to the themed surface so the header turns dark in dark mode.
   const headerBg = backgroundColor ?? theme.colors.card;
 
+  // The title sits in the very middle of the bar, however many buttons are on
+  // the right: the left side is kept as wide as the right one turns out to be.
+  const [rightWidth, setRightWidth] = useState(SIDE);
+  const onRightLayout = (e: LayoutChangeEvent) => {
+    const w = Math.max(SIDE, Math.ceil(e.nativeEvent.layout.width));
+    if (w !== rightWidth) setRightWidth(w);
+  };
+
   return (
     <>
       {/* Translucent, as at the app's root, whose white strip under the status
@@ -74,7 +107,7 @@ const Header = ({
         translucent
       />
       <View style={[styles.container, { backgroundColor: headerBg, height }, divider && styles.divider]}>
-        <View style={styles.side}>
+        <View style={[styles.side, { width: rightWidth }]}>
           {showBack ? (
             <TouchableOpacity
               onPress={onBackPress ? onBackPress : handleBackPress}
@@ -91,11 +124,15 @@ const Header = ({
           ) : null}
         </View>
 
-        <Text style={styles.title} numberOfLines={1}>
+        {/* A long title steps its size down a little before it is cut short. */}
+        <Text style={styles.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82}>
           {title}
         </Text>
 
-        <View style={[styles.side, styles.sideRight, (rightText || rightSlot) ? styles.sideAuto : null]}>
+        <View
+          style={[styles.side, styles.sideRight, (rightText || rightSlot) ? styles.sideAuto : null]}
+          onLayout={onRightLayout}
+        >
           {rightSlot ? (
             rightSlot
           ) : rightText ? (
@@ -113,6 +150,9 @@ const Header = ({
 
 export default Header;
 
+// A side of the bar: one round button wide.
+const SIDE = 36;
+
 const __mk_styles = () => StyleSheet.create({
   container: {
     flexDirection: 'row',
@@ -127,7 +167,7 @@ const __mk_styles = () => StyleSheet.create({
     borderBottomColor: theme.colors.divider,
   },
   side: {
-    width: 36,
+    width: SIDE,
     alignItems: 'flex-start',
   },
   sideRight: {
@@ -135,8 +175,9 @@ const __mk_styles = () => StyleSheet.create({
   },
   sideAuto: {
     width: 'auto',
-    minWidth: 36,
+    minWidth: SIDE,
   },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rightPill: {
     minWidth: 28,
     height: 24,

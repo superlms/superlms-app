@@ -245,6 +245,76 @@ export const BorderLabel = ({
   </View>
 );
 
+// ── A field that opens a picker (a date, say) ───────────────────────────────
+//   ╭─ Issued Date * ───────────────╮
+//   │ 27 Oct 2026                📅  │
+//   ╰───────────────────────────────╯
+// The same outline as a typed field; a tap opens what picks its value.
+export const OutlinedPicker = ({
+  label,
+  required,
+  value,
+  placeholder = 'Select',
+  icon = 'chevron-down',
+  hint,
+  error,
+  half,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  required?: boolean;
+  value?: string | null;
+  placeholder?: string;
+  icon?: string;
+  hint?: string;
+  error?: string | null;
+  half?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) => (
+  <View style={[s.field, half && s.half, disabled && s.off]}>
+    <TouchableOpacity
+      style={[s.box, s.boxRow, !!error && s.boxError]}
+      activeOpacity={0.7}
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Text style={[s.pickText, !value && s.pickPlaceholder]} numberOfLines={1}>
+        {value || placeholder}
+      </Text>
+      <VectorIcon iconSet="Ionicons" iconName={icon} size={16} color={theme.colors.textMuted} />
+    </TouchableOpacity>
+    <BorderLabel text={label} required={required} error={!!error} />
+    {error ? <Text style={s.error}>{error}</Text> : !!hint && <Text style={s.hint}>{hint}</Text>}
+  </View>
+);
+
+// ── A box with its name in the border, holding anything ─────────────────────
+// For what is not a single line typed in — the student picked for a
+// certificate, say — drawn as the fields around it are.
+export const OutlinedBox = ({
+  label,
+  required,
+  error,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  error?: string | null;
+  hint?: string;
+  children: React.ReactNode;
+}) => (
+  <View style={s.field}>
+    <View style={[s.box, s.boxPadded, !!error && s.boxError]}>{children}</View>
+    <BorderLabel text={label} required={required} error={!!error} />
+    {error ? <Text style={s.error}>{error}</Text> : !!hint && <Text style={s.hint}>{hint}</Text>}
+  </View>
+);
+
 // Two fields side by side, where both are short.
 export const FieldPair = ({ children }: { children: React.ReactNode }) => <View style={s.pair}>{children}</View>;
 
@@ -318,6 +388,12 @@ const __mk_s = () => StyleSheet.create({
     color: theme.colors.textPrimary,
   },
   inputMultiline: { minHeight: 70, paddingTop: 13, textAlignVertical: 'top' },
+  // A picker's value: the typed fields' 44pt height, as text.
+  pickText: { flex: 1, paddingVertical: 12, lineHeight: 20, fontSize: 14, color: theme.colors.textPrimary },
+  pickPlaceholder: { color: theme.colors.textMuted + 'B3' },
+  // A box holding more than a line: room inside, under the name in its border.
+  boxPadded: { paddingTop: 14, paddingBottom: 12 },
+  off: { opacity: 0.55 },
   labelWrap: { position: 'absolute', top: -8, left: 9, right: 9, flexDirection: 'row' },
   label: {
     flexShrink: 1,

@@ -17,7 +17,7 @@ import {
 } from '../../api/adminTcCertificateApi';
 import { OptionSheet } from './adminFormUi';
 import { ErrorState, FilterBar, FilterChip, RowsSkeleton, SearchField } from './adminExamUi';
-import { HeadBtn } from './adminAdmitCardUi';
+import { HeaderIconButton } from '../../components/Header';
 import { CertRow, TABS, TcRow, monthLabel, monthOptions } from './adminTcUi';
 
 /**
@@ -182,7 +182,7 @@ const AdminTcCertificateListScreen = ({ navigation, route }: any) => {
       <DocHeader
         title={TABS.find(t => t.key === tab)?.label ?? 'TC & Certificate'}
         onBackPress={() => navigation.goBack()}
-        rightSlot={<HeadBtn icon="add" onPress={issue} />}
+        rightSlot={<HeaderIconButton icon="add" size={22} onPress={issue} accessibilityLabel={isTc ? 'Issue a TC' : 'Issue a certificate'} />}
       />
 
       <SearchField value={query} onChangeText={setQuery} placeholder="Student / certificate no…" />

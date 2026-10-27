@@ -14,7 +14,7 @@ import {
   downloadCertificatePdf,
 } from '../../api/adminTcCertificateApi';
 import { QuietAction, confirmDestructive } from './adminFormUi';
-import { HeadActions, HeadBtn } from './adminAdmitCardUi';
+import { HeaderActions, HeaderIconButton } from '../../components/Header';
 import { longDate } from './adminTcUi';
 
 /**
@@ -98,10 +98,10 @@ const AdminTcCertificateDetailScreen = ({ navigation, route }: any) => {
         title={isTc ? 'Transfer Certificate' : 'Certificate'}
         onBackPress={() => navigation.goBack()}
         rightSlot={
-          <HeadActions>
-            <HeadBtn icon="create-outline" onPress={edit} />
-            <HeadBtn icon="download-outline" onPress={download} busy={downloading} />
-          </HeadActions>
+          <HeaderActions>
+            <HeaderIconButton icon="create-outline" onPress={edit} accessibilityLabel="Edit" />
+            <HeaderIconButton icon="download-outline" onPress={download} busy={downloading} accessibilityLabel="Download PDF" />
+          </HeaderActions>
         }
       />
 
