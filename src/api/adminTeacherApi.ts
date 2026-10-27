@@ -1,7 +1,8 @@
 import apiClient from './apiClient';
 import constant from '../utils/constant';
 import { PickedFile } from './adminProfileApi';
-import { Pagination } from './adminStudentApi';
+import { Pagination, appendCrop } from './adminStudentApi';
+import type { CropRect } from '../components/PhotoCropper';
 import { authHeader, downloadFile } from './pdfDownload';
 
 // Teachers module. Mirrors app/Livewire/Admin/Teacher.php over /admin/teachers.
@@ -89,6 +90,11 @@ export interface TeacherPayload {
   city?: string;
   is_active?: boolean;
   image?: PickedFile | null;
+  /**
+   * The passport frame set in PassportPhoto: the server cuts the photo sent —
+   * or, with none sent, the saved one — to it.
+   */
+  crop?: CropRect | null;
 }
 
 const teacherForm = (p: TeacherPayload) => {
@@ -113,6 +119,7 @@ const teacherForm = (p: TeacherPayload) => {
   append('city', p.city);
   form.append('is_active', p.is_active ? '1' : '0');
   if (p.image) form.append('image', filePart(p.image));
+  if (p.crop) appendCrop(form, p.crop);
   return form;
 };
 
@@ -167,10 +174,19 @@ export const getTeacherLookups = async (state?: string): Promise<TeacherLookups>
   return unwrap(data);
 };
 
-/** A new photo for the teacher (up to 1 MB), leaving the rest of them as they are. */
-export const setTeacherPhoto = async (id: number, image: PickedFile): Promise<string | null> => {
+/**
+ * A new photo for the teacher (up to 2 MB) — or, with none, the saved one —
+ * cut to the passport frame set in PassportPhoto, leaving the rest of them as
+ * they are. Returns the photo's new address.
+ */
+export const setTeacherPhoto = async (
+  id: number,
+  image: PickedFile | null,
+  crop?: CropRect | null,
+): Promise<string | null> => {
   const form = new FormData();
-  form.append('image', filePart(image));
+  if (image) form.append('image', filePart(image));
+  if (crop) appendCrop(form, crop);
   const { data } = await apiClient.post(`/admin/teachers/${id}/photo`, form, MULTIPART);
   return unwrap(data)?.image ?? null;
 };

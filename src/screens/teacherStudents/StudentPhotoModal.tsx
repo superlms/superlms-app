@@ -3,7 +3,8 @@ import { Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import VectorIcon from '../../components/VectorIcon';
 import { AppAlert } from '../../components/AppDialog';
-import { PhotoEditorView, type PhotoEdit } from '../../components/PhotoEditor';
+import type { PhotoEdit } from '../../components/PhotoEditor';
+import { PassportPhotoView } from '../../components/PassportPhoto';
 import { PhotoCircleView } from '../../components/PhotoCircle';
 import type { CropRect } from '../../components/PhotoCropper';
 import { apiErr } from '../../utils/filePickers';
@@ -88,7 +89,7 @@ const StudentPhotoModal = ({
   return (
     <Modal visible={!!student} animationType="fade" statusBarTranslucent onRequestClose={back}>
       {!!student && !!image && cropping ? (
-        <PhotoEditorView uri={image} doneLabel="Save" busy={saving} showCircle={false} onCancel={back} onDone={save} />
+        <PassportPhotoView uri={image} doneLabel="Save" busy={saving} onCancel={back} onDone={save} />
       ) : !!student && !!image && circling ? (
         <PhotoCircleView uri={image} circle={circle} doneLabel="Save" busy={saving} onCancel={back} onDone={saveCircle} />
       ) : (

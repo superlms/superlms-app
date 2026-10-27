@@ -26,6 +26,9 @@ import {
   setTeacherPhoto,
 } from '../../api/adminTeacherApi';
 import { AppAlert, AppDialog } from '../../components/AppDialog';
+import type { PhotoEdit } from '../../components/PhotoEditor';
+import PassportPhoto from '../../components/PassportPhoto';
+import { PickedFile } from '../../api/adminProfileApi';
 import { withinOneMb } from './adminFormUi';
 import { keepTeacherDetail, sampleTeacherDetail } from './adminTeachersUi';
 
@@ -34,8 +37,10 @@ import { keepTeacherDetail, sampleTeacherDetail } from './adminTeachersUi';
  * Student Detail is drawn): the photo, the name and what they sign in with,
  * over what the school keeps about them, each block a heading and plain
  * lines, with the class they are class teacher of. As on the panel, the photo
- * opens large, and is changed (camera or gallery) or taken off from here, on
- * its own. Edit and Delete are in the header: Edit opens the form, and saved,
+ * opens large, and is changed (camera or gallery), set again in its frame
+ * (Crop) or taken off from here, on its own — a new photo, and Crop, set it in
+ * a passport-size frame (35 × 45 mm, PassportPhoto) and the server cuts it to
+ * that. Edit and Delete are in the header: Edit opens the form, and saved,
  * it comes back here; Delete takes the teacher, their login, their class
  * assignments and their photo away, and asks first.
  *
@@ -150,6 +155,8 @@ const AdminTeacherDetailScreen = ({ navigation, route }: any) => {
   const [deleting, setDeleting] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [asking, setAsking] = useState(false);
+  // The photo in the passport frame: one just picked (file), or the saved one (none).
+  const [cropping, setCropping] = useState<{ uri: string; file: PickedFile | null } | null>(null);
 
   const load = useCallback(async () => {
     const mine = ++seq.current;
@@ -195,14 +202,23 @@ const AdminTeacherDetailScreen = ({ navigation, route }: any) => {
     );
 
   // ── The photo ──
+  // A new one — the camera, or the gallery — is set in the passport frame first.
   const changePhoto = async (from: 'camera' | 'gallery') => {
     setAsking(false);
     const f = from === 'camera' ? await takePhoto({ maxSide: PHOTO_SIDE }) : await pickImage({ maxSide: PHOTO_SIDE });
     if (!f || !withinOneMb(f, 'The photo')) return;
+    setCropping({ uri: f.uri, file: f });
+  };
+
+  // Save in the frame: the new photo, or the saved one, goes up cut to it. The
+  // frame stays open, saving, until the photo is in; not saved, it stays to try again.
+  const savePhoto = async (edit: PhotoEdit) => {
+    if (!cropping || photoBusy) return;
     setPhotoBusy(true);
     try {
-      const image = await setTeacherPhoto(id, f);
+      const image = await setTeacherPhoto(id, cropping.file, edit.crop);
       setD(prev => (prev ? { ...prev, image } : prev));
+      setCropping(null);
     } catch (e) {
       AppAlert.alert('Photo not saved', apiErr(e, 'Could not save the photo.'));
     } finally {
@@ -286,6 +302,10 @@ const AdminTeacherDetailScreen = ({ navigation, route }: any) => {
               {!!d.image && (
                 <>
                   <Text style={s.photoDot}>·</Text>
+                  <TouchableOpacity onPress={() => d.image && setCropping({ uri: d.image, file: null })} disabled={photoBusy} hitSlop={8} activeOpacity={0.6}>
+                    <Text style={s.photoLink}>Crop</Text>
+                  </TouchableOpacity>
+                  <Text style={s.photoDot}>·</Text>
                   <TouchableOpacity onPress={takePhotoOff} disabled={photoBusy} hitSlop={8} activeOpacity={0.6}>
                     <Text style={[s.photoLink, s.photoRemove]}>Remove</Text>
                   </TouchableOpacity>
@@ -314,6 +334,15 @@ const AdminTeacherDetailScreen = ({ navigation, route }: any) => {
           { text: 'Cancel', style: 'cancel' as const, onPress: () => setAsking(false) },
         ]}
         onRequestClose={() => setAsking(false)}
+      />
+
+      <PassportPhoto
+        uri={cropping?.uri ?? null}
+        title="Teacher photo"
+        doneLabel="Save"
+        busy={photoBusy}
+        onCancel={() => setCropping(null)}
+        onDone={savePhoto}
       />
     </View>
   );

@@ -11,7 +11,8 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import { theme, onThemeChange } from '../../utils/theme';
 import AppRefreshControl from '../../components/AppRefreshControl';
 import VectorIcon from '../../components/VectorIcon';
-import PhotoCropper, { type CropRect } from '../../components/PhotoCropper';
+import type { PhotoEdit } from '../../components/PhotoEditor';
+import PassportPhoto from '../../components/PassportPhoto';
 import { useRefresh, useFocusLoad } from '../../hooks/useRefresh';
 import { getTeacherProfile, updateTeacherPhoto, type PickedPhoto } from '../../api/teacherApi';
 import { apiErr } from '../../utils/filePickers';
@@ -133,8 +134,9 @@ const TeacherProfileScreen = () => {
 
   useFocusLoad(fetchProfile);
 
-  // Pick a photo, then frame it in the cropper before it goes up. The picker
-  // scales big photos down first so the upload stays small.
+  // Pick a photo, then set it in the passport-size frame (35 × 45 mm) before
+  // it goes up; the server cuts it to the frame. The picker scales big photos
+  // down first so the upload stays small.
   const choosePhoto = () => {
     launchImageLibrary({ mediaType: 'photo', quality: 0.9, maxWidth: 1600, maxHeight: 1600 }, res => {
       if (res.didCancel) return;
@@ -154,13 +156,15 @@ const TeacherProfileScreen = () => {
     });
   };
 
-  const savePhoto = async (crop: CropRect) => {
+  // Save in the frame: the frame stays open, saving, until the photo is in;
+  // not saved, it stays to try again (or Cancel).
+  const savePhoto = async (edit: PhotoEdit) => {
     const photo = picked;
-    setPicked(null);
-    if (!photo) return;
+    if (!photo || uploading) return;
     setUploading(true);
     try {
-      setProfile(await updateTeacherPhoto(photo, crop));
+      setProfile(await updateTeacherPhoto(photo, edit.crop));
+      setPicked(null);
     } catch (e: any) {
       console.log('[TeacherProfile] photo ❌', e?.response?.data ?? e?.message);
       AppAlert.alert('Could not update photo', apiErr(e, 'Please try again.'));
@@ -231,10 +235,13 @@ const TeacherProfileScreen = () => {
         </View>
       </ScrollView>
 
-      <PhotoCropper
+      <PassportPhoto
         uri={picked?.uri ?? null}
         width={picked?.width}
         height={picked?.height}
+        title="Profile photo"
+        doneLabel="Save"
+        busy={uploading}
         onCancel={() => setPicked(null)}
         onDone={savePhoto}
       />

@@ -5,6 +5,9 @@ import VectorIcon from '../../components/VectorIcon';
 import Select from '../../components/Select';
 import { Skeleton } from '../../components/Skeleton';
 import { AppAlert, AppDialog } from '../../components/AppDialog';
+import type { PhotoEdit } from '../../components/PhotoEditor';
+import PassportPhoto from '../../components/PassportPhoto';
+import CroppedPhoto from '../../components/CroppedPhoto';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr, pickImage, takePhoto } from '../../utils/filePickers';
 import { PickedFile } from '../../api/adminProfileApi';
@@ -54,12 +57,18 @@ import {
  *
  * Opened to edit, the form is first drawn as a skeleton of the student's own
  * values — what the student's page showed, else what was kept the last time
- * they were opened here. Dates are typed DD/MM/YYYY and sent as YYYY-MM-DD; the
- * photo is scaled down before it goes up, to stay inside the server's 2 MB.
+ * they were opened here. Dates are typed DD/MM/YYYY and sent as YYYY-MM-DD.
+ *
+ * The photo, picked or taken, is set in a passport-size frame (35 × 45 mm,
+ * PassportPhoto) before it is used; the one shown can be set again with Crop.
+ * The ring shows the round photo the lists will show of it. The frame goes up
+ * with the save and the server cuts the photo to it; the photo is scaled down
+ * before it goes up, to stay inside the server's 2 MB.
  */
 
-// A profile picture needs no more than this on its longest side.
-const PHOTO_SIDE = 1024;
+// A photo is picked no bigger than this on its longest side; the passport
+// frame cut from it is at most 1024.
+const PHOTO_SIDE = 1600;
 // The photo's circle on the form.
 const PHOTO = 92;
 // How long the green "added" stays on the button before the form closes.
@@ -246,6 +255,10 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
   const pickedClass = useRef(0);
   const [photo, setPhoto] = useState<PickedFile | null>(null);
   const [savedPhoto, setSavedPhoto] = useState<string | null>(null);
+  // The photo in the passport frame: one just picked (file), or the one shown.
+  const [cropping, setCropping] = useState<{ uri: string; file: PickedFile | null } | null>(null);
+  // The frame set on the photo shown (and its circle, for the ring) — sent with the save.
+  const [crop, setCrop] = useState<PhotoEdit | null>(null);
   const [asking, setAsking] = useState(false);
   const [loading, setLoading] = useState(!!editId);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -350,13 +363,23 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
     }
   };
 
-  // The photo: the camera, or the gallery.
+  // The photo: the camera, or the gallery — then set in the passport frame.
   const choose = async (from: 'camera' | 'gallery') => {
     setAsking(false);
     const f = from === 'camera' ? await takePhoto({ maxSide: PHOTO_SIDE }) : await pickImage({ maxSide: PHOTO_SIDE });
     if (!f) return;
-    setPhoto(f);
-    set('image', f);
+    setCropping({ uri: f.uri, file: f });
+  };
+
+  // Use photo: a photo just picked becomes the one shown; the frame goes with
+  // the save. Cancel leaves everything as it was.
+  const cropped = (edit: PhotoEdit) => {
+    if (cropping?.file) {
+      setPhoto(cropping.file);
+      set('image', cropping.file);
+    }
+    setCrop(edit);
+    setCropping(null);
   };
 
   /** The first field, in the order they stand, that is empty or wrongly written. */
@@ -442,6 +465,7 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
       mobile: form.mobile.trim(),
       dob: toApiDate(form.dob) as string,
       date_of_admission: toApiDate(form.date_of_admission) || '',
+      crop: crop?.crop ?? null,
     };
     busy.current = true;
     setSaveState('saving');
@@ -478,6 +502,8 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
   }
 
   const shown = photo?.uri ?? savedPhoto;
+  // Set the photo shown in the frame again: a new one from the file picked, the saved one as it is.
+  const cropShown = () => shown && setCropping({ uri: shown, file: photo });
 
   return (
     <View style={s.root}>
@@ -488,7 +514,9 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
             {/* The photo */}
             <View style={s.photoBlock}>
               <TouchableOpacity activeOpacity={0.8} onPress={() => setAsking(true)} style={s.photoRing}>
-                {shown ? (
+                {shown && crop ? (
+                  <CroppedPhoto uri={shown} crop={crop.circle} size={PHOTO} style={s.photo} />
+                ) : shown ? (
                   <Image source={{ uri: shown }} style={s.photo} />
                 ) : (
                   <View style={[s.photo, s.photoEmpty]}>
@@ -503,6 +531,14 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
                 <TouchableOpacity onPress={() => setAsking(true)} hitSlop={8} activeOpacity={0.6}>
                   <Text style={s.photoText}>{shown ? 'Change photo' : 'Add a photo'}</Text>
                 </TouchableOpacity>
+                {!!shown && (
+                  <>
+                    <Text style={s.photoDot}>·</Text>
+                    <TouchableOpacity onPress={cropShown} hitSlop={8} activeOpacity={0.6}>
+                      <Text style={s.photoText}>Crop</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             </View>
 
@@ -803,6 +839,8 @@ const AdminStudentFormScreen = ({ navigation, route }: any) => {
         onRequestClose={() => setAsking(false)}
         onBackdropPress={() => setAsking(false)}
       />
+
+      <PassportPhoto uri={cropping?.uri ?? null} doneLabel="Use photo" onCancel={() => setCropping(null)} onDone={cropped} />
     </View>
   );
 };
@@ -840,6 +878,7 @@ const __mk_s = () => StyleSheet.create({
   },
   photoLinks: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, minHeight: 18 },
   photoText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
+  photoDot: { fontSize: 13, color: theme.colors.textMuted },
 
   // Save, at the foot (the app's root keeps clear of the phone's own bar below)
   footer: {

@@ -135,11 +135,20 @@ export interface StudentPayload {
    */
   client_ref?: string;
   /**
-   * The square framed in PhotoCropper (the class teacher's form): the server
-   * cuts the photo sent — or, with none sent, the saved one — to it.
+   * The passport frame set in PassportPhoto (the admin's and the class
+   * teacher's form): the server cuts the photo sent — or, with none sent, the
+   * saved one — to it.
    */
   crop?: CropRect | null;
 }
+
+/** The part of the photo to keep, as the server reads it (PhotoCrop). */
+export const appendCrop = (form: FormData, crop: CropRect) => {
+  form.append('crop_x', crop.x.toFixed(6));
+  form.append('crop_y', crop.y.toFixed(6));
+  form.append('crop_w', crop.w.toFixed(6));
+  form.append('crop_h', crop.h.toFixed(6));
+};
 
 /** A fresh mark for one Add Student form. */
 export const newClientRef = () =>
@@ -176,12 +185,7 @@ export const studentForm = (p: StudentPayload) => {
   if (p.transportation_required && p.route_id) append('route_id', p.route_id);
   if (p.image) form.append('image', filePart(p.image));
   append('client_ref', p.client_ref);
-  if (p.crop) {
-    form.append('crop_x', p.crop.x.toFixed(6));
-    form.append('crop_y', p.crop.y.toFixed(6));
-    form.append('crop_w', p.crop.w.toFixed(6));
-    form.append('crop_h', p.crop.h.toFixed(6));
-  }
+  if (p.crop) appendCrop(form, p.crop);
   return form;
 };
 
@@ -202,10 +206,19 @@ export const updateStudent = async (id: number, p: StudentPayload): Promise<Stud
   return unwrap(data);
 };
 
-/** A new photo for the student, leaving the rest of them as they are. */
-export const setStudentPhoto = async (id: number, image: PickedFile): Promise<string | null> => {
+/**
+ * A new photo for the student — or, with none, the saved one — cut to the
+ * passport frame set in PassportPhoto, leaving the rest of them as they are.
+ * Returns the photo's new address.
+ */
+export const setStudentPhoto = async (
+  id: number,
+  image: PickedFile | null,
+  crop?: CropRect | null,
+): Promise<string | null> => {
   const form = new FormData();
-  form.append('image', filePart(image));
+  if (image) form.append('image', filePart(image));
+  if (crop) appendCrop(form, crop);
   const { data } = await apiClient.post(`/admin/students/${id}/photo`, form, MULTIPART);
   return unwrap(data)?.image ?? null;
 };

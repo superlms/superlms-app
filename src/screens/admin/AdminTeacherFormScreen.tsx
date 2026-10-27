@@ -5,6 +5,9 @@ import VectorIcon from '../../components/VectorIcon';
 import Select from '../../components/Select';
 import { Skeleton } from '../../components/Skeleton';
 import { AppAlert, AppDialog } from '../../components/AppDialog';
+import type { PhotoEdit } from '../../components/PhotoEditor';
+import PassportPhoto from '../../components/PassportPhoto';
+import CroppedPhoto from '../../components/CroppedPhoto';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr, pickImage, takePhoto } from '../../utils/filePickers';
 import { PickedFile } from '../../api/adminProfileApi';
@@ -49,9 +52,11 @@ import {
  * qualification (up to 50), an address and a 6-digit pincode; the date of
  * joining (not after today) and a 10-digit emergency contact may be left out.
  * State and City are picked from the panel's lists, the city from the chosen
- * state's. The photo is optional and up to 1 MB. A new teacher's name offers a
- * free username until one is typed in; the username says, as it is typed,
- * whether it is free.
+ * state's. The photo is optional and up to 1 MB; picked or taken, it is set in
+ * a passport-size frame (35 × 45 mm, PassportPhoto) before it is used, and the
+ * one shown can be set again with Crop — the server cuts it to the frame. A
+ * new teacher's name offers a free username until one is typed in; the
+ * username says, as it is typed, whether it is free.
  *
  * Save checks the fields in the order they stand and stops at the first one
  * that is wrong: the popup names it, the field turns red with what is wrong
@@ -222,6 +227,10 @@ const AdminTeacherFormScreen = ({ navigation, route }: any) => {
   const [form, setForm] = useState<TeacherPayload>(emptyForm);
   const [photo, setPhoto] = useState<PickedFile | null>(null);
   const [savedPhoto, setSavedPhoto] = useState<string | null>(null);
+  // The photo in the passport frame: one just picked (file), or the one shown.
+  const [cropping, setCropping] = useState<{ uri: string; file: PickedFile | null } | null>(null);
+  // The frame set on the photo shown (and its circle, for the ring) — sent with the save.
+  const [crop, setCrop] = useState<PhotoEdit | null>(null);
   const [asking, setAsking] = useState(false);
   const [loading, setLoading] = useState(!!editId);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -356,13 +365,24 @@ const AdminTeacherFormScreen = ({ navigation, route }: any) => {
     set('username', v.toLowerCase().replace(/[^a-z0-9._@]/g, ''));
   };
 
-  // The photo: the camera, or the gallery — up to 1 MB, as on the panel.
+  // The photo: the camera, or the gallery — up to 1 MB, as on the panel —
+  // then set in the passport frame.
   const choose = async (from: 'camera' | 'gallery') => {
     setAsking(false);
     const f = from === 'camera' ? await takePhoto({ maxSide: PHOTO_SIDE }) : await pickImage({ maxSide: PHOTO_SIDE });
     if (!f || !withinOneMb(f, 'The photo')) return;
-    setPhoto(f);
-    set('image', f);
+    setCropping({ uri: f.uri, file: f });
+  };
+
+  // Use photo: a photo just picked becomes the one shown; the frame goes with
+  // the save. Cancel leaves everything as it was.
+  const cropped = (edit: PhotoEdit) => {
+    if (cropping?.file) {
+      setPhoto(cropping.file);
+      set('image', cropping.file);
+    }
+    setCrop(edit);
+    setCropping(null);
   };
 
   /** The first field, in the order they stand, that is empty or wrongly written. */
@@ -459,6 +479,7 @@ const AdminTeacherFormScreen = ({ navigation, route }: any) => {
       pincode: form.pincode.trim(),
       dob: toApiDate(form.dob) as string,
       date_of_joining: toApiDate(form.date_of_joining) || '',
+      crop: crop?.crop ?? null,
     };
     busy.current = true;
     setSaveState('saving');
@@ -494,6 +515,8 @@ const AdminTeacherFormScreen = ({ navigation, route }: any) => {
   }
 
   const shown = photo?.uri ?? savedPhoto;
+  // Set the photo shown in the frame again: a new one from the file picked, the saved one as it is.
+  const cropShown = () => shown && setCropping({ uri: shown, file: photo });
 
   return (
     <View style={s.root}>
@@ -504,7 +527,9 @@ const AdminTeacherFormScreen = ({ navigation, route }: any) => {
             {/* The photo */}
             <View style={s.photoBlock}>
               <TouchableOpacity activeOpacity={0.8} onPress={() => setAsking(true)} style={s.photoRing}>
-                {shown ? (
+                {shown && crop ? (
+                  <CroppedPhoto uri={shown} crop={crop.circle} size={PHOTO} style={s.photo} />
+                ) : shown ? (
                   <Image source={{ uri: shown }} style={s.photo} resizeMethod="resize" />
                 ) : (
                   <View style={[s.photo, s.photoEmpty]}>
@@ -520,7 +545,13 @@ const AdminTeacherFormScreen = ({ navigation, route }: any) => {
                   <Text style={s.photoText}>{shown ? 'Change photo' : 'Add a photo'}</Text>
                 </TouchableOpacity>
                 <Text style={s.photoDot}>·</Text>
-                <Text style={s.photoNote}>Optional, up to 1 MB</Text>
+                {shown ? (
+                  <TouchableOpacity onPress={cropShown} hitSlop={8} activeOpacity={0.6}>
+                    <Text style={s.photoText}>Crop</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={s.photoNote}>Optional, up to 1 MB</Text>
+                )}
               </View>
             </View>
 
@@ -761,6 +792,8 @@ const AdminTeacherFormScreen = ({ navigation, route }: any) => {
         onRequestClose={() => setAsking(false)}
         onBackdropPress={() => setAsking(false)}
       />
+
+      <PassportPhoto uri={cropping?.uri ?? null} doneLabel="Use photo" onCancel={() => setCropping(null)} onDone={cropped} />
     </View>
   );
 };

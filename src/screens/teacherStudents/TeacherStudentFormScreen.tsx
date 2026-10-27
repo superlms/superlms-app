@@ -15,7 +15,8 @@ import { HeaderIconButton } from '../../components/Header';
 import Select from '../../components/Select';
 import { AppAlert, AppDialog } from '../../components/AppDialog';
 import { Skeleton } from '../../components/Skeleton';
-import PhotoEditor, { type PhotoEdit } from '../../components/PhotoEditor';
+import type { PhotoEdit } from '../../components/PhotoEditor';
+import PassportPhoto from '../../components/PassportPhoto';
 import CroppedPhoto from '../../components/CroppedPhoto';
 import { theme, onThemeChange } from '../../utils/theme';
 import { apiErr, pickImage, takePhoto } from '../../utils/filePickers';
@@ -944,7 +945,7 @@ const TeacherStudentFormScreen = ({ navigation, route }: any) => {
         onBackdropPress={() => setAsking(false)}
       />
 
-      <PhotoEditor uri={cropping?.uri ?? null} doneLabel="Use photo" onCancel={() => setCropping(null)} onDone={cropped} />
+      <PassportPhoto uri={cropping?.uri ?? null} doneLabel="Use photo" onCancel={() => setCropping(null)} onDone={cropped} />
 
       <AppDialog
         visible={confirming}

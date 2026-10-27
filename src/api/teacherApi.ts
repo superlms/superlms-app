@@ -18,8 +18,8 @@ export interface PickedPhoto {
 }
 
 // Adds or replaces the teacher's own photo. The whole photo goes up with the
-// square framed in the cropper; the server makes the cut. Returns the
-// refreshed profile.
+// passport frame set on it (PassportPhoto); the server makes the cut. Returns
+// the refreshed profile.
 export const updateTeacherPhoto = async (photo: PickedPhoto, crop: CropRect) => {
   const form = new FormData();
   form.append('photo', {
