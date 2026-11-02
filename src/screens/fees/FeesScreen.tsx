@@ -34,6 +34,7 @@ import {
 import { transportReceiptUrl } from '../../api/transportApi';
 import { AmountRows, InstallmentRow, MonthLine, ReceiptRow, inr } from './feesUi';
 import { FeeButton, PayOptions, QrImage, QrRequestRow, openUpiApp } from './qrUi';
+import AutopayCard from './AutopayCard';
 
 /**
  * A student's fees, in the dashboards' way: white cards on the page's grey,
@@ -201,6 +202,9 @@ const Overview = ({
           )}
         </Card>
       )}
+
+      {/* Autopay — PhonePe UPI AutoPay, where the school has it */}
+      <AutopayCard />
 
       {/* Paid, by fee */}
       {parts.length > 0 && (
