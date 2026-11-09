@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { Storage } from '../../utils/storage';
 import { playUpdateAppReady } from '../../utils/playUpdate';
+import { studentMustPayFirst } from '../../api/platformFeeApi';
 
 /**
  * The logo on a white page, "Made with ❤️ in India" at the foot.
@@ -40,6 +41,11 @@ const nextRoute = async (): Promise<Route> => {
   if (!onboardingSeen) return ['Onboarding'];
   if (token && role === 'admin') return ['AdminDashboard'];
   if (token && role === 'accounts') return ['AccountsDashboard'];
+  if (token && role === 'student') {
+    // Their school has them pay the platform fee in the app, and it is not paid yet.
+    const fee = await studentMustPayFirst();
+    if (fee) return ['PlatformFee', { fee }];
+  }
   if (token && role) return ['DrawerRoot', { userRole: role }];
   return ['Login'];
 };

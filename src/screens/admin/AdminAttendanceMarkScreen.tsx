@@ -58,6 +58,8 @@ const AdminAttendanceMarkScreen = ({ navigation, route }: any) => {
 
   const [rows, setRows] = useState<Row[] | null>(null);
   const [existing, setExisting] = useState(false);
+  // Students not listed till they pay the platform fee in the app.
+  const [locked, setLocked] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState<null | 'save' | 'holiday'>(null);
   const [sheet, setSheet] = useState<null | 'date' | 'class' | 'section'>(null);
@@ -85,6 +87,7 @@ const AdminAttendanceMarkScreen = ({ navigation, route }: any) => {
       if (mine !== seq.current) return;
       setRows(day.rows);
       setExisting(day.existing);
+      setLocked(day.locked ?? []);
     } catch (e) {
       if (mine === seq.current) setError(apiErr(e, 'Could not load the day.'));
     }
@@ -201,6 +204,13 @@ const AdminAttendanceMarkScreen = ({ navigation, route }: any) => {
     <View>
       <Text style={s.day}>{moment(date).format('dddd, D MMMM YYYY')}</Text>
       <Text style={[s.note, existing && s.noteEdit]}>{note}</Text>
+      {who === 'student' && locked.length > 0 && (
+        <Text style={[s.note, s.noteLocked]}>
+          {locked.length === 1 ? '1 student is' : `${locked.length} students are`} not listed — platform fee not paid in
+          the app yet: {locked.slice(0, 3).join(', ')}
+          {locked.length > 3 ? ` and ${locked.length - 3} more` : ''}.
+        </Text>
+      )}
 
       <View style={s.toolbar}>
         {ALL.map(a => (
@@ -347,6 +357,7 @@ const __mk_s = () => StyleSheet.create({
   day: { fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, paddingHorizontal: 20, paddingTop: 12 },
   note: { fontSize: 12, color: theme.colors.textMuted, paddingHorizontal: 20, paddingTop: 2, lineHeight: 17 },
   noteEdit: { color: '#B45309' },
+  noteLocked: { color: '#B91C1C', paddingTop: 4 },
   toolbar: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 20, paddingTop: 12 },
   allBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: theme.radius.full, backgroundColor: theme.colors.background },
   allText: { fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary },

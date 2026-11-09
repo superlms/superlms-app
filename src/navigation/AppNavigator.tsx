@@ -80,6 +80,7 @@ import AdminSchoolInfoFormScreen from '../screens/admin/AdminSchoolInfoFormScree
 import AdminSchoolMemberFormScreen from '../screens/admin/AdminSchoolMemberFormScreen';
 import AdminSchoolDocumentFormScreen from '../screens/admin/AdminSchoolDocumentFormScreen';
 import AdminChangePasswordScreen from '../screens/admin/AdminChangePasswordScreen';
+import PlatformFeeScreen from '../screens/platformFee/PlatformFeeScreen';
 import PanelDrawerNavigator from './PanelDrawerNavigator';
 import AdminDrawerNavigator from './AdminDrawerNavigator';
 
@@ -99,6 +100,10 @@ const AppNavigator = () => {
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="LoginOtp" component={LoginOtpScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+
+      {/* A student whose school has them pay the platform fee in the app, until
+          it is paid: the fee and Pay Now, and nothing to go back to. */}
+      <Stack.Screen name="PlatformFee" component={PlatformFeeScreen} options={{ gestureEnabled: false }} />
 
       {/* Profile */}
       <Stack.Screen name="StudentProfile" component={StudentProfileScreen} />

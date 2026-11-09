@@ -16,6 +16,7 @@ import { CommonActions, useNavigation } from '@react-navigation/native';
 import { theme, onThemeChange } from '../../utils/theme';
 import VectorIcon from '../../components/VectorIcon';
 import { login, type UserRole } from '../../api/authApi';
+import { studentMustPayFirst } from '../../api/platformFeeApi';
 
 // Where each role lands after a successful login.
 const destinationFor = (role: UserRole) => {
@@ -107,6 +108,16 @@ const LoginScreen = () => {
         return;
       }
       console.log('[Login] Success:', JSON.stringify({ role: res.role }, null, 2));
+
+      // A student whose school has them pay the platform fee in the app, and
+      // who has not yet, signs in to its payment screen.
+      const fee = res.role === 'student' ? await studentMustPayFirst() : null;
+      if (fee) {
+        navigation.dispatch(
+          CommonActions.reset({ index: 0, routes: [{ name: 'PlatformFee', params: { fee } }] }),
+        );
+        return;
+      }
 
       const dest = destinationFor(res.role);
       navigation.dispatch(

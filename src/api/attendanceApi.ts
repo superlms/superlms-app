@@ -40,6 +40,8 @@ export const getMyAttendance = async (month: string): Promise<MyAttendance> => {
 
 // ─── Teacher: mark attendance ──────────────────────────────────────────────────
 export interface AttendanceStudent {
+  /** Has not paid the platform fee in the app yet: cannot be marked. */
+  fee_locked?: boolean;
   student_id: number;
   user_id: number;
   roll_no: string | number | null;

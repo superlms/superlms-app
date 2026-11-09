@@ -5,7 +5,9 @@ import axios, {
   AxiosError,
 } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { CommonActions } from '@react-navigation/native';
 import constant from '../utils/constant';
+import { navigationRef } from '../navigation/navigationRef';
 import { TransferHandle, filesIn, startTransfer } from '../utils/transfers';
 
 
@@ -86,6 +88,20 @@ type RetryConfig = InternalAxiosRequestConfig & { __tries?: number };
 
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(() => resolve(), ms));
 
+// ── The platform fee ────────────────────────────────────────────────────────
+// A student whose school has them pay the platform fee in the app is answered
+// 402 (code "platform_fee_due") by every request until it is paid. The payment
+// screen then takes the place of whatever was open — once, not for every
+// request that comes back so.
+const showPlatformFee = (fee: unknown) => {
+  if (!navigationRef.isReady()) return;
+  const current = navigationRef.getCurrentRoute()?.name;
+  if (!current || ['PlatformFee', 'Splash', 'Onboarding', 'Login', 'LoginOtp'].includes(current)) return;
+  navigationRef.dispatch(
+    CommonActions.reset({ index: 0, routes: [{ name: 'PlatformFee', params: { fee } }] }),
+  );
+};
+
 const shouldRetry = (error: AxiosError, config?: RetryConfig): boolean => {
   if (!config || config.retry === false || axios.isCancel(error)) return false;
   const method = (config.method ?? 'get').toLowerCase();
@@ -115,6 +131,12 @@ apiClient.interceptors.response.use(
       if (!sent || !current || sent === current) {
         await AsyncStorage.multiRemove(['auth_token', 'user_data', 'user_role']);
       }
+      return Promise.reject(error);
+    }
+
+    const body = error.response?.data as { code?: string; data?: unknown } | undefined;
+    if (error.response?.status === 402 && body?.code === 'platform_fee_due') {
+      showPlatformFee(body.data);
       return Promise.reject(error);
     }
 

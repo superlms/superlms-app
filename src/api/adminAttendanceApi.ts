@@ -39,6 +39,8 @@ export interface MarkDay {
   rows: MarkRow[];
   /** The day was already submitted — saving updates it. */
   existing: boolean;
+  /** Students left out: they have not paid the platform fee in the app yet. */
+  locked?: string[];
 }
 
 export interface DayRecord {
@@ -202,10 +204,13 @@ export const getStudentDay = async (standard_id: number, section_id: number, dat
     params: { standard_id, section_id, date, ...V },
   });
   const d = unwrap(data);
+  const all: any[] = d.rows ?? [];
   return {
     date: d.date,
     existing: !!d.existing,
-    rows: (d.rows ?? []).map((r: any) => ({
+    // Not paid the platform fee in the app yet: the server marks them not, so they are not listed.
+    locked: all.filter(r => r.fee_locked).map(r => String(r.name ?? '')),
+    rows: all.filter(r => !r.fee_locked).map((r: any) => ({
       id: r.student_detail_id,
       name: r.name,
       sub: r.roll_no ? `Roll no. ${r.roll_no}` : r.email ?? '',

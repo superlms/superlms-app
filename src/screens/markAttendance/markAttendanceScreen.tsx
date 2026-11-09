@@ -70,6 +70,10 @@ const sectionLetter = (section?: string | null) => {
   return t ? t.slice(-1).toUpperCase() : '';
 };
 
+// The students who can be marked: not those still to pay the platform fee in the app.
+const markable = (c: AttendanceClass | null) =>
+  (c?.students ?? []).filter(st => !st.fee_locked).map(toMarkStudent);
+
 const toMarkStudent = (st: AttendanceStudent): MarkStudent => ({
   id: st.student_id,
   rollNo: String(st.roll_no ?? ''),
@@ -198,6 +202,11 @@ const MarkAttendanceScreen = ({ navigation, route }: any) => {
     [selectedClass],
   );
   const reviewing = alreadyMarked && !editing;
+  // Students who have not paid the platform fee in the app: not marked till they pay.
+  const feeLocked = useMemo(
+    () => (selectedClass?.students ?? []).filter(st => st.fee_locked),
+    [selectedClass],
+  );
   const canContinue = allMarked(students);
   const left = students.filter(st => st.status === null).length;
 
@@ -279,7 +288,7 @@ const MarkAttendanceScreen = ({ navigation, route }: any) => {
   // The chosen class's students, freshly copied whenever the class or the
   // day's data changes — which also ends any editing.
   useEffect(() => {
-    setStudents((selectedClass?.students ?? []).map(toMarkStudent));
+    setStudents(markable(selectedClass));
     setEditing(false);
   }, [selectedClass]);
 
@@ -296,7 +305,7 @@ const MarkAttendanceScreen = ({ navigation, route }: any) => {
 
   // Leave editing without saving: back to the saved review.
   const cancelEdit = () => {
-    setStudents((selectedClass?.students ?? []).map(toMarkStudent));
+    setStudents(markable(selectedClass));
     setEditing(false);
   };
 
@@ -356,6 +365,16 @@ const MarkAttendanceScreen = ({ navigation, route }: any) => {
               <Text style={s.markAllText}>{STATUS_CONFIG[st].full}</Text>
             </TouchableOpacity>
           ))}
+        </View>
+      )}
+      {feeLocked.length > 0 && (
+        <View style={s.locked}>
+          <VectorIcon iconSet="Ionicons" iconName="lock-closed" size={15} color={theme.colors.danger} />
+          <Text style={s.lockedText}>
+            {feeLocked.length === 1 ? '1 student is' : `${feeLocked.length} students are`} not listed — platform fee not
+            paid in the app yet: {feeLocked.slice(0, 3).map(st => st.full_name).join(', ')}
+            {feeLocked.length > 3 ? ` and ${feeLocked.length - 3} more` : ''}.
+          </Text>
         </View>
       )}
     </View>
@@ -567,6 +586,17 @@ const __mk_s = () => StyleSheet.create({
     borderBottomColor: theme.colors.border,
   },
   markAllLabel: { fontSize: 13, color: theme.colors.textMuted, marginRight: 2 },
+  // Students left out till they pay the platform fee in the app
+  locked: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: 10,
+    padding: 10,
+    borderRadius: theme.radius.sm,
+    backgroundColor: '#FEF2F2',
+  },
+  lockedText: { flex: 1, fontSize: 12, lineHeight: 17, color: '#B91C1C' },
   markAllBtn: {
     paddingHorizontal: 12,
     paddingVertical: 5,
